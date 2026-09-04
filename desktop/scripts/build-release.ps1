@@ -6,6 +6,7 @@ param(
     [Parameter(Mandatory = $true)][string]$PrivateKeyPath,
     [string]$VenvPath = "",
     [string]$BootstrapDirectory = "",
+    [string]$UpstreamDirectory = "",
     # This is the first release in the independent desktop version line, so no
     # older build may take an app-only delta. An empty SupportedFrom list makes
     # every earlier installation use the complete package, which is the safe
@@ -15,11 +16,15 @@ param(
     [string[]]$SupportedFrom = @(),
     [string]$ReleaseNotes = "",
     [string]$Repository = "tuzibuqiahuluobo/finesub-desktop",
-    [switch]$SkipBootstrap
+    [switch]$SkipBootstrap,
+    [switch]$RequireAuthenticode
 )
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
+. (Join-Path $PSScriptRoot "authenticode.ps1")
+$SigningCertificate = Get-FineSubCodeSigningCertificate `
+    -Required:$RequireAuthenticode
 if (-not $VenvPath) {
     if ($env:FINESUB_DESKTOP_VENV) {
         $VenvPath = $env:FINESUB_DESKTOP_VENV
@@ -43,7 +48,13 @@ if (-not $SkipBootstrap) {
     & (Join-Path $PSScriptRoot "build-bootstrap.ps1") `
         -VenvPath $VenvPath `
         -OutputDirectory $BootstrapDirectory `
+        -UpstreamDirectory $UpstreamDirectory `
         -Version $Version
+}
+if ($SigningCertificate) {
+    Set-FineSubAuthenticodeSignature `
+        -FilePath (Get-FineSubPackagedExecutables $Bootstrap) `
+        -Certificate $SigningCertificate
 }
 $AppSource = Join-Path $Bootstrap "app\versions\$Version"
 if (-not (Test-Path -LiteralPath $AppSource -PathType Container)) {

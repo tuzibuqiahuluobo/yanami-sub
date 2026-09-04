@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+from importlib import resources
 import json
 from pathlib import Path
 import re
@@ -120,3 +121,18 @@ def test_release_defaults_do_not_promise_future_deltas() -> None:
         match = re.search(rf'\[string\]\${name} = "([^"]+)"', script)
         assert match is not None
         assert Version(match.group(1)) <= version
+
+
+def test_upstream_runtime_keeps_the_verified_tuna_python_route() -> None:
+    package = resources.files("finesub_bootstrap")
+    sources = json.loads(
+        package.joinpath("download-sources.json").read_text(encoding="utf-8")
+    )
+    mirror = sources["pypiIndex"]
+    mainland_lock = package.joinpath("pylock.win-py312.cn.toml").read_text(
+        encoding="utf-8"
+    )
+
+    assert mirror == "https://pypi.tuna.tsinghua.edu.cn/simple"
+    assert "https://pypi.tuna.tsinghua.edu.cn/packages/" in mainland_lock
+    assert "sha256 =" in mainland_lock

@@ -13,10 +13,6 @@ from desktop.backend.common.models import ResourceInstallSnapshot
 from desktop.backend.resources import install_log
 
 
-class ResourceInstallConflict(ValueError):
-    pass
-
-
 class ResourceInstallNotFound(KeyError):
     pass
 
@@ -43,19 +39,6 @@ class ResourceInstallManager:
 
     def start(self, resource_id: str) -> ResourceInstallSnapshot:
         with self._lock:
-            active = next(
-                (
-                    snapshot
-                    for snapshot in self._snapshots.values()
-                    if snapshot.state in {"queued", "running"}
-                    and snapshot.resource_id != resource_id
-                ),
-                None,
-            )
-            if active is not None:
-                raise ResourceInstallConflict(
-                    f"{active.resource_id} 正在处理，请先暂停或等待完成。"
-                )
             current = self._snapshots.get(resource_id)
             if current is not None and current.state in {"queued", "running"}:
                 return current.model_copy(deep=True)

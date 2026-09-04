@@ -23,6 +23,8 @@ export const en: Translations = {
     resources: "Resources",
     // Sidebar bottom status
     resourceProcessing: "Resources processing in background",
+    resourcesProcessing: "{count} resources processing together",
+    parallelDownloads: "Parallel downloads",
     translationReady: "Translation Ready",
     localOnly: "Local Recognition Available",
     geminiConnected: "Gemini Connected",
@@ -186,11 +188,11 @@ export const en: Translations = {
   resources: {
     title: "Runtime Resources",
     kicker: "RESOURCES",
-    description: "Large components are installed online, keeping the app lightweight.",
+    description: "Local resources are searched and verified first; missing resources can download in parallel.",
     openLogs: "Open log folder",
     spaceWarning: {
       title: "Disk Space Required",
-      message: "About {size} of runtime resources to download. Please ensure sufficient disk space.",
+      message: "Up to {size} of runtime resources may be downloaded. Please ensure sufficient disk space.",
     },
     items: {
       uv: {
@@ -256,12 +258,16 @@ export const en: Translations = {
       title: "How are models managed?",
       description: "Model weights -- speech recognition large-v3-turbo ~1.6 GB, BS-RoFormer vocal separation ~0.6 GB, Qwen3-ASR second-model verification ~1.5 GB -- are downloaded by FineSub the first time each is needed and saved to the models directory. They survive app updates, and a stage you never run never fetches its model.",
     },
+    sourceNote: {
+      title: "Download and mirror strategy",
+      description: "FineSub scans local disks first and verifies matching resources by size and SHA-256. It downloads only missing or mismatched versions. Python dependencies on mainland China routes automatically use the Tsinghua TUNA mirror, with the official source as fallback.",
+    },
     confirm: {
-      title: "Confirm Download",
-      message: "About to download {name}, requiring approximately {size} of disk space.",
-      warning: "Please ensure the target disk has enough space. Installation may fail if space runs out during download.",
+      title: "Confirm Resource Setup",
+      message: "FineSub will search this PC for the same {name} version first; otherwise it may download up to {size}.",
+      warning: "A local file is reused only after its version and SHA-256 pass verification. Please ensure sufficient disk space.",
       cancel: "Cancel",
-      startDownload: "Start Download",
+      startDownload: "Start Installation",
     },
   },
   // Confirm Dialog

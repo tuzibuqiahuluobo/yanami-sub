@@ -19,6 +19,7 @@ from finesub_bootstrap.model_caches import (
 from finesub_bootstrap.downloader import DownloadPaused
 from finesub_bootstrap.models import DownloadProgress, ResourceStatus
 from desktop.backend.resources.model_prefetch import run_model_prefetch
+from desktop.backend.resources.local_reuse import LocalResourceReuse
 from finesub_bootstrap.system_tools import (
     SystemTool,
     find_system_ffmpeg,
@@ -100,6 +101,7 @@ class DesktopResourceService:
         system_tool_finders: Mapping[str, Callable[[], SystemTool | None]]
         | None = None,
         model_prefetch: Callable[..., None] | None = None,
+        local_reuse: LocalResourceReuse | None = None,
     ) -> None:
         self.bootstrap = bootstrap
         self.runtime = runtime
@@ -116,6 +118,7 @@ class DesktopResourceService:
             SYSTEM_TOOL_FINDERS if system_tool_finders is None else system_tool_finders
         )
         self._system_tools: dict[str, SystemTool | None] = {}
+        self.local_reuse = local_reuse or LocalResourceReuse(bootstrap)
 
     def system_tool(self, resource_id: str) -> SystemTool | None:
         """A usable system copy of `resource_id`, probed at most once."""
@@ -294,6 +297,12 @@ class DesktopResourceService:
             for callback in (stage, log, should_pause)
         )
         if resource_id == "uv":
+            self._prepare_local_archive(
+                resource_id,
+                stage=stage,
+                log=log,
+                should_pause=should_pause,
+            )
             if background:
                 self.bootstrap.install(
                     "uv",
@@ -312,12 +321,38 @@ class DesktopResourceService:
             raise KeyError(f"Unknown desktop resource: {resource_id}")
         if self.system_tool(resource_id) is not None:
             return self.status(resource_id)
+        self._prepare_local_archive(
+            resource_id,
+            stage=stage,
+            log=log,
+            should_pause=should_pause,
+        )
         if not background:
             return self.bootstrap.install(resource_id, progress)
         return self.bootstrap.install(
             resource_id,
             progress,
             stage=stage,
+            should_pause=should_pause,
+        )
+
+    def _prepare_local_archive(
+        self,
+        resource_id: str,
+        *,
+        stage: Callable[[str, str], None] | None,
+        log: Callable[[str], None] | None,
+        should_pause: Callable[[], bool] | None,
+    ) -> None:
+        # An installed exact version wins without touching the disks. Missing
+        # and outdated resources get one shared local scan before the normal,
+        # hash-verifying downloader is allowed to contact the network.
+        if self.bootstrap.status(resource_id).state == "ready":
+            return
+        self.local_reuse.prepare(
+            resource_id,
+            stage=stage,
+            log=log,
             should_pause=should_pause,
         )
 

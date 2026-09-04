@@ -2,6 +2,7 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$RepoRoot,
+    [string]$CoreRoot = "",
     [Parameter(Mandatory = $true)]
     [string]$OutputDirectory,
     [Parameter(Mandatory = $true)]
@@ -14,6 +15,11 @@ param(
 
 $ErrorActionPreference = "Stop"
 $RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
+$CoreRoot = if ($CoreRoot) {
+    [System.IO.Path]::GetFullPath($CoreRoot)
+} else {
+    $RepoRoot
+}
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 
 # What ships is decided by git, not by whatever happens to be on disk.
@@ -124,7 +130,7 @@ $FrontendOut = Join-Path $RepoRoot "desktop\frontend\out"
 $TrustedKeys = Join-Path $RepoRoot "desktop\resources\trusted-update-keys.json"
 Assert-RequiredUntracked -Paths @($FrontendOut)
 
-Copy-TrackedTree -RepoRoot $RepoRoot -RelativeRoot "src" `
+Copy-TrackedTree -RepoRoot $CoreRoot -RelativeRoot "src" `
     -Destination (Join-Path $VersionRoot "src")
 
 # Pre-0.4.0 launchers (frozen 0.3.x/0.2.x exes in the field) hard-code

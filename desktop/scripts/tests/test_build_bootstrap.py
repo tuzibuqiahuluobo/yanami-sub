@@ -34,8 +34,12 @@ def test_windows_build_stages_the_shared_bootstrap_package() -> None:
     # PyInstaller resolves imports from --paths, not the build venv's editable
     # install; without staging src/finesub_bootstrap the frozen launcher would
     # depend on whatever the venv happens to expose.
-    assert 'Join-Path $RepoRoot "src\\finesub_bootstrap"' in SCRIPT
+    assert '[string]$UpstreamDirectory = ""' in SCRIPT
+    assert "FINESUB_UPSTREAM_SOURCE" in SCRIPT
+    assert "$ExpectedCoreVersion" in SCRIPT
+    assert "-Source $CorePackage" in SCRIPT
     assert 'Join-Path $StageDirectory "finesub_bootstrap"' in SCRIPT
+    assert "-CoreRoot $CoreRoot" in SCRIPT
 
 
 def test_windows_build_redacts_environment_for_packaging_tools() -> None:
@@ -56,7 +60,9 @@ def test_windows_build_generates_version_resources_from_release_version() -> Non
 
 def test_release_build_accepts_ascii_bootstrap_directory() -> None:
     assert "[string]$BootstrapDirectory" in RELEASE_SCRIPT
+    assert "[string]$UpstreamDirectory" in RELEASE_SCRIPT
     assert "-OutputDirectory $BootstrapDirectory" in RELEASE_SCRIPT
+    assert "-UpstreamDirectory $UpstreamDirectory" in RELEASE_SCRIPT
     assert '$Bootstrap = Join-Path $BootstrapDirectory "FineSub Desktop.dist"' in (
         RELEASE_SCRIPT
     )

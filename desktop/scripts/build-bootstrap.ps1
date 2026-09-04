@@ -3,6 +3,7 @@ param(
     [string]$VenvPath = "",
     [string]$OutputDirectory = "",
     [string]$Version = "",
+    [string]$UpstreamDirectory = "",
     [string]$LauncherConfigPath = "",
     [string]$TrustedKeysPath = "",
     [switch]$AllowExampleUpdateConfig,
@@ -16,6 +17,37 @@ if (-not $Version) {
     $Version = (
         Get-Content -LiteralPath (Join-Path $RepoRoot "VERSION") -Raw
     ).Trim()
+}
+$CoreRoot = $RepoRoot
+if (-not (Test-Path -LiteralPath (Join-Path $CoreRoot "src\finesub_bootstrap") -PathType Container)) {
+    if (-not $UpstreamDirectory) {
+        $UpstreamDirectory = $env:FINESUB_UPSTREAM_SOURCE
+    }
+    if (-not $UpstreamDirectory) {
+        throw @"
+FineSub core source was not found in this standalone desktop repository.
+Pass -UpstreamDirectory (or set FINESUB_UPSTREAM_SOURCE) to a clean checkout
+whose version matches the finesub dependency in pyproject.toml.
+"@
+    }
+    $CoreRoot = [System.IO.Path]::GetFullPath($UpstreamDirectory)
+}
+$CorePackage = Join-Path $CoreRoot "src\finesub_bootstrap"
+$CoreVersionFile = Join-Path $CoreRoot "VERSION"
+if (-not (Test-Path -LiteralPath $CorePackage -PathType Container)) {
+    throw "FineSub bootstrap source not found: $CorePackage"
+}
+if (-not (Test-Path -LiteralPath $CoreVersionFile -PathType Leaf)) {
+    throw "FineSub source VERSION file not found: $CoreVersionFile"
+}
+$DesktopProject = Get-Content -LiteralPath (Join-Path $RepoRoot "pyproject.toml") -Raw
+if ($DesktopProject -notmatch '"finesub==(?<version>[^"; ]+)"') {
+    throw "Desktop pyproject.toml must pin one exact FineSub version."
+}
+$ExpectedCoreVersion = $Matches.version
+$ActualCoreVersion = (Get-Content -LiteralPath $CoreVersionFile -Raw).Trim()
+if ($ActualCoreVersion -ne $ExpectedCoreVersion) {
+    throw "FineSub source version '$ActualCoreVersion' does not match desktop dependency '$ExpectedCoreVersion'."
 }
 $IconPath = Join-Path $RepoRoot "desktop\assets\finesub-desktop.ico"
 $TrayIconPath = Join-Path $RepoRoot "desktop\assets\source\finesub-desktop.png"
@@ -264,7 +296,7 @@ Copy-PythonTree `
 # the stage: PyInstaller resolves imports via --paths, not the build venv's
 # editable install.
 Copy-PythonTree `
-    -Source (Join-Path $RepoRoot "src\finesub_bootstrap") `
+    -Source $CorePackage `
     -Destination (Join-Path $StageDirectory "finesub_bootstrap")
 
 $PreviousPyInstallerConfig = $env:PYINSTALLER_CONFIG_DIR
@@ -350,6 +382,7 @@ Move-Item `
 
 & (Join-Path $PSScriptRoot "package-bootstrap.ps1") `
     -RepoRoot $RepoRoot `
+    -CoreRoot $CoreRoot `
     -OutputDirectory $OutputDirectory `
     -Version $Version `
     -LauncherConfigPath $LauncherConfigPath `

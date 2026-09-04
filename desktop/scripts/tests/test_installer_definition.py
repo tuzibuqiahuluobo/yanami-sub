@@ -38,11 +38,25 @@ def test_installer_creates_shortcuts_and_can_launch_application() -> None:
 
 def test_installer_uses_branding_and_exact_output_name() -> None:
     script = _installer_text()
+    assert '#define AppPublisher "tuzibuqiahuluobo"' in script
+    assert "AppPublisher={#AppPublisher}" in script
     assert "SetupIconFile={#SetupIcon}" in script
     assert "UninstallDisplayIcon={app}\\FineSub Desktop.exe" in script
     assert "OutputBaseFilename=FineSub-Desktop-{#AppVersion}-Setup" in script
     assert "Compression=lzma2/ultra64" in script
     assert "SolidCompression=yes" in script
+
+
+def test_installer_build_requires_a_valid_authenticode_signature_on_request() -> None:
+    script = _build_script_text()
+    assert "[switch]$RequireAuthenticode" in script
+    assert "Get-FineSubCodeSigningCertificate" in script
+    assert "Get-FineSubPackagedExecutables" in script
+    assert "Set-FineSubAuthenticodeSignature" in script
+    # The second call is after Inno produced the Setup executable.
+    assert script.rfind("Set-FineSubAuthenticodeSignature") > script.index(
+        'InstallerName = "FineSub-Desktop-$Version-Setup.exe"'
+    )
 
 
 def test_installer_always_uses_bundled_chinese_language() -> None:
@@ -135,6 +149,7 @@ def test_installer_build_validates_required_application_files() -> None:
         "FineSub Desktop.exe",
         "app\\current.json",
         "src\\finesub_bootstrap\\runtime-manifest.json",
+        "src\\finesub_bootstrap\\download-sources.json",
         "src\\finesub_bootstrap\\pylock.win-py312.toml",
         "src\\finesub_bootstrap\\pylock.win-py312.cn.toml",
     ):

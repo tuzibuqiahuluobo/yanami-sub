@@ -4,7 +4,8 @@ param(
     [string]$ApplicationDirectory,
     [string]$OutputDirectory = "",
     [string]$Version = "",
-    [string]$InnoCompiler = ""
+    [string]$InnoCompiler = "",
+    [switch]$RequireAuthenticode
 )
 
 $ErrorActionPreference = "Stop"
@@ -17,6 +18,7 @@ if (-not $Version) {
 $Definition = Join-Path $RepoRoot "desktop\installer\FineSubDesktop.iss"
 $SetupIcon = Join-Path $RepoRoot "desktop\assets\finesub-desktop.ico"
 $ChineseLanguageFile = Join-Path $RepoRoot "desktop\installer\ChineseSimplified.isl"
+. (Join-Path $PSScriptRoot "authenticode.ps1")
 
 function Resolve-InnoCompiler {
     param([string]$RequestedPath)
@@ -68,11 +70,14 @@ if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $RepoRoot "dist\installer"
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
+$SigningCertificate = Get-FineSubCodeSigningCertificate `
+    -Required:$RequireAuthenticode
 
 $RequiredFiles = @(
     "FineSub Desktop.exe",
     "app\current.json",
     "app\versions\$Version\src\finesub_bootstrap\runtime-manifest.json",
+    "app\versions\$Version\src\finesub_bootstrap\download-sources.json",
     "app\versions\$Version\src\finesub_bootstrap\pylock.win-py312.toml",
     "app\versions\$Version\src\finesub_bootstrap\pylock.win-py312.cn.toml",
     "app\versions\$Version\desktop\frontend\out\index.html"
@@ -90,6 +95,11 @@ $CurrentPointer = Get-Content `
     -Encoding UTF8 | ConvertFrom-Json
 if ($CurrentPointer.current -ne $Version) {
     throw "Packaged app version '$($CurrentPointer.current)' does not match installer version '$Version'."
+}
+if ($SigningCertificate) {
+    Set-FineSubAuthenticodeSignature `
+        -FilePath (Get-FineSubPackagedExecutables $ApplicationDirectory) `
+        -Certificate $SigningCertificate
 }
 
 $Compiler = Resolve-InnoCompiler -RequestedPath $InnoCompiler
@@ -112,6 +122,11 @@ $InstallerName = "FineSub-Desktop-$Version-Setup.exe"
 $InstallerPath = Join-Path $OutputDirectory $InstallerName
 if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) {
     throw "Inno Setup completed without producing the expected installer: $InstallerPath"
+}
+if ($SigningCertificate) {
+    Set-FineSubAuthenticodeSignature `
+        -FilePath @($InstallerPath) `
+        -Certificate $SigningCertificate
 }
 
 Write-Host "FineSub Desktop installer ready:"

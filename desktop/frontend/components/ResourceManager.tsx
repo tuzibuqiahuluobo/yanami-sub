@@ -338,6 +338,11 @@ export function ResourceManager({
       </section>
 
       <div className="resource-info-note">
+        <strong>{t.resources.sourceNote.title}</strong>
+        <p>{t.resources.sourceNote.description}</p>
+      </div>
+
+      <div className="resource-info-note">
         <strong>{t.resources.modelNote.title}</strong>
         <p>
           {t.resources.modelNote.description}

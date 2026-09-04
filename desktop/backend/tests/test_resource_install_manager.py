@@ -72,6 +72,18 @@ def test_resource_install_runs_in_background_and_reports_progress(
     assert completed.phase == "complete"
 
 
+def test_different_resources_download_concurrently(tmp_path: Path) -> None:
+    manager = ResourceInstallManager(FakeResources(tmp_path))
+
+    manager.start("ffmpeg")
+    manager.start("git")
+
+    assert _wait_for_progress(manager, "ffmpeg").state == "running"
+    assert _wait_for_progress(manager, "git").state == "running"
+    assert _wait_for(manager, "ffmpeg", "ready").state == "ready"
+    assert _wait_for(manager, "git", "ready").state == "ready"
+
+
 def test_resource_install_pause_preserves_paths_and_can_resume(
     tmp_path: Path,
 ) -> None:
@@ -92,9 +104,13 @@ def test_resource_install_pause_preserves_paths_and_can_resume(
 def test_shutdown_pauses_and_joins_an_active_install(tmp_path: Path) -> None:
     manager = ResourceInstallManager(FakeResources(tmp_path))
     manager.start("models")
+    manager.start("git")
     _wait_for_progress(manager, "models")
+    _wait_for_progress(manager, "git")
 
     manager.shutdown()
 
     assert _wait_for(manager, "models", "paused").state == "paused"
+    assert _wait_for(manager, "git", "paused").state == "paused"
     assert not manager._workers["models"].is_alive()
+    assert not manager._workers["git"].is_alive()

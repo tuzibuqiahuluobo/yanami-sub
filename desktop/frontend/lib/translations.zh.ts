@@ -21,6 +21,8 @@ export const zh = {
     resources: "资源",
     // 侧边栏底部状态
     resourceProcessing: "资源正在后台处理",
+    resourcesProcessing: "{count} 个资源正在同时处理",
+    parallelDownloads: "并行下载中",
     translationReady: "翻译已就绪",
     localOnly: "本地识别可用",
     geminiConnected: "Gemini 已连接",
@@ -184,11 +186,11 @@ export const zh = {
   resources: {
     title: "运行资源",
     kicker: "RESOURCES",
-    description: "大型组件在线安装，应用本体保持轻量。",
+    description: "先搜索并校验本机资源，缺少时再联网下载；多个资源可以同时安装。",
     openLogs: "打开日志文件夹",
     spaceWarning: {
       title: "磁盘空间需求",
-      message: "需要下载约 {size} 的运行资源，请确保磁盘有足够空间。",
+      message: "最多需要下载约 {size} 的运行资源，请确保磁盘有足够空间。",
     },
     items: {
       uv: {
@@ -254,12 +256,16 @@ export const zh = {
       title: "模型如何管理？",
       description: "Whisper 等模型的权重（语音识别 large-v3-turbo 约 1.6 GB、人声分离 BS-RoFormer 约 0.6 GB、第二模型校验 Qwen3-ASR 约 1.5 GB）由 FineSub 在首次用到时按需下载，统一写入 models 目录；更新应用时不会删除。用不到的阶段不会触发下载。",
     },
+    sourceNote: {
+      title: "下载与镜像策略",
+      description: "FineSub 会先扫描本机磁盘并按大小与 SHA-256 校验同版本资源；未命中或版本不符时才联网下载。中国大陆网络的 Python 依赖会自动使用清华大学 TUNA 镜像，镜像失败时回退到官方源。",
+    },
     confirm: {
-      title: "确认下载资源",
-      message: "即将下载 {name}，需要约 {size} 的磁盘空间。",
-      warning: "请确保目标磁盘有足够空间。如果下载中途空间不足，安装可能失败。",
+      title: "确认准备资源",
+      message: "将先搜索本机同版本的 {name}；如果没有可用文件，最多需要下载约 {size}。",
+      warning: "本地文件只有通过版本与 SHA-256 校验才会复用；请确保目标磁盘有足够空间。",
       cancel: "取消",
-      startDownload: "开始下载",
+      startDownload: "开始安装",
     },
   },
   // 确认对话框

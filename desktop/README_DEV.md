@@ -506,6 +506,35 @@ traceback 弹窗，而此时 FineSub 已经退出、没人会去点它。`update
   -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist"
 ```
 
+独立仓库不再复制 FineSub 核心代码。构建启动器时要传入与 `pyproject.toml` 中
+`finesub==...` 完全同版本的上游 Git checkout；脚本会同时校验 `VERSION` 并且只把该
+checkout 中受 Git 跟踪的 `src/` 文件写入应用包：
+
+```powershell
+.\desktop\scripts\build-bootstrap.ps1 `
+  -UpstreamDirectory "C:\src\finesub-v0.5.0"
+```
+
+也可以用 `FINESUB_UPSTREAM_SOURCE` 设置同一路径。版本不符或目录不是完整源码时构建会
+直接失败，不会把开发环境里碰巧安装的另一个 FineSub 版本混入发行包。
+
+正式发布必须使用受信任且包含 Code Signing EKU、证书主题为
+`CN=tuzibuqiahuluobo` 的 Authenticode 证书。构建脚本从环境变量读取 PFX，密码不会
+写入仓库或命令行；`-RequireAuthenticode` 会在证书缺失、发布者不符、证书链不受信任
+或签名复验失败时终止构建：
+
+```powershell
+$env:FINESUB_AUTHENTICODE_PFX = "C:\secure\tuzibuqiahuluobo-code-signing.pfx"
+$env:FINESUB_AUTHENTICODE_PASSWORD = "<PFX 密码>"
+.\desktop\scripts\build-installer.ps1 `
+  -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist" `
+  -RequireAuthenticode
+```
+
+也可以用 `FINESUB_AUTHENTICODE_THUMBPRINT` 指定当前用户证书库中的证书。时间戳默认
+使用 DigiCert，可通过 `FINESUB_AUTHENTICODE_TIMESTAMP_URL` 覆盖。自签名证书不会被
+当作可信发布证书接受。
+
 ## 发布（签名更新）
 
 **发布私钥不在仓库里，也不在本机构建流程里了**：它是 `release` environment 的
@@ -574,12 +603,15 @@ updater。
 # 1. 产出 app/full 包 + 签名 manifest（版本号取自仓库根 VERSION）
 .\desktop\scripts\build-release.ps1 `
   -Version (Get-Content VERSION -Raw).Trim() `
+  -UpstreamDirectory "C:\src\finesub-v0.5.0" `
   -KeyId finesub-release-2026 `
-  -PrivateKeyPath <仓库外的 .pem>
+  -PrivateKeyPath <仓库外的 .pem> `
+  -RequireAuthenticode
 
 # 2. Inno 安装器（README 引导新用户从 Release 下载它；full 包兼作 portable 下载）
 .\desktop\scripts\build-installer.ps1 `
-  -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist"
+  -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist" `
+  -RequireAuthenticode
 
 # 3. 构建 CLI wheel（与桌面同版本同 Release；见 cli/README.md）
 .\cli\scripts\build-wheel.ps1 -Version $Version

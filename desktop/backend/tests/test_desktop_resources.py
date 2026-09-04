@@ -129,6 +129,28 @@ def test_python_install_bootstraps_uv_before_activating_runtime(
     assert runtime.installs == 1
 
 
+def test_local_archive_search_runs_before_network_install(tmp_path: Path) -> None:
+    bootstrap = FakeBootstrap(tmp_path)
+    calls: list[str] = []
+
+    class SpyReuse:
+        def prepare(self, resource_id, **_kwargs):
+            assert bootstrap.installed == []
+            calls.append(resource_id)
+
+    service = DesktopResourceService(
+        bootstrap=bootstrap,
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        local_reuse=SpyReuse(),
+    )
+
+    service.install("ffmpeg", lambda _event: None)
+
+    assert calls == ["ffmpeg"]
+    assert bootstrap.installed == ["ffmpeg"]
+
+
 def test_a_task_waits_for_every_managed_tool(tmp_path: Path) -> None:
     bootstrap = FakeBootstrap(tmp_path)
     runtime = FakeRuntime(tmp_path)

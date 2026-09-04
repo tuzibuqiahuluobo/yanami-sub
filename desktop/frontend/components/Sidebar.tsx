@@ -55,14 +55,21 @@ export function Sidebar({
     navigation.findIndex((item) => item.route === route),
   );
 
-  const activeInstall = resourceInstalls.find(isInstallActive);
+  const activeInstalls = resourceInstalls.filter(isInstallActive);
+  const activeInstall = activeInstalls[0];
+  const activeTotal = activeInstalls.reduce(
+    (total, install) => total + install.total,
+    0,
+  );
+  const activeDownloaded = activeInstalls.reduce(
+    (total, install) => total + Math.min(install.downloaded, install.total),
+    0,
+  );
   const activePercent =
-    activeInstall && activeInstall.total > 0
+    activeInstall && activeTotal > 0
       ? Math.min(
           100,
-          Math.round(
-            (activeInstall.downloaded / activeInstall.total) * 100,
-          ),
+          Math.round((activeDownloaded / activeTotal) * 100),
         )
       : null;
   return (
@@ -107,9 +114,20 @@ export function Sidebar({
           >
             <Download size={14} />
             <span>
-              <strong>{t.sidebar.resourceProcessing}</strong>
+              <strong>
+                {activeInstalls.length > 1
+                  ? t.sidebar.resourcesProcessing.replace(
+                    "{count}",
+                    String(activeInstalls.length),
+                  )
+                  : t.sidebar.resourceProcessing}
+              </strong>
               <small>
-                {activePercent === null
+                {activeInstalls.length > 1
+                  ? activePercent === null
+                    ? t.sidebar.parallelDownloads
+                    : `${activePercent}% · ${t.sidebar.parallelDownloads}`
+                  : activePercent === null
                   ? activeInstall.message
                   : `${activePercent}% · ${activeInstall.message}`}
               </small>

@@ -3,7 +3,7 @@
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-rc.1"
+  #define AppVersion "0.1.0-rc.2"
 #endif
 
 #ifndef OutputDir
@@ -18,7 +18,7 @@
   #error ChineseLanguageFile must point to the installer language file.
 #endif
 
-#define AppPublisher "FineSub"
+#define AppPublisher "tuzibuqiahuluobo"
 #define AppExeName "FineSub Desktop.exe"
 
 [Setup]
