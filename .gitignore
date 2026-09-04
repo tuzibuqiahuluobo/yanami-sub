@@ -8,3 +8,4 @@ build/
 dist/
 *.spec
 .release-secrets/
+.release-build/
