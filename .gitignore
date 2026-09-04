@@ -1,0 +1,9 @@
+.venv-desktop/
+.test-upstream/
+.pytest-tmp/
+.pytest_cache/
+pytest-cache-files-*/
+__pycache__/
+build/
+dist/
+*.spec

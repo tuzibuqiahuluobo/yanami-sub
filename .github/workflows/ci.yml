@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  desktop:
+    runs-on: windows-latest
+    steps:
+      - name: Check out FineSub Desktop
+        uses: actions/checkout@v4
+
+      - name: Check out FineSub 0.5.0
+        uses: actions/checkout@v4
+        with:
+          repository: caca2331/finesub
+          ref: v0.5.0
+          path: upstream
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./upstream
+          python -m pip install -e ".[desktop,dev]"
+
+      - name: Run Python tests
+        run: python -m pytest -q
+
+      - name: Install frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci
+
+      - name: Type-check frontend
+        working-directory: desktop/frontend
+        run: npm run typecheck
+
+      - name: Test frontend
+        working-directory: desktop/frontend
+        run: npm test
+
+      - name: Build frontend
+        working-directory: desktop/frontend
+        run: npm run build

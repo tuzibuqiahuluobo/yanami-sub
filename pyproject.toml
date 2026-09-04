@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "finesub-desktop"
+dynamic = ["version"]
+description = "Windows desktop client for FineSub."
+readme = "README.md"
+license = "GPL-3.0-or-later"
+requires-python = ">=3.12"
+authors = [
+  { name = "caca2331" },
+  { name = "tuzibuqiahuluobo" },
+  { name = "回不去的星光" },
+]
+maintainers = [{ name = "tuzibuqiahuluobo" }]
+dependencies = ["finesub==0.5.0"]
+
+[project.urls]
+Homepage = "https://github.com/tuzibuqiahuluobo/finesub-desktop"
+Repository = "https://github.com/tuzibuqiahuluobo/finesub-desktop"
+Issues = "https://github.com/tuzibuqiahuluobo/finesub-desktop/issues"
+Upstream = "https://github.com/caca2331/finesub"
+Migration-Source = "https://github.com/caca2331/finesub/tree/0.5.0pre/desktop"
+
+[project.optional-dependencies]
+desktop = [
+  "cryptography",
+  "httpx",
+  "packaging",
+  "pydantic>=2,<3",
+  "Pillow",
+  "pystray~=0.19.5",
+  "pywebview~=6.2.0",
+]
+dev = [
+  "Pillow",
+  "pyinstaller>=6,<7",
+  "pyinstaller-hooks-contrib>=2026.6",
+  "pytest",
+  "pytest-timeout",
+  "pytest-xdist",
+]
+
+[tool.setuptools.dynamic]
+version = { file = "VERSION" }
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["desktop*"]
+exclude = ["desktop.backend.tests*", "desktop.scripts.tests*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["desktop/backend/tests", "desktop/scripts/tests"]
+addopts = "-n 0"
