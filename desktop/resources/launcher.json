@@ -1,5 +1,5 @@
 {
-  "channel": "stable",
+  "channel": "beta",
   "platform": "windows-x64",
   "launcherVersion": "0.1.0-rc.1",
   "schemaVersion": 1,
