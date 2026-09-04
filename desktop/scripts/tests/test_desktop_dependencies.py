@@ -99,11 +99,12 @@ def test_the_desktop_release_uses_one_version_number() -> None:
 
     assert "version" in project["project"].get("dynamic", [])
     assert "version" not in project["project"]
-    expected = Version((REPOSITORY_ROOT / "VERSION").read_text("utf-8").strip())
+    expected_text = (REPOSITORY_ROOT / "VERSION").read_text("utf-8").strip()
+    expected = Version(expected_text)
     assert Version(frontend["version"]) == expected
     assert Version(launcher["appVersion"]) == expected
     assert Version(launcher["launcherVersion"]) == expected
-    assert f'#define AppVersion "{expected}"' in installer
+    assert f'#define AppVersion "{expected_text}"' in installer
 
 
 def test_release_defaults_do_not_promise_future_deltas() -> None:

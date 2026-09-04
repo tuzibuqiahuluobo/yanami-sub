@@ -6,15 +6,12 @@ param(
     [Parameter(Mandatory = $true)][string]$PrivateKeyPath,
     [string]$VenvPath = "",
     [string]$BootstrapDirectory = "",
-    # 0.3.1 restarts the update line: it is the first release to publish a signed
-    # manifest at all, so nothing older can be delta-updated into it and every
-    # earlier install takes the full package. -SupportedFrom is empty by default
-    # for the same reason -- an omitted list means "full for everyone", which is
-    # correct but large, and that is the right direction to fail. From the next
-    # release on, pass the versions that may take the small app delta, e.g.
-    # -SupportedFrom 0.3.1.
-    [string]$MinimumLauncherVersion = "0.3.1",
-    [string]$MinimumSupportedVersion = "0.3.1",
+    # This is the first release in the independent desktop version line, so no
+    # older build may take an app-only delta. An empty SupportedFrom list makes
+    # every earlier installation use the complete package, which is the safe
+    # default until a later desktop release explicitly opts in compatible builds.
+    [string]$MinimumLauncherVersion = "0.1.0-rc.1",
+    [string]$MinimumSupportedVersion = "0.1.0-rc.1",
     [string[]]$SupportedFrom = @(),
     [string]$ReleaseNotes = "",
     [string]$Repository = "tuzibuqiahuluobo/finesub-desktop",
