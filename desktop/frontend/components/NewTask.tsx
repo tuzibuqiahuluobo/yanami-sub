@@ -120,6 +120,7 @@ export function NewTask({
           <TaskSettings
             request={state.task.request}
             capabilities={state.capabilities}
+            routing={state.routing}
             disabled={busy}
             onChange={onRequestChange}
           />

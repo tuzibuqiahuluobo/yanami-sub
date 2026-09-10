@@ -5,6 +5,200 @@
   gap: 10px;
 }
 
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.diagnostics-card {
+  display: grid;
+  gap: 14px;
+  margin-bottom: 16px;
+  padding: 16px 17px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-subtle);
+}
+
+.storage-card {
+  display: grid;
+  gap: 13px;
+  margin-bottom: 16px;
+  padding: 16px 17px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-subtle);
+}
+
+.storage-card-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.storage-card-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+}
+
+.storage-card-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.storage-card-title strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.storage-card-copy p,
+.storage-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.storage-card-copy code {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.storage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.storage-message.is-success {
+  color: var(--success);
+}
+
+.storage-message.is-error,
+.resource-confirm-icon.is-danger {
+  color: var(--danger);
+}
+
+.diagnostics-heading,
+.diagnostics-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.diagnostics-heading {
+  justify-content: space-between;
+}
+
+.diagnostics-title > div {
+  display: grid;
+  gap: 3px;
+}
+
+.diagnostics-title strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.diagnostics-title p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.diagnostics-title .resource-large-icon.is-ready {
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.diagnostics-result {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.diagnostics-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.diagnostics-meta > span,
+.diagnostics-paths span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.diagnostics-meta > span {
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+}
+
+.diagnostics-meta small,
+.diagnostics-paths small {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.diagnostics-meta strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.diagnostics-resources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.diagnostics-paths summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.diagnostics-paths > div {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.diagnostics-paths code {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-family: Consolas, "Cascadia Mono", monospace;
+  font-size: 0.73rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 900px) {
+  .diagnostics-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .resource-card {
   display: grid;
   min-height: 102px;

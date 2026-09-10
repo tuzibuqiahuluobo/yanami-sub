@@ -2,12 +2,25 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from finesub import config as app_config
+from finesub.llm.routing.model_routes import default_model_routes
 from finesub_bootstrap.models import ResourceStatus
-from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.models import BatchRequest, TaskRequest
 from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.launcher.bridge import DesktopBridge
 from finesub_bootstrap.environment import WorkerContext
 from desktop.backend.settings.store import SettingsStore
+
+
+@pytest.fixture(autouse=True)
+def clear_routing_caches():
+    app_config.clear_config_cache()
+    default_model_routes.cache_clear()
+    yield
+    app_config.clear_config_cache()
+    default_model_routes.cache_clear()
 
 
 class FakeJobs:
@@ -62,7 +75,9 @@ class FakeJobs:
 
 
 class FakeResources:
-    ready = True
+    def __init__(self) -> None:
+        self.ready = True
+        self.ensured: list[tuple[str, ...]] = []
 
     def check_all(self):
         return [
@@ -76,9 +91,21 @@ class FakeResources:
     def task_ready(self, request=None):
         return self.ready
 
+    def diagnostics(self):
+        return {
+            "healthy": self.ready,
+            "core_version": "0.5.0",
+            "resources": self.check_all(),
+            "blocking_resources": [],
+            "python_executable": Path("C:/FineSub/runtime/python/python.exe"),
+            "disk_free_bytes": 1024,
+            "paths": {"tasks": Path("C:/FineSub/tasks")},
+        }
+
     def ensure(self, resource_ids):
         # The bridge now asks which of *these* are missing, so the fake has to
         # answer per resource rather than with one global flag.
+        self.ensured.append(tuple(resource_ids))
         return [] if self.ready else list(resource_ids)
 
     def install(self, resource_id, progress):
@@ -113,6 +140,77 @@ class FakeTray:
         self.hidden = True
 
 
+class FakeBatches:
+    def __init__(self) -> None:
+        self.running = False
+        self.requests: list[BatchRequest] = []
+        self.worker_context: WorkerLaunchContext | None = None
+        self.output_root: Path | None = None
+
+    def is_running(self) -> bool:
+        return self.running
+
+    def start(self, request: BatchRequest):
+        self.requests.append(request)
+        self.running = True
+        return {"batch_id": "batch-1", "state": "running", "items": []}
+
+    def snapshot(self):
+        return None
+
+    def history(self):
+        return []
+
+    def request_for(self, batch_id: str) -> BatchRequest:
+        if not self.requests:
+            raise KeyError(batch_id)
+        return self.requests[-1]
+
+    def cancel(self, batch_id: str):
+        self.running = False
+        return {"batch_id": batch_id, "state": "cancelled", "items": []}
+
+    def resume(self, batch_id: str):
+        self.running = True
+        return {"batch_id": batch_id, "state": "running", "items": []}
+
+    def set_worker_context(self, context: WorkerLaunchContext) -> None:
+        self.worker_context = context
+
+    def set_output_root(self, output_root: Path) -> None:
+        self.output_root = Path(output_root).resolve()
+
+
+class FakeKnowledge:
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.calls: list[tuple[str, object]] = []
+
+    def snapshot(self):
+        self.calls.append(("snapshot", None))
+        return {"revision": 7, "entries": []}
+
+    def entry(self, name: str, rev: int | None = None):
+        self.calls.append(("entry", (name, rev)))
+        return {"qualified_name": name, "valid_from_rev": rev or 7, "text": "# entry"}
+
+    def maintenance(self, command: str, args: list[str], *, content: str = ""):
+        self.calls.append(("maintenance", (command, args, content)))
+        return {"command": command, "exit_code": 0, "output": "ok"}
+
+    def share(self, command: str, args: list[str]):
+        self.calls.append(("share", (command, args)))
+        return {"command": command, "exit_code": 0, "output": "ok"}
+
+    def feedback(self, final_srt: str):
+        self.calls.append(("feedback", final_srt))
+        return {"artifact_dir": "artifacts", "merged_hints": []}
+
+    def refined_update(self, **values):
+        self.calls.append(("refined_update", values))
+        return {"mode": "refined_aligned", "warnings": []}
+
+
 def _bridge(tmp_path: Path) -> tuple[DesktopBridge, FakeJobs]:
     jobs = FakeJobs()
     bridge = DesktopBridge(
@@ -121,6 +219,18 @@ def _bridge(tmp_path: Path) -> tuple[DesktopBridge, FakeJobs]:
         settings=SettingsStore(tmp_path / "user-data"),
     )
     return bridge, jobs
+
+
+def test_bridge_exposes_a_structured_diagnostic_report(tmp_path: Path) -> None:
+    bridge, _ = _bridge(tmp_path)
+
+    result = bridge.get_diagnostics()
+
+    assert result["ok"] is True
+    assert result["data"]["healthy"] is True
+    assert result["data"]["core_version"] == "0.5.0"
+    assert result["data"]["python_executable"].endswith("python.exe")
+    assert result["data"]["gpu"] == {"state": "unavailable", "devices": []}
 
 
 def test_bridge_rejects_unknown_task_fields(tmp_path: Path) -> None:
@@ -167,6 +277,50 @@ def test_bridge_requests_runtime_install_before_worker_launch(
     assert jobs.requests == []
 
 
+def test_bridge_starts_a_core_batch_and_requests_url_capabilities(
+    tmp_path: Path,
+) -> None:
+    jobs = FakeJobs()
+    batches = FakeBatches()
+    resources = FakeResources()
+    bridge = DesktopBridge(
+        jobs=jobs,
+        batches=batches,
+        resources=resources,
+        settings=SettingsStore(tmp_path / "user-data"),
+    )
+
+    result = bridge.start_batch(
+        {
+            "items": [
+                {"input": "D:/media/a.wav"},
+                {"input": "https://example.test/video"},
+            ]
+        }
+    )
+
+    assert result["ok"] is True
+    assert batches.requests[0].workers.download == 2
+    assert resources.ensured[-1] == ("uv", "ffmpeg", "yt-dlp")
+
+
+def test_single_task_is_blocked_while_a_batch_is_running(tmp_path: Path) -> None:
+    batches = FakeBatches()
+    batches.running = True
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        batches=batches,
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+    )
+
+    result = bridge.start_task({"input": "D:/media/a.wav"})
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "batch_already_running"
+    assert result["error"]["action"] == "show_batch"
+
+
 def test_save_api_keys_returns_only_configuration_status(tmp_path: Path) -> None:
     bridge, jobs = _bridge(tmp_path)
 
@@ -175,7 +329,8 @@ def test_save_api_keys_returns_only_configuration_status(tmp_path: Path) -> None
     )
 
     assert result["ok"] is True
-    assert result["data"]["api_keys"]["gemini"] == "configured"
+    assert result["data"]["api_keys"]["gemini_free"] == "configured"
+    assert result["data"]["api_keys"]["gemini_paid"] == "missing"
     assert "private-gemini-key" not in str(result)
     assert jobs.worker_context.environment["GEMINI_FREE"] == "private-gemini-key"
 
@@ -187,7 +342,7 @@ def test_reveal_api_keys_returns_plaintext_entries(tmp_path: Path) -> None:
     result = bridge.reveal_api_keys()
 
     assert result["ok"] is True
-    entries = result["data"]["gemini"]
+    entries = result["data"]["gemini_free"]
     assert entries[0]["key"] == "private-gemini-key-123"
     assert entries[0]["masked"] == "priv…-123"
     assert result["data"]["exa"] == []
@@ -287,6 +442,35 @@ def test_bootstrap_state_reports_resources_and_optional_capabilities(
     assert result["data"]["resources"][0]["state"] == "ready"
     assert result["data"]["capabilities"]["raw_srt"] is True
     assert result["data"]["capabilities"]["translation"] is False
+    assert result["data"]["routing"]["active_preset_id"] == "default"
+
+
+def test_bridge_saves_a_validated_core_routing_preset(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(tmp_path / "config.toml"))
+    app_config.clear_config_cache()
+    default_model_routes.cache_clear()
+    bridge, jobs = _bridge(tmp_path)
+    current = bridge.get_routing_settings()["data"]
+    before = jobs.worker_context
+
+    result = bridge.save_routing_settings(
+        {
+            "preset": "agy-hybrid",
+            "execution_policy": current["execution_policy"],
+            "local_agent_timeout_seconds": 900,
+            "local_agent_allow_unisolated_user_config": False,
+            "local_agent_service_tier": "",
+            "local_agent_reasoning_effort": "",
+            "local_agent_max_parallel": 2,
+        }
+    )
+
+    assert result["ok"] is True
+    assert result["data"]["active_preset_id"] == "agy-hybrid"
+    assert result["data"]["local_agent_max_parallel"] == 2
+    assert jobs.worker_context is not before
 
 
 def test_resource_install_refreshes_worker_context(tmp_path: Path) -> None:
@@ -427,3 +611,197 @@ def test_the_missing_resource_is_named_rather_than_guessed(tmp_path: Path) -> No
     assert result["error"]["code"] == "runtime_required"
     assert "yt-dlp" in result["error"]["message"]
     assert "FFmpeg" not in result["error"]["message"]
+
+
+def test_bridge_forwards_owned_knowledge_workflows_and_rejects_unknown_commands(
+    tmp_path: Path,
+) -> None:
+    final_srt = tmp_path / "task" / "subtitle.srt"
+
+    class JobsWithRequest(FakeJobs):
+        def request_for(self, task_id: str) -> TaskRequest:
+            assert task_id == "task-1"
+            return TaskRequest(input="D:/media/a.wav", output=str(final_srt))
+
+    knowledge = FakeKnowledge(tmp_path / "knowledge")
+    bridge = DesktopBridge(
+        jobs=JobsWithRequest(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        knowledge=knowledge,
+    )
+
+    assert bridge.get_knowledge_snapshot()["data"]["revision"] == 7
+    assert bridge.get_knowledge_entry("common/FineSub", 4)["ok"] is True
+    assert bridge.run_knowledge_maintenance(
+        {"command": "edit", "args": ["common/FineSub"], "content": "# changed"}
+    )["ok"] is True
+    assert bridge.run_knowledge_share(
+        {"command": "status", "args": ["--remote", "https://example.test"]}
+    )["ok"] is True
+    assert bridge.get_task_knowledge_feedback("task-1")["ok"] is True
+    assert bridge.run_refined_knowledge_update(
+        {
+            "task_id": "task-1",
+            "refined_srt": str(tmp_path / "refined.srt"),
+            "apply": False,
+        }
+    )["ok"] is True
+    rejected = bridge.run_knowledge_maintenance(
+        {"command": "shell", "args": ["calc.exe"]}
+    )
+
+    assert rejected["ok"] is False
+    assert rejected["error"]["code"] == "invalid_request"
+    assert ("feedback", str(final_srt)) in knowledge.calls
+    refined = next(value for kind, value in knowledge.calls if kind == "refined_update")
+    assert refined["final_srt"] == str(final_srt)
+    assert refined["task_id"] == "task-1"
+
+
+def test_bridge_routes_missing_knowledge_runtime_to_resources(tmp_path: Path) -> None:
+    resources = FakeResources()
+    resources.ready = False
+    knowledge = FakeKnowledge(tmp_path / "knowledge")
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=resources,
+        settings=SettingsStore(tmp_path / "user-data"),
+        knowledge=knowledge,
+    )
+
+    result = bridge.get_knowledge_snapshot()
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "runtime_required"
+    assert result["error"]["action"] == "open_resources"
+    assert knowledge.calls == []
+
+
+def test_bridge_exports_keys_only_through_the_native_save_selector(
+    tmp_path: Path,
+) -> None:
+    settings = SettingsStore(tmp_path / "user-data")
+    settings.save_api_keys(gemini="secret")
+    destination = tmp_path / "transfer.env"
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=settings,
+        key_export_selector=lambda: str(destination),
+    )
+
+    result = bridge.export_api_keys()
+
+    assert result["ok"] is True
+    assert result["data"]["count"] == 1
+    assert result["data"]["path"] == str(destination.resolve())
+    assert destination.read_text(encoding="utf-8") == "GEMINI_FREE=secret\n"
+
+
+def test_bridge_relocates_storage_and_refreshes_future_batch_paths(
+    tmp_path: Path,
+) -> None:
+    destination = tmp_path / "large-files"
+
+    class MaintenanceResources(FakeResources):
+        def __init__(self) -> None:
+            super().__init__()
+            self.root = tmp_path / "app"
+            self.calls: list[tuple[str, object]] = []
+
+        def storage_state(self):
+            return {
+                "big_data": str(self.root),
+                "default_big_data": str(tmp_path / "app"),
+                "runtime": str(tmp_path / "app" / "runtime"),
+                "models": str(self.root / "models"),
+                "cache": str(self.root / "cache"),
+                "tasks": str(self.root / "tasks"),
+                "agent_capsules": str(self.root / "agent"),
+                "relocated": self.root != tmp_path / "app",
+            }
+
+        def relocate_big_data(self, selected, *, reset=False):
+            self.calls.append(("relocate", (selected, reset)))
+            self.root = Path(selected).resolve()
+            return {
+                "storage": self.storage_state(),
+                "resources": self.check_all(),
+                "message": "moved",
+            }
+
+    class FinishedInstalls:
+        forgotten = False
+
+        def list(self):
+            return []
+
+        def forget_finished(self):
+            self.forgotten = True
+
+    resources = MaintenanceResources()
+    installs = FinishedInstalls()
+    batches = FakeBatches()
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        batches=batches,
+        resources=resources,
+        resource_installs=installs,
+        settings=SettingsStore(tmp_path / "user-data"),
+        directory_selector=lambda: str(destination),
+    )
+
+    result = bridge.relocate_data()
+
+    assert result["ok"] is True
+    assert result["data"]["storage"]["big_data"] == str(destination.resolve())
+    assert resources.calls == [("relocate", (destination, False))]
+    assert installs.forgotten is True
+    assert batches.output_root == (destination / "tasks" / "batches").resolve()
+    assert batches.worker_context is not None
+
+
+def test_storage_maintenance_is_blocked_while_a_resource_install_runs(
+    tmp_path: Path,
+) -> None:
+    class RunningInstalls:
+        def list(self):
+            return [{"state": "running"}]
+
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        resource_installs=RunningInstalls(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        directory_selector=lambda: str(tmp_path / "large-files"),
+    )
+
+    result = bridge.relocate_data()
+
+    assert result["ok"] is False
+    assert result["error"]["code"] == "resource_install_running"
+
+
+def test_rebuildable_cleanup_requires_an_explicit_confirmation(
+    tmp_path: Path,
+) -> None:
+    calls: list[str] = []
+
+    class MaintenanceResources(FakeResources):
+        def purge_rebuildable_data(self):
+            calls.append("purge")
+            return {"storage": {}, "resources": [], "message": "removed"}
+
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=MaintenanceResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+    )
+
+    rejected = bridge.purge_rebuildable_data("yes")
+    accepted = bridge.purge_rebuildable_data("PURGE_REBUILDABLE_DATA")
+
+    assert rejected["error"]["code"] == "confirmation_required"
+    assert accepted["ok"] is True
+    assert calls == ["purge"]

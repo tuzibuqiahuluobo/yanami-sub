@@ -114,14 +114,22 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
 
     assert exposed == [
         "get_bootstrap_state",
+        "get_diagnostics",
         "select_input_file",
+        "select_batch_files",
         "start_task",
         "cancel_task",
         "retry_task",
         "resume_task",
+        "delete_task_intermediates",
         "get_task_snapshot",
         "list_tasks",
         "poll_events",
+        "start_batch",
+        "cancel_batch",
+        "resume_batch",
+        "get_batch_snapshot",
+        "list_batches",
         "install_resource",
         "get_resource_install",
         "list_resource_installs",
@@ -134,13 +142,31 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "save_api_keys",
         "delete_api_key",
         "reveal_api_keys",
+        "export_api_keys",
+        "get_routing_settings",
+        "save_routing_settings",
+        "save_provider_key",
+        "delete_provider_key",
+        "probe_local_agents",
+        "get_knowledge_snapshot",
+        "get_knowledge_entry",
+        "run_knowledge_maintenance",
+        "run_knowledge_share",
+        "get_task_knowledge_feedback",
+        "run_refined_knowledge_update",
+        "open_knowledge_directory",
         "check_updates",
         "install_update",
         "get_update_install",
         "open_update_page",
         "open_tasks_directory",
+        "open_batch_directory",
+        "open_batch_output",
+        "open_batch_log",
         "open_install_logs",
         "open_output",
+        "relocate_data",
+        "purge_rebuildable_data",
         "minimize_window",
         "minimize_to_tray",
         "maximize_window",
@@ -237,13 +263,14 @@ def test_development_services_run_worker_from_repository_source(
     python.parent.mkdir(parents=True)
     python.write_bytes(b"python")
 
-    jobs, desktop_resources, _ = create_backend_services(
+    jobs, batches, desktop_resources, _ = create_backend_services(
         paths,
         development_python=python,
     )
 
     assert jobs.worker_context.python_executable == str(python.resolve())
     assert jobs.worker_context.working_directory == str(paths.root)
+    assert batches.snapshot() is None
     # A development interpreter is not considered ready merely because the
     # executable exists; it must also contain the worker dependencies.
     assert desktop_resources.check_all()[0].state == "missing"
@@ -269,13 +296,13 @@ def test_installed_services_load_resources_from_current_app_version(
         encoding="utf-8",
     )
 
-    jobs, desktop_resources, _ = create_backend_services(paths)
+    jobs, batches, desktop_resources, _ = create_backend_services(paths)
 
     assert jobs.worker_context.working_directory == str(source.resolve())
+    assert batches.snapshot() is None
     statuses = desktop_resources.check_all()
-    # Required first, then the two a task can start without: the model weights,
-    # which a task downloads itself, and tokcount, which it simply does not
-    # need -- the free countTokens endpoint counts for it online.
+    # Required first, then request-specific and optional conveniences. URL
+    # tasks gate on yt-dlp at launch; local tasks do not wait for it or Git.
     assert [status.id for status in statuses] == [
         "uv",
         "ffmpeg",
@@ -287,8 +314,8 @@ def test_installed_services_load_resources_from_current_app_version(
     assert [status.optional for status in statuses] == [
         False,
         False,
-        False,
-        False,
+        True,
+        True,
         True,
         True,
     ]

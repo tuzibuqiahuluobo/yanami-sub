@@ -11,8 +11,8 @@ import {
 import { fileName } from "@/lib/formatters";
 import type { TaskState } from "@/lib/state";
 import {
-  preferredSubtitleOutput,
-  subtitleOutputEntries,
+  preferredTaskOutput,
+  taskOutputEntries,
 } from "@/lib/subtitleOutputs";
 import { useLanguage } from "./LanguageProvider";
 
@@ -31,8 +31,8 @@ export function CompletedView({
 }: CompletedViewProps) {
   const { t } = useLanguage();
   const outputLabels: Record<string, string> = t.completed.labels;
-  const outputs = subtitleOutputEntries(task.outputs);
-  const preferred = preferredSubtitleOutput(task.outputs);
+  const outputs = taskOutputEntries(task.outputs);
+  const preferred = preferredTaskOutput(task.outputs);
 
   return (
     <div className="page completed-page">

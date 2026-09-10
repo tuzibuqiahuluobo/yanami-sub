@@ -11,6 +11,8 @@
 @import "./styles/controls.css";
 @import "./styles/task-run.css";
 @import "./styles/history.css";
+@import "./styles/batch.css";
+@import "./styles/knowledge.css";
 @import "./styles/resources.css";
 @import "./styles/settings.css";
 @import "./styles/url-input.css";

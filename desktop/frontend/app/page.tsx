@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
+import { BatchQueue } from "@/components/BatchQueue";
 import { BootstrapScreen } from "@/components/BootstrapScreen";
 import { CompletedView } from "@/components/CompletedView";
 import { ConfirmDialog, isConfirmRemembered } from "@/components/ConfirmDialog";
+import { KnowledgeCenter } from "@/components/KnowledgeCenter";
 import { LanguageProvider, useLanguage } from "@/components/LanguageProvider";
 import { NewTask } from "@/components/NewTask";
 import { ProcessingView } from "@/components/ProcessingView";
@@ -28,8 +30,10 @@ import {
   reduceAppState,
 } from "@/lib/state";
 import type {
+  ApiProvider,
   BridgeError,
   Route,
+  RoutingUpdate,
   TaskRequest,
   UpdateCheck,
 } from "@/lib/types";
@@ -292,7 +296,11 @@ export default function Home() {
       });
       dispatch({ type: "taskStarted", snapshot });
     } catch (error) {
-      dispatch({ type: "taskRejected", error: toBridgeError(error) });
+      const bridgeError = toBridgeError(error);
+      dispatch({ type: "taskRejected", error: bridgeError });
+      if (bridgeError.action === "show_batch") {
+        dispatch({ type: "navigate", route: "batch" });
+      }
     } finally {
       setBusy(false);
     }
@@ -364,22 +372,37 @@ export default function Home() {
   };
 
   const saveKey = async (
-    provider: "gemini" | "exa" | "tavily",
+    provider: ApiProvider,
     value: string,
   ) => {
     const settings = await desktopApi.saveApiKeys({ [provider]: value });
     dispatch({ type: "settingsChanged", settings });
+    dispatch({ type: "routingChanged", routing: await desktopApi.getRoutingSettings() });
   };
 
-  const deleteKey = async (provider: "gemini" | "exa" | "tavily") => {
+  const deleteKey = async (provider: ApiProvider) => {
     const settings = await desktopApi.deleteApiKey(provider);
     dispatch({ type: "settingsChanged", settings });
+    dispatch({ type: "routingChanged", routing: await desktopApi.getRoutingSettings() });
   };
 
 
 
   let content;
-  if (state.route === "history") {
+  if (state.route === "batch") {
+    content = (
+      <BatchQueue
+        request={state.task.request}
+        capabilities={state.capabilities}
+        routing={state.routing}
+        onRequestChange={(changes) => {
+          dispatch({ type: "requestChanged", changes });
+          rememberTaskOptions(changes);
+        }}
+        onOpenResources={() => dispatch({ type: "navigate", route: "resources" })}
+      />
+    );
+  } else if (state.route === "history") {
     content = (
       <TaskHistory
         tasks={state.history}
@@ -403,6 +426,8 @@ export default function Home() {
         }}
       />
     );
+  } else if (state.route === "knowledge") {
+    content = <KnowledgeCenter tasks={state.history} />;
   } else if (state.route === "resources") {
     content = (
       <ResourceManager
@@ -414,6 +439,20 @@ export default function Home() {
           void desktopApi.openResourceLocation(resourceId, kind)
         }
         onOpenLogs={() => void desktopApi.openInstallLogs()}
+        onRunDiagnostics={() => desktopApi.getDiagnostics()}
+        storage={state.storage}
+        onRelocateData={async (reset) => {
+          const result = await desktopApi.relocateData(reset);
+          if (!result.cancelled) await loadBootstrap();
+          return result;
+        }}
+        onPurgeRebuildableData={async () => {
+          const result = await desktopApi.purgeRebuildableData(
+            "PURGE_REBUILDABLE_DATA",
+          );
+          await loadBootstrap();
+          return result;
+        }}
       />
     );
   } else if (state.route === "settings") {
@@ -425,6 +464,20 @@ export default function Home() {
         onSaveKey={saveKey}
         onDeleteKey={deleteKey}
         onRevealKeys={() => desktopApi.revealApiKeys()}
+        onExportKeys={() => desktopApi.exportApiKeys()}
+        onSaveRouting={async (values: RoutingUpdate) => {
+          const routing = await desktopApi.saveRoutingSettings(values);
+          dispatch({ type: "routingChanged", routing });
+        }}
+        onSaveProviderKey={async (providerId, value) => {
+          const routing = await desktopApi.saveProviderKey(providerId, value);
+          dispatch({ type: "routingChanged", routing });
+        }}
+        onDeleteProviderKey={async (providerId) => {
+          const routing = await desktopApi.deleteProviderKey(providerId);
+          dispatch({ type: "routingChanged", routing });
+        }}
+        onProbeLocalAgents={() => desktopApi.probeLocalAgents()}
         onUseRawSubtitle={() => {
           dispatch({
             type: "requestChanged",

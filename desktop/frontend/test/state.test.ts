@@ -18,7 +18,8 @@ test("bootstrap restores an active worker task and its progress", () => {
       },
       settings: {
         api_keys: {
-          gemini: "missing",
+          gemini_free: "missing",
+          gemini_paid: "missing",
           exa: "missing",
           tavily: "missing",
         },
@@ -38,17 +39,31 @@ test("bootstrap restores an active worker task and its progress", () => {
           device: "cuda",
           language: "ja",
           gpu_tier: "entry",
+          gap_sec: 0.3,
+          qwen_verify: "auto",
+          lang_redecode: "auto",
+          asr_decode_batch: "auto",
+          asr_context: "off",
           word: false,
           asr_stabilize_profile: 0,
           llm_media: "video",
+          llm_correction_media: "",
+          llm_planning_media: "",
           llm_retrieval: "local",
           llm_difficulty: "quality",
+          llm_continuity: "serial",
+          llm_parallel_windows: 1,
           llm_fast: "auto",
           llm_output_scale: 1,
+          llm_model: [],
+          download_video_source: true,
           extra_info: "",
           extra_style: "",
-            knowledge: "none",
+          knowledge: "none",
           postprocess_profile: 0,
+          max_retries_per_window: 5,
+          max_replacements_per_window: 1,
+          resume: true,
         },
         events: [
           {
@@ -271,17 +286,31 @@ test("reusing a recognition run pins its directory and switches to final-srt", (
         device: "cuda",
         language: null,
         gpu_tier: "entry",
+        gap_sec: 0.3,
+        qwen_verify: "auto",
+        lang_redecode: "auto",
+        asr_decode_batch: "auto",
+        asr_context: "off",
         word: false,
         asr_stabilize_profile: 0,
         llm_media: "video",
+        llm_correction_media: "",
+        llm_planning_media: "",
         llm_retrieval: "local",
         llm_difficulty: "quality",
+        llm_continuity: "serial",
+        llm_parallel_windows: 1,
         llm_fast: "auto",
         llm_output_scale: 1,
+        llm_model: [],
+        download_video_source: true,
         extra_info: "出自某次直播",
         extra_style: "",
         knowledge: "update",
         postprocess_profile: 0,
+        max_retries_per_window: 5,
+        max_replacements_per_window: 1,
+        resume: true,
       },
     },
   });
@@ -339,17 +368,31 @@ test("a rejection about the running task must not tear the running task down", (
         gpu_index: null,
         language: null,
         gpu_tier: "entry",
+        gap_sec: 0.3,
+        qwen_verify: "auto",
+        lang_redecode: "auto",
+        asr_decode_batch: "auto",
+        asr_context: "off",
         word: false,
         asr_stabilize_profile: 0,
         llm_media: "video",
+        llm_correction_media: "",
+        llm_planning_media: "",
         llm_retrieval: "local",
         llm_difficulty: "quality",
+        llm_continuity: "serial",
+        llm_parallel_windows: 1,
         llm_fast: "auto",
         llm_output_scale: 1,
+        llm_model: [],
+        download_video_source: true,
         extra_info: "",
         extra_style: "",
         knowledge: "update",
         postprocess_profile: 0,
+        max_retries_per_window: 5,
+        max_replacements_per_window: 1,
+        resume: true,
       },
       events: [],
       outputs: {},
@@ -386,7 +429,7 @@ test("remembered options survive starting a new task", () => {
       resource_installs: [],
       capabilities: { raw_srt: true, translation: false, web_search: false },
       settings: {
-        api_keys: { gemini: "missing", exa: "missing", tavily: "missing" },
+        api_keys: { gemini_free: "missing", gemini_paid: "missing", exa: "missing", tavily: "missing" },
       },
       preferences: { ui: {}, task_defaults: { gpu_tier: "standard" } },
       shared_settings: { split_length_scale: null },
@@ -399,13 +442,24 @@ test("remembered options survive starting a new task", () => {
 
   const changed = reduceAppState(bootstrapped, {
     type: "requestChanged",
-    changes: { language: "ja", model_name: "large-v3" },
+    changes: {
+      language: "ja",
+      model_name: "large-v3",
+      separate: false,
+      asr_decode_batch: 4,
+      llm_continuity: "parallel",
+      max_retries_per_window: 8,
+    },
   });
   const reset = reduceAppState(changed, { type: "resetTask" });
 
   assert.equal(reset.task.request.gpu_tier, "standard");
   assert.equal(reset.task.request.language, "ja");
   assert.equal(reset.task.request.model_name, "large-v3");
+  assert.equal(reset.task.request.separate, false);
+  assert.equal(reset.task.request.asr_decode_batch, 4);
+  assert.equal(reset.task.request.llm_continuity, "parallel");
+  assert.equal(reset.task.request.max_retries_per_window, 8);
   // Content, not "how": a new task starts clean.
   assert.equal(reset.task.selectedFile, null);
 });
@@ -422,7 +476,7 @@ test("a null in stored defaults never overwrites a real default", () => {
       resource_installs: [],
       capabilities: { raw_srt: true, translation: false, web_search: false },
       settings: {
-        api_keys: { gemini: "missing", exa: "missing", tavily: "missing" },
+        api_keys: { gemini_free: "missing", gemini_paid: "missing", exa: "missing", tavily: "missing" },
       },
       preferences: {
         ui: {},

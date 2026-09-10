@@ -9,7 +9,18 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from desktop.backend.common.models import BridgeError, SharedSettings, TaskRequest
+from desktop.backend.batches.manager import BatchAlreadyRunning, BatchNotFound
+from desktop.backend.common.models import (
+    BatchRequest,
+    BridgeError,
+    KnowledgeCommandRequest,
+    KnowledgeShareCommandRequest,
+    RefinedKnowledgeUpdateRequest,
+    RoutingUpdate,
+    SharedSettings,
+    TaskRequest,
+)
+from desktop.backend.knowledge import KnowledgeOperationError, KnowledgeService
 from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobAlreadyRunning, JobNotFound
 from desktop.backend.settings.preferences import PreferencesStore
@@ -23,6 +34,8 @@ class ApiKeyPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     gemini: str | None = None
+    gemini_free: str | None = None
+    gemini_paid: str | None = None
     exa: str | None = None
     tavily: str | None = None
 
@@ -85,10 +98,15 @@ class DesktopBridge:
         resources: Any,
         resource_installs: Any | None = None,
         settings: SettingsStore,
+        batches: Any | None = None,
         preferences: PreferencesStore | None = None,
         updates: Any | None = None,
         update_installs: Any | None = None,
         file_selector: Callable[[], str | None] | None = None,
+        batch_file_selector: Callable[[], list[str]] | None = None,
+        directory_selector: Callable[[], str | None] | None = None,
+        key_export_selector: Callable[[], str | None] | None = None,
+        knowledge: Any | None = None,
         output_opener: Callable[[Path], None] | None = None,
         url_opener: Callable[[str], Any] | None = None,
         window: Any | None = None,
@@ -96,6 +114,7 @@ class DesktopBridge:
         app_version: str = "development",
     ) -> None:
         self.jobs = jobs
+        self.batches = batches
         self.resources = resources
         self.resource_installs = resource_installs
         self.settings = settings
@@ -103,6 +122,13 @@ class DesktopBridge:
         self.updates = updates
         self.update_installs = update_installs
         self.file_selector = file_selector
+        self.batch_file_selector = batch_file_selector
+        self.directory_selector = directory_selector
+        self.key_export_selector = key_export_selector
+        self.knowledge = knowledge or KnowledgeService(
+            settings.user_data / "knowledge",
+            lambda: self.jobs.worker_context,
+        )
         self.output_opener = output_opener or self._open_in_explorer
         self.url_opener = url_opener or webbrowser.open
         self.window = window
@@ -121,12 +147,16 @@ class DesktopBridge:
                 ),
                 "capabilities": self.settings.get_capabilities(),
                 "settings": self.settings.public_settings(),
+                "routing": self.settings.routing_settings(),
                 "preferences": self.preferences.load(),
                 "shared_settings": self.settings.shared_settings(),
                 "config_path": str(self.settings.config_path),
+                "storage": self._storage_state(),
                 "gpus": self._gpu_snapshot(),
                 "task": self.jobs.snapshot(),
                 "tasks": self.jobs.history(),
+                "batch": self.batches.snapshot() if self.batches is not None else None,
+                "batches": self.batches.history() if self.batches is not None else [],
             }
         )
 
@@ -137,6 +167,21 @@ class DesktopBridge:
         # Whatever the background probe has right now. Never waits: the state
         # is "scanning" until it answers, and the interface polls anyway.
         return probe.snapshot().to_dict()
+
+    def _storage_state(self) -> dict[str, Any]:
+        read = getattr(self.resources, "storage_state", None)
+        if callable(read):
+            return dict(read())
+        return {
+            "big_data": "",
+            "default_big_data": "",
+            "runtime": "",
+            "models": "",
+            "cache": "",
+            "tasks": "",
+            "agent_capsules": "",
+            "relocated": False,
+        }
 
     def rescan_gpus(self) -> dict[str, Any]:
         """Look for GPUs again -- for after a card or driver change."""
@@ -150,6 +195,26 @@ class DesktopBridge:
 
         return self._guard(rescan)
 
+    def get_diagnostics(self) -> dict[str, Any]:
+        """Run the explicit runtime probe and return one structured report."""
+
+        def diagnose() -> dict[str, Any]:
+            report = dict(self.resources.diagnostics())
+            report.update(
+                {
+                    "app_version": self.app_version,
+                    "capabilities": self.settings.get_capabilities(),
+                    "gpu": self._gpu_snapshot(),
+                    "active_task": self.jobs.snapshot(),
+                    "active_batch": (
+                        self.batches.snapshot() if self.batches is not None else None
+                    ),
+                }
+            )
+            return report
+
+        return self._guard(diagnose)
+
     def select_input_file(self) -> dict[str, Any]:
         if self.file_selector is None:
             return _failure(
@@ -159,6 +224,16 @@ class DesktopBridge:
                 )
             )
         return self._guard(lambda: {"path": self.file_selector()})
+
+    def select_batch_files(self) -> dict[str, Any]:
+        if self.batch_file_selector is None:
+            return _failure(
+                BridgeError(
+                    code="dialog_unavailable",
+                    message="当前窗口无法打开多文件选择器。",
+                )
+            )
+        return self._guard(lambda: {"paths": self.batch_file_selector()})
 
     def start_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
@@ -171,9 +246,17 @@ class DesktopBridge:
                     action=str(error.errors(include_url=False)),
                 )
             )
-        capability_error = self.settings.validate_stage(request.stage)
+        capability_error = self.settings.validate_stage(request.stage, request.llm_model)
         if capability_error is not None:
             return _failure(capability_error)
+        if self.batches is not None and self.batches.is_running():
+            return _failure(
+                BridgeError(
+                    code="batch_already_running",
+                    message="已有批处理正在运行。",
+                    action="show_batch",
+                )
+            )
         missing = self._missing_resources(request)
         if missing:
             return _failure(_missing_resource_error(missing, "开始"))
@@ -189,6 +272,115 @@ class DesktopBridge:
             )
         except Exception:
             return self._internal_error("start_task")
+
+    def start_batch(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(
+                BridgeError(code="batch_unavailable", message="当前构建不支持批处理。")
+            )
+        try:
+            request = BatchRequest.model_validate(payload)
+        except ValidationError as error:
+            return _failure(
+                BridgeError(
+                    code="invalid_request",
+                    message="批处理参数无效。",
+                    action=str(error.errors(include_url=False)),
+                )
+            )
+        active = self.jobs.snapshot()
+        if active is not None and active.state == "running":
+            return _failure(
+                BridgeError(
+                    code="task_already_running",
+                    message="已有字幕任务正在运行。",
+                    action="show_current_task",
+                )
+            )
+        for item in request.items:
+            capability_error = self.settings.validate_stage(item.stage, item.llm_model)
+            if capability_error is not None:
+                return _failure(capability_error)
+        missing = self._missing_batch_resources(request)
+        if missing:
+            return _failure(_missing_resource_error(missing, "开始"))
+        try:
+            return _success(self.batches.start(request))
+        except BatchAlreadyRunning:
+            return _failure(
+                BridgeError(
+                    code="batch_already_running",
+                    message="已有批处理正在运行。",
+                    action="show_batch",
+                )
+            )
+        except Exception:
+            return self._internal_error("start_batch")
+
+    def cancel_batch(self, batch_id: str) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(
+                BridgeError(code="batch_unavailable", message="当前构建不支持批处理。")
+            )
+        try:
+            return _success(self.batches.cancel(batch_id))
+        except BatchNotFound:
+            return _failure(
+                BridgeError(code="batch_not_found", message="没有找到该批次。")
+            )
+        except Exception:
+            return self._internal_error("cancel_batch")
+
+    def resume_batch(self, batch_id: str) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(
+                BridgeError(code="batch_unavailable", message="当前构建不支持批处理。")
+            )
+        active = self.jobs.snapshot()
+        if active is not None and active.state == "running":
+            return _failure(
+                BridgeError(
+                    code="task_already_running",
+                    message="已有字幕任务正在运行。",
+                    action="show_current_task",
+                )
+            )
+        try:
+            request = self.batches.request_for(batch_id)
+            for item in request.items:
+                capability_error = self.settings.validate_stage(item.stage, item.llm_model)
+                if capability_error is not None:
+                    return _failure(capability_error)
+            missing = self._missing_batch_resources(request)
+            if missing:
+                return _failure(_missing_resource_error(missing, "继续"))
+            return _success(self.batches.resume(batch_id))
+        except BatchNotFound:
+            return _failure(
+                BridgeError(code="batch_not_found", message="没有找到该批次。")
+            )
+        except BatchAlreadyRunning:
+            return _failure(
+                BridgeError(
+                    code="batch_already_running",
+                    message="已有批处理正在运行。",
+                    action="show_batch",
+                )
+            )
+        except ValueError as error:
+            return _failure(BridgeError(code="batch_not_resumable", message=str(error)))
+        except Exception:
+            return self._internal_error("resume_batch")
+
+    def get_batch_snapshot(self) -> dict[str, Any]:
+        return self._guard(
+            self.batches.snapshot if self.batches is not None else lambda: None
+        )
+
+    def list_batches(self) -> dict[str, Any]:
+        return self._guard(
+            self.batches.history if self.batches is not None else lambda: []
+        )
 
     def cancel_task(self, task_id: str) -> dict[str, Any]:
         try:
@@ -276,7 +468,7 @@ class DesktopBridge:
 
     def _validate_saved_task(self, task_id: str) -> BridgeError | None:
         request = self.jobs.request_for(task_id)
-        capability_error = self.settings.validate_stage(request.stage)
+        capability_error = self.settings.validate_stage(request.stage, request.llm_model)
         if capability_error is not None:
             return capability_error
         missing = self._missing_resources(request)
@@ -301,6 +493,22 @@ class DesktopBridge:
         )
 
         return ensure(ALWAYS_REQUIRED + capability_requirements(request))
+
+    def _missing_batch_resources(self, request: BatchRequest) -> list[str]:
+        ensure = getattr(self.resources, "ensure", None)
+        if not callable(ensure):
+            return []
+        from desktop.backend.resources.desktop_service import (
+            ALWAYS_REQUIRED,
+            capability_requirements,
+        )
+
+        required = list(ALWAYS_REQUIRED)
+        for item in request.items:
+            for resource_id in capability_requirements(item):
+                if resource_id not in required:
+                    required.append(resource_id)
+        return ensure(tuple(required))
 
     def poll_events(self, after_cursor: int = 0) -> dict[str, Any]:
         def collect() -> dict[str, Any]:
@@ -361,6 +569,61 @@ class DesktopBridge:
             return {"path": str(path)}
 
         return self._guard(open_location)
+
+    def relocate_data(self, reset: bool = False) -> dict[str, Any]:
+        """Choose and move the core big-data store; paths never come from JS."""
+
+        if not isinstance(reset, bool):
+            return _failure(
+                BridgeError(code="invalid_request", message="目录重置参数无效。")
+            )
+        busy = self._storage_maintenance_blocker()
+        if busy is not None:
+            return _failure(busy)
+        if not reset and self.directory_selector is None:
+            return _failure(
+                BridgeError(
+                    code="dialog_unavailable",
+                    message="当前窗口无法打开目录选择器。",
+                )
+            )
+        try:
+            destination = None if reset else self.directory_selector()
+            if not reset and not destination:
+                return _success({"cancelled": True, "storage": self._storage_state()})
+            result = self.resources.relocate_big_data(
+                None if reset else Path(destination),
+                reset=reset,
+            )
+            self._after_storage_change()
+            return _success({"cancelled": False, **result})
+        except (ValueError, RuntimeError, OSError) as error:
+            return _failure(
+                BridgeError(code="storage_maintenance_failed", message=str(error))
+            )
+        except Exception:
+            return self._internal_error("relocate_data")
+
+    def purge_rebuildable_data(self, confirmation: str) -> dict[str, Any]:
+        """Remove only data the core can recreate; tasks and settings survive."""
+
+        if confirmation != "PURGE_REBUILDABLE_DATA":
+            return _failure(
+                BridgeError(code="confirmation_required", message="需要确认后才能清理。")
+            )
+        busy = self._storage_maintenance_blocker()
+        if busy is not None:
+            return _failure(busy)
+        try:
+            result = self.resources.purge_rebuildable_data()
+            self._forget_resource_install_snapshots()
+            return _success({"cancelled": False, **result})
+        except (ValueError, RuntimeError, OSError) as error:
+            return _failure(
+                BridgeError(code="storage_maintenance_failed", message=str(error))
+            )
+        except Exception:
+            return self._internal_error("purge_rebuildable_data")
 
     def get_preferences(self) -> dict[str, Any]:
         """Front-end state plus the shared settings the panel can write.
@@ -441,7 +704,9 @@ class DesktopBridge:
 
     def delete_api_key(
         self,
-        provider: Literal["gemini", "exa", "tavily"],
+        provider: Literal[
+            "gemini", "gemini_free", "gemini_paid", "exa", "tavily"
+        ],
     ) -> dict[str, Any]:
         try:
             self.settings.delete_api_key(provider)
@@ -461,6 +726,146 @@ class DesktopBridge:
         # The payload is plaintext key material headed for the UI; nothing on
         # this path logs it (_internal_error records only the operation name).
         return self._guard(self.settings.reveal_api_keys)
+
+    def export_api_keys(self) -> dict[str, Any]:
+        if self.key_export_selector is None:
+            return _failure(
+                BridgeError(
+                    code="dialog_unavailable",
+                    message="当前窗口无法打开密钥导出对话框。",
+                )
+            )
+
+        def export() -> dict[str, Any]:
+            destination = self.key_export_selector()
+            if not destination:
+                return {"cancelled": True, "path": None, "count": 0}
+            result = self.settings.export_api_keys(Path(destination))
+            return {"cancelled": False, **result}
+
+        return self._guard(export)
+
+    def save_provider_key(self, provider_id: str, value: str) -> dict[str, Any]:
+        try:
+            self.settings.save_provider_key(provider_id, value)
+            self._refresh_worker_environment()
+            return _success(self.settings.routing_settings())
+        except ValueError as error:
+            return _failure(
+                BridgeError(code="invalid_provider", message=str(error))
+            )
+        except Exception:
+            return self._internal_error("save_provider_key")
+
+    def delete_provider_key(self, provider_id: str) -> dict[str, Any]:
+        try:
+            self.settings.delete_provider_key(provider_id)
+            self._refresh_worker_environment()
+            return _success(self.settings.routing_settings())
+        except ValueError as error:
+            return _failure(
+                BridgeError(code="invalid_provider", message=str(error))
+            )
+        except Exception:
+            return self._internal_error("delete_provider_key")
+
+    def get_routing_settings(self) -> dict[str, Any]:
+        return self._guard(self.settings.routing_settings)
+
+    def save_routing_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            values = RoutingUpdate.model_validate(payload)
+            saved = self.settings.save_routing_settings(values)
+            self._refresh_worker_environment()
+            return _success(saved)
+        except (ValidationError, ValueError) as error:
+            return _failure(
+                BridgeError(code="invalid_routing", message=str(error))
+            )
+        except Exception:
+            return self._internal_error("save_routing_settings")
+
+    def probe_local_agents(self) -> dict[str, Any]:
+        return self._guard(self.settings.probe_local_agents)
+
+    def get_knowledge_snapshot(self) -> dict[str, Any]:
+        return self._knowledge_guard(self.knowledge.snapshot)
+
+    def get_knowledge_entry(
+        self, name: str, rev: int | None = None
+    ) -> dict[str, Any]:
+        return self._knowledge_guard(lambda: self.knowledge.entry(name, rev))
+
+    def run_knowledge_maintenance(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        try:
+            request = KnowledgeCommandRequest.model_validate(payload)
+        except ValidationError as error:
+            return _failure(
+                BridgeError(code="invalid_request", message=str(error))
+            )
+        return self._knowledge_guard(
+            lambda: self.knowledge.maintenance(
+                request.command,
+                request.args,
+                content=request.content,
+            )
+        )
+
+    def run_knowledge_share(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            request = KnowledgeShareCommandRequest.model_validate(payload)
+        except ValidationError as error:
+            return _failure(
+                BridgeError(code="invalid_request", message=str(error))
+            )
+        return self._knowledge_guard(
+            lambda: self.knowledge.share(request.command, request.args)
+        )
+
+    def get_task_knowledge_feedback(self, task_id: str) -> dict[str, Any]:
+        def read_feedback() -> dict[str, Any]:
+            request = self.jobs.request_for(task_id)
+            if not request.output:
+                raise ValueError("该任务没有可定位的最终字幕路径。")
+            return self.knowledge.feedback(request.output)
+
+        return self._knowledge_guard(read_feedback)
+
+    def run_refined_knowledge_update(
+        self, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        try:
+            values = RefinedKnowledgeUpdateRequest.model_validate(payload)
+        except ValidationError as error:
+            return _failure(
+                BridgeError(code="invalid_request", message=str(error))
+            )
+
+        def update() -> dict[str, Any]:
+            request = self.jobs.request_for(values.task_id)
+            if not request.output:
+                raise ValueError("该任务没有可定位的最终字幕路径。")
+            return self.knowledge.refined_update(
+                final_srt=request.output,
+                refined_srt=values.refined_srt,
+                task_id=values.task_id,
+                task_summary=values.task_summary or request.task_summary,
+                llm_model=values.llm_model,
+                apply=values.apply,
+                resume=values.resume,
+            )
+
+        return self._knowledge_guard(update)
+
+    def open_knowledge_directory(self) -> dict[str, Any]:
+        def open_directory() -> dict[str, str]:
+            self.knowledge.root.mkdir(parents=True, exist_ok=True)
+            self.output_opener(self.knowledge.root)
+            return {"path": str(self.knowledge.root)}
+
+        return self._guard(open_directory)
 
     def check_updates(self) -> dict[str, Any]:
         if self.updates is None:
@@ -529,6 +934,50 @@ class DesktopBridge:
             return {"path": str(target)}
 
         return self._guard(open_directory)
+
+    def open_batch_directory(self, batch_id: str) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(
+                BridgeError(code="batch_unavailable", message="当前构建不支持批处理。")
+            )
+
+        def open_directory() -> dict[str, str]:
+            target = self.batches.open_batch_directory(batch_id, self.output_opener)
+            return {"path": str(target)}
+
+        return self._guard(open_directory)
+
+    def open_batch_output(self, batch_id: str, output_path: str) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(
+                BridgeError(code="batch_unavailable", message="当前构建不支持批处理。")
+            )
+        try:
+            path = self.batches.open_owned_output(
+                batch_id, output_path, self.output_opener
+            )
+            return _success({"path": str(path)})
+        except ValueError:
+            return _failure(
+                BridgeError(
+                    code="invalid_output",
+                    message="无法打开不属于当前批次的路径。",
+                )
+            )
+        except Exception:
+            return self._internal_error("open_batch_output")
+
+    def open_batch_log(self, batch_id: str) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(
+                BridgeError(code="batch_unavailable", message="当前构建不支持批处理。")
+            )
+
+        def open_log() -> dict[str, str]:
+            target = self.batches.open_log(batch_id, self.output_opener)
+            return {"path": str(target)}
+
+        return self._guard(open_log)
 
     def open_install_logs(self) -> dict[str, Any]:
         """Reveal the folder holding the install transcripts.
@@ -624,31 +1073,102 @@ class DesktopBridge:
         name = state.ToString() if hasattr(state, "ToString") else str(state)
         return name.rsplit(".", 1)[-1].lower() == "maximized"
 
+    def _storage_maintenance_blocker(self) -> BridgeError | None:
+        task = self.jobs.snapshot()
+        task_state = (
+            task.get("state", "")
+            if isinstance(task, dict)
+            else getattr(task, "state", "")
+        )
+        if task_state == "running":
+            return BridgeError(
+                code="task_already_running",
+                message="字幕任务正在运行，完成或取消后再维护数据目录。",
+                action="show_current_task",
+            )
+        if self.batches is not None and self.batches.is_running():
+            return BridgeError(
+                code="batch_already_running",
+                message="批处理正在运行，完成或取消后再维护数据目录。",
+                action="show_batch",
+            )
+        if self.resource_installs is not None:
+            for install in self.resource_installs.list():
+                state = (
+                    install.get("state", "")
+                    if isinstance(install, dict)
+                    else getattr(install, "state", "")
+                )
+                if state in {"queued", "running"}:
+                    return BridgeError(
+                        code="resource_install_running",
+                        message="仍有资源正在下载或安装，请先暂停并等待它停下。",
+                        action="open_resources",
+                    )
+        return None
+
+    def _forget_resource_install_snapshots(self) -> None:
+        forget = getattr(self.resource_installs, "forget_finished", None)
+        if callable(forget):
+            forget()
+
+    def _after_storage_change(self) -> None:
+        self._forget_resource_install_snapshots()
+        storage = self._storage_state()
+        set_batch_root = getattr(self.batches, "set_output_root", None)
+        if callable(set_batch_root) and storage.get("tasks"):
+            set_batch_root(Path(str(storage["tasks"])) / "batches")
+        self._refresh_worker_environment()
+
     def _refresh_worker_environment(self) -> None:
         environment = self.settings.build_worker_env()
         context_builder = getattr(self.resources, "worker_context", None)
         current = self.jobs.worker_context
         if callable(context_builder):
             context = context_builder(environment)
-            self.jobs.set_worker_context(
-                WorkerLaunchContext(
-                    python_executable=str(context.python_executable),
-                    working_directory=str(context.working_directory),
-                    environment=dict(context.environment),
-                )
+            launch_context = WorkerLaunchContext(
+                python_executable=str(context.python_executable),
+                working_directory=str(context.working_directory),
+                environment=dict(context.environment),
             )
-            return
-        self.jobs.set_worker_context(
-            WorkerLaunchContext(
+        else:
+            launch_context = WorkerLaunchContext(
                 python_executable=current.python_executable,
                 working_directory=current.working_directory,
                 environment=environment,
             )
-        )
+        self.jobs.set_worker_context(launch_context)
+        set_batch_context = getattr(self.batches, "set_worker_context", None)
+        if callable(set_batch_context):
+            set_batch_context(launch_context)
 
     def _guard(self, action: Callable[[], Any]) -> dict[str, Any]:
         try:
             return _success(action())
+        except (ValueError, KeyError) as error:
+            return _failure(
+                BridgeError(code="invalid_request", message=str(error))
+            )
+        except Exception:
+            return self._internal_error(action.__name__)
+
+    def _knowledge_guard(self, action: Callable[[], Any]) -> dict[str, Any]:
+        try:
+            missing = self.resources.ensure(["uv"])
+            if missing:
+                return _failure(
+                    BridgeError(
+                        code="runtime_required",
+                        message="请先安装 Python 运行环境，再使用知识库。",
+                        action="open_resources",
+                    )
+                )
+            return _success(action())
+        except KnowledgeOperationError as error:
+            LOGGER.error("Knowledge worker failed: %s\n%s", error, error.detail)
+            return _failure(
+                BridgeError(code="knowledge_operation_failed", message=str(error))
+            )
         except (ValueError, KeyError) as error:
             return _failure(
                 BridgeError(code="invalid_request", message=str(error))

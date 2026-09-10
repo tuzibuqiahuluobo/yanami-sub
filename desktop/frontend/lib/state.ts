@@ -9,7 +9,9 @@ import type {
   ResourceInstallSnapshot,
   ResourceStatus,
   Route,
+  RoutingSettings,
   SharedSettings,
+  StorageState,
   TaskRequest,
   WorkerEvent,
 } from "./types";
@@ -48,11 +50,13 @@ export interface AppState {
   history: JobSnapshot[];
   capabilities: CapabilityState;
   settings: PublicSettings;
+  routing: RoutingSettings;
   /** Remembered task options; what a new task starts from. */
   taskDefaults: Partial<TaskRequest>;
   /** The config.toml slice the panel can write, and where that file is. */
   sharedSettings: SharedSettings;
   configPath: string;
+  storage: StorageState;
   /** Undefined until the first bootstrap poll answers. */
   gpus?: GpuSnapshot;
   task: TaskState;
@@ -75,6 +79,7 @@ export type AppAction =
   | { type: "resourceInstallChanged"; install: ResourceInstallSnapshot }
   | { type: "resourceInstallsChanged"; installs: ResourceInstallSnapshot[] }
   | { type: "settingsChanged"; settings: PublicSettings }
+  | { type: "routingChanged"; routing: RoutingSettings }
   | {
       type: "sharedSettingsChanged";
       settings: SharedSettings;
@@ -93,15 +98,34 @@ export const REMEMBERED_TASK_FIELDS = [
   "model_name",
   "language",
   "gpu_tier",
+  "gap_sec",
+  "separator_sample_rate",
+  "separate",
+  "vad_silero_assist",
+  "qwen_verify",
+  "lang_redecode",
+  "asr_decode_batch",
+  "asr_context",
   "word",
   "asr_stabilize_profile",
   "llm_media",
+  "llm_correction_media",
+  "llm_planning_media",
   "llm_retrieval",
   "llm_difficulty",
+  "llm_continuity",
+  "llm_parallel_windows",
   "llm_fast",
   "llm_output_scale",
+  "llm_model",
+  "style",
+  "style_mode",
+  "download_video_source",
   "knowledge",
   "postprocess_profile",
+  "max_retries_per_window",
+  "max_replacements_per_window",
+  "resume",
   "cleanup_intermediate",
 ] as const;
 
@@ -133,17 +157,39 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
   gpu_index: null,
   language: null,
   gpu_tier: "auto",
+  gap_sec: 0.3,
+  separator_sample_rate: null,
+  separate: null,
+  vad_silero_assist: null,
+  qwen_verify: "auto",
+  lang_redecode: "auto",
+  asr_decode_batch: "auto",
+  asr_context: "off",
   word: false,
   asr_stabilize_profile: 0,
   llm_media: "video",
+  llm_correction_media: "",
+  llm_planning_media: "",
   llm_retrieval: "local",
   llm_difficulty: "quality",
+  llm_continuity: "serial",
+  llm_parallel_windows: 1,
   llm_fast: "auto",
   llm_output_scale: 1,
+  llm_model: [],
+  llm_video: null,
   extra_info: "",
   extra_style: "",
+  task_summary: "",
+  style: null,
+  style_mode: null,
+  download_video_source: true,
   knowledge: "update",
+  refined_srt: null,
   postprocess_profile: 0,
+  max_retries_per_window: 5,
+  max_replacements_per_window: 1,
+  resume: true,
 };
 
 
@@ -226,14 +272,43 @@ export const initialState: AppState = {
   },
   settings: {
     api_keys: {
-      gemini: "missing",
+      gemini_free: "missing",
+      gemini_paid: "missing",
       exa: "missing",
       tavily: "missing",
     },
   },
+  routing: {
+    active_preset_id: "",
+    execution_policy: "",
+    local_agent_timeout_seconds: 1680,
+    local_agent_allow_unisolated_user_config: false,
+    local_agent_service_tier: "",
+    local_agent_reasoning_effort: "",
+    local_agent_max_parallel: 4,
+    presets: [],
+    policies: [],
+    providers: [],
+    targets: [],
+    model_groups: {},
+    task_groups: [],
+    local_agent_bound: false,
+    config_path: "",
+    error: "",
+  },
   taskDefaults: {},
   sharedSettings: { split_length_scale: null },
   configPath: "",
+  storage: {
+    big_data: "",
+    default_big_data: "",
+    runtime: "",
+    models: "",
+    cache: "",
+    tasks: "",
+    agent_capsules: "",
+    relocated: false,
+  },
   task: emptyTask(),
 };
 
@@ -254,6 +329,7 @@ export function reduceAppState(
         history: action.payload.tasks ?? [],
         capabilities: action.payload.capabilities,
         settings: action.payload.settings,
+        routing: action.payload.routing ?? state.routing,
         // Remembered task options seed the form, but never a task that is
         // already running or finished: those carry the request they ran with.
         task: restoreRunningTask(
@@ -268,6 +344,7 @@ export function reduceAppState(
         taskDefaults: remembered,
         sharedSettings: action.payload.shared_settings ?? state.sharedSettings,
         configPath: action.payload.config_path ?? state.configPath,
+        storage: action.payload.storage ?? state.storage,
         gpus: action.payload.gpus ?? state.gpus,
       };
     }
@@ -465,10 +542,25 @@ export function reduceAppState(
         settings: action.settings,
         capabilities: {
           ...state.capabilities,
-          translation: action.settings.api_keys.gemini === "configured",
+          translation:
+            action.settings.api_keys.gemini_free === "configured" ||
+            action.settings.api_keys.gemini_paid === "configured" ||
+            state.routing.local_agent_bound,
           web_search:
             action.settings.api_keys.exa === "configured" ||
             action.settings.api_keys.tavily === "configured",
+        },
+      };
+    case "routingChanged":
+      return {
+        ...state,
+        routing: action.routing,
+        capabilities: {
+          ...state.capabilities,
+          translation:
+            state.settings.api_keys.gemini_free === "configured" ||
+            state.settings.api_keys.gemini_paid === "configured" ||
+            action.routing.local_agent_bound,
         },
       };
     case "resetTask":

@@ -15,6 +15,7 @@ from finesub_bootstrap.paths import AppPaths, ensure_store, load_app_paths
 from finesub_bootstrap.resources import ResourceManager
 from finesub_bootstrap.environment import RuntimeEnvironment
 
+from desktop.backend.batches.manager import BatchManager
 from desktop.backend.common.product import PRODUCT_NAME
 from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobManager
@@ -36,14 +37,22 @@ from desktop.backend.updates.service import (
 
 PUBLIC_BRIDGE_METHODS = (
     "get_bootstrap_state",
+    "get_diagnostics",
     "select_input_file",
+    "select_batch_files",
     "start_task",
     "cancel_task",
     "retry_task",
     "resume_task",
+    "delete_task_intermediates",
     "get_task_snapshot",
     "list_tasks",
     "poll_events",
+    "start_batch",
+    "cancel_batch",
+    "resume_batch",
+    "get_batch_snapshot",
+    "list_batches",
     "install_resource",
     "get_resource_install",
     "list_resource_installs",
@@ -56,13 +65,31 @@ PUBLIC_BRIDGE_METHODS = (
     "save_api_keys",
     "delete_api_key",
     "reveal_api_keys",
+    "export_api_keys",
+    "get_routing_settings",
+    "save_routing_settings",
+    "save_provider_key",
+    "delete_provider_key",
+    "probe_local_agents",
+    "get_knowledge_snapshot",
+    "get_knowledge_entry",
+    "run_knowledge_maintenance",
+    "run_knowledge_share",
+    "get_task_knowledge_feedback",
+    "run_refined_knowledge_update",
+    "open_knowledge_directory",
     "check_updates",
     "install_update",
     "get_update_install",
     "open_update_page",
     "open_tasks_directory",
+    "open_batch_directory",
+    "open_batch_output",
+    "open_batch_log",
     "open_install_logs",
     "open_output",
+    "relocate_data",
+    "purge_rebuildable_data",
     "minimize_window",
     "minimize_to_tray",
     "maximize_window",
@@ -595,7 +622,7 @@ def create_backend_services(
     paths: AppPaths,
     *,
     development_python: Path | None = None,
-) -> tuple[JobManager, DesktopResourceService, SettingsStore]:
+) -> tuple[JobManager, BatchManager, DesktopResourceService, SettingsStore]:
     app_source = resolve_application_source(paths)
     # Before anything reads personal data, and never fatal: a failed migration
     # is logged and retried at the next start.
@@ -641,17 +668,26 @@ def create_backend_services(
         ).tasks,
     )
 
+    batches = BatchManager(
+        python_executable=context.python_executable,
+        working_directory=context.working_directory,
+        worker_env=context.environment,
+        available_gpus=gpu_probe.snapshot,
+        history_path=paths.user_data / "batches.json",
+        output_root=paths.tasks / "batches",
+    )
+
     def refresh_worker_context() -> None:
         updated = resources.worker_context(settings.build_worker_env())
         # One atomic swap: this runs on the installer's thread, and a spawn in
         # flight must not see a new interpreter with the old PYTHONPATH.
-        jobs.set_worker_context(
-            WorkerLaunchContext(
-                python_executable=str(updated.python_executable),
-                working_directory=str(updated.working_directory),
-                environment=dict(updated.environment),
-            )
+        worker_context = WorkerLaunchContext(
+            python_executable=str(updated.python_executable),
+            working_directory=str(updated.working_directory),
+            environment=dict(updated.environment),
         )
+        jobs.set_worker_context(worker_context)
+        batches.set_worker_context(worker_context)
 
     resource_installs = ResourceInstallManager(
         resources,
@@ -660,7 +696,7 @@ def create_backend_services(
     )
     resources.install_manager = resource_installs
     resources.gpu_probe = gpu_probe
-    return jobs, resources, settings
+    return jobs, batches, resources, settings
 
 
 def load_update_service(paths: AppPaths) -> GitHubUpdateService | None:
@@ -718,13 +754,14 @@ def create_application(
         development_url=development_url,
         installer=installer,
     )
-    jobs, resources, settings = create_backend_services(
+    jobs, batches, resources, settings = create_backend_services(
         paths,
         development_python=Path(sys.executable) if development else None,
     )
     updates = None if development else load_update_service(paths)
     bridge = DesktopBridge(
         jobs=jobs,
+        batches=batches,
         resources=resources,
         resource_installs=resources.install_manager,
         settings=settings,
@@ -778,6 +815,7 @@ def create_application(
         # (pywebview fires `closed` only on a real quit), which is exactly the
         # distinction the tray exists to draw.
         jobs.shutdown()
+        batches.shutdown()
 
     window.events.closed += on_closed
 
@@ -792,6 +830,45 @@ def create_application(
         return str(result[0]) if result else None
 
     bridge.file_selector = select_file
+
+    def select_batch_files() -> list[str]:
+        result = window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            allow_multiple=True,
+            file_types=(
+                "媒体文件 (*.wav;*.mp3;*.flac;*.m4a;*.ogg;*.mp4;*.mkv;*.mov;*.webm)",
+                "所有文件 (*.*)",
+            ),
+        )
+        return [str(path) for path in (result or ())]
+
+    bridge.batch_file_selector = select_batch_files
+
+    def select_directory() -> str | None:
+        result = window.create_file_dialog(webview.FileDialog.FOLDER)
+        if not result:
+            return None
+        selected = result[0] if isinstance(result, (list, tuple)) else result
+        return str(selected)
+
+    bridge.directory_selector = select_directory
+
+    def select_key_export() -> str | None:
+        result = window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename="finesub-api-keys.env",
+            file_types=(
+                "环境变量文件 (*.env)",
+                "文本文件 (*.txt)",
+                "所有文件 (*.*)",
+            ),
+        )
+        if not result:
+            return None
+        selected = result[0] if isinstance(result, (list, tuple)) else result
+        return str(selected)
+
+    bridge.key_export_selector = select_key_export
     return window, bridge, development
 
 

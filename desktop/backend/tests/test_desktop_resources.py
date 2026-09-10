@@ -78,8 +78,14 @@ class FakeRuntime:
         self.paths = AppPaths.for_root(root)
         self.ready = False
         self.installs = 0
+        self.force_probes: list[bool] = []
 
-    def status(self) -> ResourceStatus:
+    @property
+    def python_executable(self) -> Path:
+        return self.root / "python.exe"
+
+    def status(self, *, force_probe: bool = False) -> ResourceStatus:
+        self.force_probes.append(force_probe)
         return ResourceStatus(
             id="uv",
             version="Python 3.12",
@@ -129,6 +135,66 @@ def test_python_install_bootstraps_uv_before_activating_runtime(
     assert runtime.installs == 1
 
 
+def test_storage_relocation_uses_the_core_shell_and_adopts_its_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path / "bootstrap"),
+        runtime=FakeRuntime(tmp_path / "app"),
+        system_tool_finders={},
+    )
+    destination = tmp_path / "large-files"
+    calls: list[tuple[str, list[str]]] = []
+
+    class FakeShell:
+        def __init__(self, *, paths, **_kwargs) -> None:
+            self.paths = paths
+
+        def relocate(self, arguments):
+            calls.append(("relocate", list(arguments)))
+            self.paths = self.paths.with_big_data(Path(arguments[0]))
+            print("moved models, cache, tasks")
+            return 0
+
+    monkeypatch.setattr("finesub_bootstrap.shell.Shell", FakeShell)
+
+    result = service.relocate_big_data(destination)
+
+    assert calls == [("relocate", [str(destination)])]
+    assert service.runtime.paths.big_data == destination.resolve()
+    assert service.bootstrap.paths == service.runtime.paths
+    assert result["storage"]["relocated"] is True
+    assert "moved models" in result["message"]
+
+
+def test_rebuildable_cleanup_calls_only_the_core_big_data_purge(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path / "bootstrap"),
+        runtime=FakeRuntime(tmp_path / "app"),
+        system_tool_finders={},
+    )
+    calls: list[list[str]] = []
+
+    class FakeShell:
+        def __init__(self, *, paths, **_kwargs) -> None:
+            self.paths = paths
+
+        def uninstall(self, arguments):
+            calls.append(list(arguments))
+            print("removed rebuildable data")
+            return 0
+
+    monkeypatch.setattr("finesub_bootstrap.shell.Shell", FakeShell)
+
+    result = service.purge_rebuildable_data()
+
+    assert calls == [["--purge-big-data"]]
+    assert result["storage"]["tasks"].endswith("tasks")
+    assert "removed rebuildable data" in result["message"]
+
+
 def test_local_archive_search_runs_before_network_install(tmp_path: Path) -> None:
     bootstrap = FakeBootstrap(tmp_path)
     calls: list[str] = []
@@ -151,23 +217,25 @@ def test_local_archive_search_runs_before_network_install(tmp_path: Path) -> Non
     assert bootstrap.installed == ["ffmpeg"]
 
 
-def test_a_task_waits_for_every_managed_tool(tmp_path: Path) -> None:
+def test_a_task_waits_only_for_its_required_managed_tools(tmp_path: Path) -> None:
     bootstrap = FakeBootstrap(tmp_path)
     runtime = FakeRuntime(tmp_path)
     service = DesktopResourceService(
         bootstrap=bootstrap, runtime=runtime, system_tool_finders={}
     )
 
-    for resource_id in ("uv", "ffmpeg", "git"):
+    for resource_id in ("uv", "ffmpeg"):
         assert service.task_ready() is False
         service.install(resource_id, lambda event: None)
-    assert service.task_ready() is False
+    assert service.task_ready() is True
+    assert service.task_ready(TaskRequest(input="https://example.test/video")) is False
     service.install("yt-dlp", lambda event: None)
-    # tokcount is still missing here, and the task starts anyway: it only makes
-    # token counting offline, and the pipeline counts through the free
-    # countTokens endpoint without it.
+    # Git and tokcount are still missing here. Neither blocks an ordinary run;
+    # yt-dlp is required only because this particular task uses a URL.
+    assert service.status("git").usable is False
     assert service.status("tokcount").usable is False
     assert service.task_ready() is True
+    assert service.task_ready(TaskRequest(input="https://example.test/video")) is True
     assert service.task_ready(TaskRequest(input="a.wav", stage="final-srt")) is True
 
 
@@ -260,17 +328,16 @@ def test_the_system_probe_runs_once_per_resource(tmp_path: Path) -> None:
     assert calls == ["ffmpeg"]
 
 
-def test_git_and_yt_dlp_are_required_before_any_task(tmp_path: Path) -> None:
-    # 40MB together, and the desktop would rather charge that once than ship an
-    # install whose abilities depend on what the user happened to fetch.
+def test_yt_dlp_is_required_only_for_a_url_task(tmp_path: Path) -> None:
     service = _service(tmp_path)
     service.install("uv", lambda event: None)
     service.install("ffmpeg", lambda event: None)
 
-    assert service.task_ready() is False
-    service.install("git", lambda event: None)
+    assert service.task_ready(TaskRequest(input="a.wav")) is True
+    assert service.task_ready(TaskRequest(input="https://example.test/video")) is False
     service.install("yt-dlp", lambda event: None)
-    assert service.task_ready() is True
+    assert service.task_ready(TaskRequest(input="https://example.test/video")) is True
+    assert service.status("git").usable is False
 
 
 def test_what_a_task_can_start_without_is_what_stays_optional(
@@ -279,20 +346,32 @@ def test_what_a_task_can_start_without_is_what_stays_optional(
     # Two ways to be optional, and neither is about size. The weights a task
     # downloads for itself during the run; tokcount it never needs at all,
     # because the LLM layer counts tokens through the free countTokens endpoint
-    # without it. Everything else has to be there before the run starts.
+    # without it. URL and maintenance tools are installed only when requested.
     service = _service(tmp_path)
 
     required = [s.id for s in service.check_all() if not s.optional]
     optional = [s.id for s in service.check_all() if s.optional]
 
-    assert required == ["uv", "ffmpeg", "git", "yt-dlp"]
-    assert optional == ["tokcount", "models"]
+    assert required == ["uv", "ffmpeg"]
+    assert optional == ["git", "yt-dlp", "tokcount", "models"]
+
+
+def test_diagnostics_forces_runtime_probe_and_reports_only_real_blockers(
+    tmp_path: Path,
+) -> None:
+    service = _service(tmp_path)
+
+    report = service.diagnostics()
+
+    assert service.runtime.force_probes[-1] is True
+    assert report["healthy"] is False
+    assert report["blocking_resources"] == ["uv", "ffmpeg"]
+    assert report["paths"]["tasks"] == service.runtime.paths.tasks
 
 
 def test_the_shared_capability_rule_still_names_what_a_request_needs() -> None:
-    # The desktop now installs these up front, so `task_ready` cannot tell the
-    # cases apart any more -- but the rule is shared with the CLI, which still
-    # fetches on demand, and it is the only place the mapping is written down.
+    # The desktop and CLI both apply this rule on demand; it is the only place
+    # the mapping is written down.
     # The knowledge base is a SQLite store now: a knowledge update needs no git.
     assert capability_requirements(
         TaskRequest(input="a.wav", knowledge="update", stage="final-srt")
@@ -413,7 +492,7 @@ def test_tokcount_is_offered_but_never_required(tmp_path: Path) -> None:
     rows = {status.id: status for status in service.check_all()}
 
     assert rows["tokcount"].optional is True
-    assert rows["yt-dlp"].optional is False
+    assert rows["yt-dlp"].optional is True
 
 
 def _isolate_shared_caches(monkeypatch, root: Path) -> tuple[Path, Path]:

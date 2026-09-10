@@ -26,8 +26,16 @@
     grid-template-columns: minmax(0, 1fr) 240px;
   }
 
-  .field-grid {
+  .field-grid,
+  .advanced-grid,
+  .routing-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .advanced-section-heading,
+  .advanced-grid .field-wide,
+  .advanced-grid > .switch-row:not(.switch-row-compact) {
+    grid-column: span 2;
   }
 
   .resource-install-detail {
@@ -121,8 +129,36 @@
     grid-template-columns: 1fr;
   }
 
+  .field-grid,
+  .advanced-grid,
+  .routing-grid,
+  .routing-catalog-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .advanced-section-heading,
+  .advanced-grid .field-wide,
+  .advanced-grid .switch-row,
+  .switch-row-compact {
+    grid-column: 1;
+  }
+
   .environment-panel {
     order: -1;
+  }
+
+  .routing-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .agent-status-row {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .agent-status-row > small {
+    grid-column: 1 / -1;
   }
 
   .resource-card-heading {

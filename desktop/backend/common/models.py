@@ -8,6 +8,7 @@ from pydantic import (
     ConfigDict,
     Field,
     field_validator,
+    model_validator,
     model_serializer,
 )
 
@@ -59,6 +60,29 @@ LLMDifficulty = Annotated[
 ]
 
 
+def _normalize_asr_decode_batch(value: object) -> object:
+    if isinstance(value, bool):
+        raise ValueError("ASR decode batch must be auto or a positive integer")
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized == "auto":
+            return "auto"
+        try:
+            value = int(normalized)
+        except ValueError as error:
+            raise ValueError(
+                "ASR decode batch must be auto or a positive integer"
+            ) from error
+    if isinstance(value, int) and value >= 1:
+        return value
+    raise ValueError("ASR decode batch must be auto or a positive integer")
+
+
+AsrDecodeBatch = Annotated[
+    int | Literal["auto"], BeforeValidator(_normalize_asr_decode_batch)
+]
+
+
 class DesktopModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -77,6 +101,76 @@ class CapabilityState(DesktopModel):
 
 class PublicSettings(DesktopModel):
     api_keys: dict[str, Literal["configured", "missing"]]
+
+
+class RoutingPresetSummary(DesktopModel):
+    id: str
+    name: str
+    active: bool = False
+    test_target_id: str = ""
+    uses_local_agent: bool = False
+    warnings: list[str] = Field(default_factory=list)
+
+
+class RoutingProviderSummary(DesktopModel):
+    id: str
+    kind: str
+    base_url: str = ""
+    key_env: str = ""
+    configured: bool = False
+
+
+class RoutingTargetSummary(DesktopModel):
+    id: str
+    display_name: str
+    backend: str
+    provider_tier: str
+    api_model_id: str
+    supports_audio: bool = False
+    supports_video: bool = False
+    supports_native_search: bool = False
+    is_free: bool = False
+    quality_score: int = 0
+
+
+class RoutingSettings(DesktopModel):
+    active_preset_id: str = ""
+    execution_policy: str = ""
+    local_agent_timeout_seconds: int = 1680
+    local_agent_allow_unisolated_user_config: bool = False
+    local_agent_service_tier: Literal["", "fast", "flex"] = ""
+    local_agent_reasoning_effort: Literal["", "low", "medium", "high", "xhigh"] = ""
+    local_agent_max_parallel: int = 4
+    presets: list[RoutingPresetSummary] = Field(default_factory=list)
+    policies: list[str] = Field(default_factory=list)
+    providers: list[RoutingProviderSummary] = Field(default_factory=list)
+    targets: list[RoutingTargetSummary] = Field(default_factory=list)
+    model_groups: dict[str, list[str]] = Field(default_factory=dict)
+    task_groups: list[str] = Field(default_factory=list)
+    local_agent_bound: bool = False
+    config_path: str = ""
+    error: str = ""
+
+
+class RoutingUpdate(DesktopModel):
+    preset: str
+    execution_policy: str
+    local_agent_timeout_seconds: int = Field(ge=10)
+    local_agent_allow_unisolated_user_config: bool = False
+    local_agent_service_tier: Literal["", "fast", "flex"] = ""
+    local_agent_reasoning_effort: Literal["", "low", "medium", "high", "xhigh"] = ""
+    local_agent_max_parallel: int = Field(ge=1)
+
+
+class LocalAgentStatus(DesktopModel):
+    provider_tier: str
+    driver: str = ""
+    models: list[str] = Field(default_factory=list)
+    quota_pools: list[str] = Field(default_factory=list)
+    status: Literal["ready", "missing", "broken", "unusable", "error"]
+    available: bool = False
+    version: str = ""
+    detail: str = ""
 
 
 class TaskDefaults(BaseModel):
@@ -99,16 +193,35 @@ class TaskDefaults(BaseModel):
     gpu_name: str | None = None
     language: str | None = None
     gpu_tier: GpuTier | None = None
+    gap_sec: float | None = Field(default=None, ge=0)
+    separator_sample_rate: Literal[44100, 32000, 22050] | None = None
+    separate: bool | None = None
+    vad_silero_assist: bool | None = None
+    qwen_verify: Literal["auto", "on", "off"] | None = None
+    lang_redecode: Literal["auto", "on", "off"] | None = None
+    asr_decode_batch: AsrDecodeBatch | None = None
+    asr_context: Literal["off", "terms", "full"] | None = None
     word: bool | None = None
     asr_stabilize_profile: Literal[-1, 0, 1, 2] | None = None
     stage: PipelineStage | None = None
     llm_media: Literal["text", "audio", "video"] | None = None
+    llm_correction_media: Literal["", "text", "audio", "video"] | None = None
+    llm_planning_media: Literal["", "text", "audio", "video"] | None = None
     llm_retrieval: Literal["none", "local", "native"] | None = None
     llm_difficulty: LLMDifficulty | None = None
+    llm_continuity: Literal["serial", "parallel"] | None = None
+    llm_parallel_windows: int | None = Field(default=None, ge=1)
     llm_fast: Literal["auto", "on", "off"] | None = None
-    llm_output_scale: float | None = None
+    llm_output_scale: float | None = Field(default=None, gt=0)
+    llm_model: list[str] | None = None
+    style: str | None = None
+    style_mode: Literal["none", "read", "update"] | None = None
+    download_video_source: bool | None = None
     knowledge: Literal["none", "collect", "update"] | None = None
     postprocess_profile: Literal[-1, 0, 1, 2, 3, 4] | None = None
+    max_retries_per_window: int | None = Field(default=None, ge=0)
+    max_replacements_per_window: int | None = Field(default=None, ge=0)
+    resume: bool | None = None
     cleanup_intermediate: bool | None = None
 
     @model_serializer
@@ -228,24 +341,51 @@ class TaskRequest(DesktopModel):
     # `auto` = ask the card. A tier names what CLASS of card this is, not a
     # cap on what a run may use, so the backend resolves it from the driver.
     gpu_tier: GpuTier = "auto"
+    gap_sec: float = Field(default=0.3, ge=0)
+    separator_sample_rate: Literal[44100, 32000, 22050] | None = None
+    # None follows config.toml; False still produces the normalized vocal
+    # artifact, but treats the input as an already-clean voice track.
+    separate: bool | None = None
+    vad_silero_assist: bool | None = None
+    qwen_verify: Literal["auto", "on", "off"] = "auto"
+    lang_redecode: Literal["auto", "on", "off"] = "auto"
+    asr_decode_batch: AsrDecodeBatch = "auto"
+    asr_context: Literal["off", "terms", "full"] = "off"
     word: bool = False
     asr_stabilize_profile: Literal[-1, 0, 1, 2] = 0
-# None = follow config.toml, then the calibrated default. Set per task only
+    # None = follow config.toml, then the calibrated default. Set per task only
     # to override the shared setting for this one run.
-    split_length_scale: float | None = None
+    split_length_scale: float | None = Field(default=None, ge=0.6, le=1.6)
     # Orthogonal switch axes (docs/llm_harness_behavior.md); the old
     # llm_route/llm_level presets and enable_web_search retired with them.
     llm_media: Literal["text", "audio", "video"] = "audio"
+    # Empty means inherit llm_media, exactly like the core CLI.
+    llm_correction_media: Literal["", "text", "audio", "video"] = ""
+    llm_planning_media: Literal["", "text", "audio", "video"] = ""
     llm_retrieval: Literal["none", "local", "native"] = "local"
     llm_difficulty: LLMDifficulty = "quality"
+    llm_continuity: Literal["serial", "parallel"] = "serial"
+    llm_parallel_windows: int = Field(default=1, ge=1)
     llm_fast: Literal["auto", "on", "off"] = "auto"
-    llm_output_scale: float = 1.0
+    llm_output_scale: float = Field(default=1.0, gt=0)
+    # Repeatable core ``--llm-model`` values. A bare id overrides every task
+    # group; ``correction-text=...`` pins one group for this run only.
+    llm_model: list[str] = Field(default_factory=list)
+    llm_video: str | None = None
     extra_info: str = ""
     extra_style: str = ""
+    task_summary: str = ""
+    style: str | None = None
+    style_mode: Literal["none", "read", "update"] | None = None
+    download_video_source: bool = True
     # Default on: the knowledge base is what makes later tasks better, and it
     # only runs when the LLM stage does -- a plain transcription ignores it.
     knowledge: Literal["none", "collect", "update"] = "update"
+    refined_srt: str | None = None
     postprocess_profile: Literal[-1, 0, 1, 2, 3, 4] = 0
+    max_retries_per_window: int = Field(default=5, ge=0)
+    max_replacements_per_window: int = Field(default=1, ge=0)
+    resume: bool = True
 
     @field_validator("input")
     @classmethod
@@ -272,3 +412,194 @@ class TaskRequest(DesktopModel):
             normalized = value.strip()
             return normalized or None
         return value
+
+    @field_validator("llm_video", "style", "refined_srt", mode="before")
+    @classmethod
+    def normalize_optional_text(cls, value: object) -> object:
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or None
+        return value
+
+    @field_validator("llm_model", mode="before")
+    @classmethod
+    def normalize_llm_model(cls, value: object) -> object:
+        if value is None:
+            return []
+        if isinstance(value, str):
+            value = value.splitlines()
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("LLM model overrides must be a list of strings")
+        normalized = [str(item).strip() for item in value if str(item).strip()]
+        if len(normalized) != len(set(normalized)):
+            raise ValueError("LLM model overrides must not contain duplicate rows")
+        return normalized
+
+    @field_validator("llm_model")
+    @classmethod
+    def validate_llm_model(cls, value: list[str]) -> list[str]:
+        if not value:
+            return value
+        from finesub.llm.routing.model_routes import (
+            TASK_GROUP_IDS,
+            default_model_routes,
+            parse_llm_model_args,
+        )
+
+        overlay = parse_llm_model_args(value)
+        unknown_groups = sorted(set(overlay) - {"default", *TASK_GROUP_IDS})
+        if unknown_groups:
+            raise ValueError(
+                "unknown LLM task group(s): " + ", ".join(unknown_groups)
+            )
+        routes = default_model_routes()
+        known = set(routes.model_groups) | set(routes.targets)
+        unknown_values = sorted(set(overlay.values()) - known)
+        if unknown_values:
+            raise ValueError(
+                "unknown LLM model group or target(s): " + ", ".join(unknown_values)
+            )
+        return value
+
+
+class KnowledgeCommandRequest(DesktopModel):
+    command: Literal[
+        "log",
+        "show",
+        "edit",
+        "new",
+        "retire",
+        "revert",
+        "restore",
+        "refresh",
+        "phase-b",
+        "candidates",
+        "verify",
+        "repair",
+        "ingest",
+    ]
+    args: list[str] = Field(default_factory=list, max_length=64)
+    content: str = Field(default="", max_length=2_000_000)
+
+    @field_validator("args")
+    @classmethod
+    def validate_args(cls, value: list[str]) -> list[str]:
+        normalized = [str(item) for item in value]
+        if any("\x00" in item or len(item) > 16_384 for item in normalized):
+            raise ValueError("knowledge command argument is invalid")
+        return normalized
+
+
+class KnowledgeShareCommandRequest(DesktopModel):
+    command: Literal[
+        "register",
+        "mark",
+        "unmark",
+        "push",
+        "status",
+        "pull",
+        "conflicts",
+        "review",
+    ]
+    args: list[str] = Field(default_factory=list, max_length=64)
+
+    @field_validator("args")
+    @classmethod
+    def validate_args(cls, value: list[str]) -> list[str]:
+        return KnowledgeCommandRequest.validate_args(value)
+
+
+class RefinedKnowledgeUpdateRequest(DesktopModel):
+    task_id: str = Field(min_length=1, max_length=200)
+    refined_srt: str = Field(min_length=1, max_length=32_768)
+    task_summary: str = Field(default="", max_length=20_000)
+    llm_model: list[str] = Field(default_factory=list)
+    apply: bool = True
+    resume: bool = True
+
+    @field_validator("task_id", "refined_srt")
+    @classmethod
+    def strip_required(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("value must not be blank")
+        return normalized
+
+    @field_validator("llm_model", mode="before")
+    @classmethod
+    def normalize_llm_model(cls, value: object) -> object:
+        return TaskRequest.normalize_llm_model(value)
+
+    @field_validator("llm_model")
+    @classmethod
+    def validate_llm_model(cls, value: list[str]) -> list[str]:
+        return TaskRequest.validate_llm_model(value)
+
+
+class BatchItemRequest(TaskRequest):
+    """One independently isolated item in a core scheduler run."""
+
+    group: str = ""
+    priority: int = 0
+
+    @field_validator("group")
+    @classmethod
+    def normalize_group(cls, value: str) -> str:
+        return value.strip()
+
+
+class BatchWorkers(DesktopModel):
+    download: int = Field(default=2, ge=1, le=8)
+    asr: int = Field(default=1, ge=1, le=4)
+    llm: int = Field(default=2, ge=1, le=8)
+
+
+class BatchRequest(DesktopModel):
+    items: list[BatchItemRequest] = Field(min_length=1, max_length=500)
+    workers: BatchWorkers = Field(default_factory=BatchWorkers)
+    asr_queue_size: int = Field(default=4, ge=1, le=32)
+    retry_failed: int = Field(default=1, ge=0, le=10)
+
+    @model_validator(mode="after")
+    def unique_sources(self) -> "BatchRequest":
+        seen: set[str] = set()
+        devices: set[tuple[str | None, int | None, str]] = set()
+        model_routes: set[tuple[str, ...]] = set()
+        for item in self.items:
+            source = item.input.casefold()
+            if source in seen:
+                raise ValueError(f"batch source is listed twice: {item.input}")
+            seen.add(source)
+            devices.add((item.device, item.gpu_index, item.gpu_name))
+            model_routes.add(tuple(item.llm_model))
+        if len(devices) > 1:
+            raise ValueError("all items in one batch must use the same processing device")
+        if len(model_routes) > 1:
+            raise ValueError("all items in one batch must use the same LLM model overrides")
+        return self
+
+
+class BatchItemSnapshot(DesktopModel):
+    index: int
+    input: str
+    label: str
+    state: Literal[
+        "queued", "running", "done", "failed", "skipped", "dropped"
+    ] = "queued"
+    stage: str = ""
+    error: str = ""
+    outputs: dict[str, str] = Field(default_factory=dict)
+
+
+class BatchSnapshot(DesktopModel):
+    batch_id: str
+    state: Literal[
+        "running", "completed", "failed", "cancelled", "interrupted"
+    ]
+    request: BatchRequest
+    items: list[BatchItemSnapshot]
+    created_at: float
+    updated_at: float
+    error: str = ""
+    log_path: str = ""
+    status_path: str = ""

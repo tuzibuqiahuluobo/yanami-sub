@@ -115,6 +115,15 @@ _PATHS_ATTRIBUTE_BY_STAGE = {
     "final-srt": "final_srt",
 }
 
+# These are expert results, not shared deliverables: keep them in the private
+# task workspace and use desktop-only keys so old CLI/history readers continue
+# to see exactly the three subtitle keys they understand.
+_EXPERT_OUTPUT_BY_STAGE = {
+    "vocal": ("vocalAudio", "vocal_audio"),
+    "aligned": ("alignedJson", "aligned_json"),
+    "stable": ("stableJson", "stable_json"),
+}
+
 
 def _claimed_outputs() -> set[Path]:
     """Every subtitle path this machine's task index already claims as ours.
@@ -175,13 +184,23 @@ def _unclaimed_destination(destination: Path) -> Path:
     return candidate
 
 
-def _publish_subtitle(
+def _publish_output(
     paths: Any,
     request: TaskRequest,
     *,
     task_id: str,
 ) -> dict[str, str]:
-    """Publish only the requested subtitle beside a local input file."""
+    """Expose the requested result; publish only subtitles beside local media."""
+
+    expert = _EXPERT_OUTPUT_BY_STAGE.get(request.stage)
+    if expert is not None:
+        key, attribute = expert
+        generated = Path(getattr(paths, attribute)).expanduser().resolve()
+        if not generated.is_file():
+            raise FileNotFoundError(
+                f"FineSub completed without producing {request.stage}: {generated}"
+            )
+        return {key: str(generated)}
 
     attribute = _PATHS_ATTRIBUTE_BY_STAGE.get(request.stage)
     key = DELIVERABLE_KEY_BY_STAGE.get(request.stage)
@@ -233,6 +252,24 @@ def _resolve_output_path(request: TaskRequest) -> str | None:
     return str(resolve_name_output_path(request.name))
 
 
+@contextmanager
+def _routing_override(values: list[str]):
+    """Apply one task's core route pin without leaking it across tests/calls."""
+
+    from finesub.llm.routing.model_routes import (
+        install_runtime_preferred,
+        parse_llm_model_args,
+        runtime_preferred,
+    )
+
+    previous = runtime_preferred()
+    install_runtime_preferred(parse_llm_model_args(values))
+    try:
+        yield
+    finally:
+        install_runtime_preferred(previous)
+
+
 def run_request(
     request: TaskRequest,
     *,
@@ -246,8 +283,10 @@ def run_request(
         # "normal": the drawer and the task log get the pipeline's own report,
         # not a library's version banner or a progress bar flattened into a
         # file. Verbose detail still reaches the file, as debug events.
-        with reporting_to(WorkerReporter(task_id, emit)), quieted_libraries(
-            "normal"
+        with (
+            _routing_override(request.llm_model),
+            reporting_to(WorkerReporter(task_id, emit)),
+            quieted_libraries("normal"),
         ):
             # Same refusal the CLI gives, so the two front ends answer one
             # input the same way. Reachable only because `device` can be None:
@@ -262,21 +301,42 @@ def run_request(
                 device=request.device,
                 language=request.language,
                 gpu_tier=request.gpu_tier,
+                gap_sec=request.gap_sec,
+                separator_sample_rate=request.separator_sample_rate,
+                separate=request.separate,
+                vad_silero_assist=request.vad_silero_assist,
+                qwen_verify=request.qwen_verify,
+                lang_redecode=request.lang_redecode,
+                asr_decode_batch=request.asr_decode_batch,
+                asr_context=request.asr_context,
                 word=request.word,
                 asr_stabilize_profile=request.asr_stabilize_profile,
                 split_length_scale=request.split_length_scale,
                 llm_media=request.llm_media,
+                llm_correction_media=request.llm_correction_media,
+                llm_planning_media=request.llm_planning_media,
                 llm_retrieval=request.llm_retrieval,
                 llm_difficulty=request.llm_difficulty,
+                llm_continuity=request.llm_continuity,
+                llm_parallel_windows=request.llm_parallel_windows,
                 llm_fast=request.llm_fast,
                 llm_output_scale=request.llm_output_scale,
+                llm_video=request.llm_video,
                 extra_info=request.extra_info,
                 extra_style=request.extra_style,
+                task_summary=request.task_summary,
+                style=request.style,
+                style_mode=request.style_mode,
+                download_video_source=request.download_video_source,
                 knowledge=request.knowledge,
+                refined_srt=request.refined_srt,
                 task_id=task_id,
                 postprocess_profile=request.postprocess_profile,
+                max_retries_per_window=request.max_retries_per_window,
+                max_replacements_per_window=request.max_replacements_per_window,
+                resume=request.resume,
             )
-        outputs = _publish_subtitle(paths, request, task_id=task_id)
+        outputs = _publish_output(paths, request, task_id=task_id)
         if request.cleanup_intermediate and outputs:
             # `outputs` is empty for the stages that produce no subtitle
             # (`vocal`/`aligned`/`stable`), and with nothing to preserve the

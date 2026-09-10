@@ -106,6 +106,19 @@ class ResourceInstallManager:
                 for snapshot in self._snapshots.values()
             ]
 
+    def forget_finished(self) -> None:
+        """Drop stale paths/status after a storage maintenance operation."""
+
+        with self._lock:
+            if any(
+                snapshot.state in {"queued", "running"}
+                for snapshot in self._snapshots.values()
+            ):
+                raise RuntimeError("仍有资源正在安装，不能刷新资源状态。")
+            self._snapshots.clear()
+            self._pause_events.clear()
+            self._workers.clear()
+
     def shutdown(self, *, timeout: float = 10.0) -> None:
         """Pause active installs and wait for their worker threads to exit.
 

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   AlertCircle,
   AlertTriangle,
   Check,
@@ -10,6 +11,8 @@ import {
   LoaderCircle,
   Pause,
   Play,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -17,8 +20,11 @@ import { DownloadProgress } from "@/components/DownloadProgress";
 import { RESOURCE_SIZES } from "@/lib/resourceCatalog";
 import { isUsable, unresolvedDependency } from "@/lib/resources";
 import type {
+  DiagnosticsReport,
   ResourceInstallSnapshot,
   ResourceStatus,
+  StorageMaintenanceResult,
+  StorageState,
 } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
 
@@ -52,6 +58,10 @@ interface ResourceManagerProps {
     kind: "cache" | "install",
   ) => void;
   onOpenLogs: () => void;
+  onRunDiagnostics: () => Promise<DiagnosticsReport>;
+  storage: StorageState;
+  onRelocateData: (reset: boolean) => Promise<StorageMaintenanceResult>;
+  onPurgeRebuildableData: () => Promise<StorageMaintenanceResult>;
 }
 
 
@@ -62,10 +72,21 @@ export function ResourceManager({
   onPause,
   onOpenLocation,
   onOpenLogs,
+  onRunDiagnostics,
+  storage,
+  onRelocateData,
+  onPurgeRebuildableData,
 }: ResourceManagerProps) {
   const { t } = useLanguage();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [diagnostics, setDiagnostics] = useState<DiagnosticsReport | null>(null);
+  const [diagnosticError, setDiagnosticError] = useState("");
+  const [maintenanceBusy, setMaintenanceBusy] = useState<"move" | "reset" | "purge" | "">("");
+  const [maintenanceError, setMaintenanceError] = useState("");
+  const [maintenanceMessage, setMaintenanceMessage] = useState("");
+  const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
 
   // 计算未安装资源的总大小
   // Only what a task actually waits on counts toward "space required"; the
@@ -108,6 +129,49 @@ export function ResourceManager({
     setPendingResourceId(null);
   };
 
+  const runDiagnostics = async () => {
+    setDiagnosing(true);
+    setDiagnosticError("");
+    try {
+      setDiagnostics(await onRunDiagnostics());
+    } catch (error) {
+      setDiagnosticError(
+        error instanceof Error ? error.message : t.resources.diagnostics.failed,
+      );
+    } finally {
+      setDiagnosing(false);
+    }
+  };
+
+  const runStorageMaintenance = async (
+    kind: "move" | "reset" | "purge",
+  ) => {
+    setMaintenanceBusy(kind);
+    setMaintenanceError("");
+    setMaintenanceMessage("");
+    try {
+      const result = kind === "purge"
+        ? await onPurgeRebuildableData()
+        : await onRelocateData(kind === "reset");
+      if (!result.cancelled) {
+        setMaintenanceMessage(
+          kind === "purge"
+            ? t.resources.storage.purged
+            : kind === "reset"
+              ? t.resources.storage.resetDone
+              : t.resources.storage.moved,
+        );
+      }
+    } catch (error) {
+      setMaintenanceError(
+        error instanceof Error ? error.message : t.resources.storage.failed,
+      );
+    } finally {
+      setMaintenanceBusy("");
+      setPurgeConfirmOpen(false);
+    }
+  };
+
   const pendingResourceSize = pendingResourceId ? RESOURCE_SIZES[pendingResourceId] || 0 : 0;
   const pendingResourceInfo = pendingResourceId ? getResourceInfo(pendingResourceId, t) : null;
 
@@ -119,14 +183,31 @@ export function ResourceManager({
           <h1>{t.resources.title}</h1>
           <p>{t.resources.description}</p>
         </div>
-        <button
-          type="button"
-          className="button button-secondary button-compact"
-          onClick={onOpenLogs}
-        >
-          <FolderOpen size={14} />
-          {t.resources.openLogs}
-        </button>
+        <div className="page-header-actions">
+          <button
+            type="button"
+            className="button button-secondary button-compact"
+            disabled={diagnosing}
+            onClick={() => void runDiagnostics()}
+          >
+            {diagnosing ? (
+              <LoaderCircle size={14} className="spin" />
+            ) : (
+              <Activity size={14} />
+            )}
+            {diagnosing
+              ? t.resources.diagnostics.running
+              : t.resources.diagnostics.action}
+          </button>
+          <button
+            type="button"
+            className="button button-secondary button-compact"
+            onClick={onOpenLogs}
+          >
+            <FolderOpen size={14} />
+            {t.resources.openLogs}
+          </button>
+        </div>
       </header>
 
       {/* 显示总磁盘空间需求 */}
@@ -144,6 +225,164 @@ export function ResourceManager({
           </div>
         </div>
       )}
+
+      <section className="diagnostics-card">
+        <div className="diagnostics-heading">
+          <div className="diagnostics-title">
+            <span className={`resource-large-icon ${diagnostics?.healthy ? "is-ready" : ""}`}>
+              {diagnostics?.healthy ? <Check size={20} /> : <Activity size={20} />}
+            </span>
+            <div>
+              <strong>{t.resources.diagnostics.title}</strong>
+              <p>
+                {diagnostics
+                  ? diagnostics.healthy
+                    ? t.resources.diagnostics.healthy
+                    : t.resources.diagnostics.needsAttention
+                  : t.resources.diagnostics.description}
+              </p>
+            </div>
+          </div>
+          {diagnostics ? (
+            <span className={`resource-label ${diagnostics.healthy ? "is-ready" : "is-failed"}`}>
+              {diagnostics.healthy
+                ? t.resources.diagnostics.passed
+                : t.resources.diagnostics.failed}
+            </span>
+          ) : null}
+        </div>
+
+        {diagnosticError ? (
+          <p className="resource-error">{diagnosticError}</p>
+        ) : null}
+
+        {diagnostics ? (
+          <div className="diagnostics-result">
+            <div className="diagnostics-meta">
+              <span>
+                <small>{t.resources.diagnostics.desktopVersion}</small>
+                <strong>{diagnostics.app_version}</strong>
+              </span>
+              <span>
+                <small>{t.resources.diagnostics.coreVersion}</small>
+                <strong>{diagnostics.core_version}</strong>
+              </span>
+              <span>
+                <small>{t.resources.diagnostics.freeSpace}</small>
+                <strong>
+                  {diagnostics.disk_free_bytes === null
+                    ? t.resources.diagnostics.unknown
+                    : formatBytes(diagnostics.disk_free_bytes)}
+                </strong>
+              </span>
+              <span>
+                <small>{t.resources.diagnostics.taskState}</small>
+                <strong>
+                  {diagnostics.active_task
+                    ? t.resources.diagnostics.taskRunning
+                    : t.resources.diagnostics.taskIdle}
+                </strong>
+              </span>
+            </div>
+            <div className="diagnostics-resources">
+              {diagnostics.resources.map((resource) => (
+                <span
+                  className={`resource-label ${isUsable(resource) ? "is-ready" : "is-failed"}`}
+                  key={resource.id}
+                  title={resource.detail}
+                >
+                  {isUsable(resource) ? <Check size={12} /> : <AlertCircle size={12} />}
+                  {getResourceInfo(resource.id, t).title}
+                </span>
+              ))}
+            </div>
+            <details className="diagnostics-paths">
+              <summary>{t.resources.diagnostics.showPaths}</summary>
+              <div>
+                {Object.entries(diagnostics.paths).map(([key, path]) => (
+                  <span key={key}>
+                    <small>
+                      {(t.resources.diagnostics.paths as Record<string, string>)[key] ?? key}
+                    </small>
+                    <code title={path}>{path}</code>
+                  </span>
+                ))}
+                <span>
+                  <small>{t.resources.diagnostics.python}</small>
+                  <code title={diagnostics.python_executable}>
+                    {diagnostics.python_executable}
+                  </code>
+                </span>
+              </div>
+            </details>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="storage-card">
+        <div className="storage-card-main">
+          <span className="resource-large-icon">
+            <HardDrive size={20} />
+          </span>
+          <div className="storage-card-copy">
+            <div className="storage-card-title">
+              <strong>{t.resources.storage.title}</strong>
+              <span className="resource-label">
+                {storage.relocated
+                  ? t.resources.storage.custom
+                  : t.resources.storage.default}
+              </span>
+            </div>
+            <p>{t.resources.storage.description}</p>
+            <code title={storage.big_data}>{storage.big_data || "—"}</code>
+          </div>
+        </div>
+        <div className="storage-actions">
+          <button
+            type="button"
+            className="button button-secondary button-compact"
+            disabled={maintenanceBusy !== ""}
+            onClick={() => void runStorageMaintenance("move")}
+          >
+            {maintenanceBusy === "move" ? (
+              <LoaderCircle size={14} className="spin" />
+            ) : (
+              <FolderOpen size={14} />
+            )}
+            {t.resources.storage.move}
+          </button>
+          {storage.relocated ? (
+            <button
+              type="button"
+              className="button button-secondary button-compact"
+              disabled={maintenanceBusy !== ""}
+              onClick={() => void runStorageMaintenance("reset")}
+            >
+              {maintenanceBusy === "reset" ? (
+                <LoaderCircle size={14} className="spin" />
+              ) : (
+                <RotateCcw size={14} />
+              )}
+              {t.resources.storage.reset}
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="button button-danger-quiet button-compact"
+            disabled={maintenanceBusy !== ""}
+            onClick={() => setPurgeConfirmOpen(true)}
+          >
+            <Trash2 size={14} />
+            {t.resources.storage.purge}
+          </button>
+        </div>
+        {maintenanceMessage ? (
+          <p className="storage-message is-success">{maintenanceMessage}</p>
+        ) : null}
+        {maintenanceError ? (
+          <p className="storage-message is-error">{maintenanceError}</p>
+        ) : null}
+      </section>
 
       <section className="resource-manager-list">
         {resources.map((resource) => {
@@ -391,6 +630,43 @@ export function ResourceManager({
           </div>
         </div>
       )}
+
+      {purgeConfirmOpen ? (
+        <div className="dialog-overlay" onClick={() => setPurgeConfirmOpen(false)}>
+          <div className="dialog-card resource-confirm-dialog" onClick={(event) => event.stopPropagation()}>
+            <div className="resource-confirm-icon is-danger">
+              <Trash2 size={24} />
+            </div>
+            <h3>{t.resources.storage.purgeTitle}</h3>
+            <p>{t.resources.storage.purgeDescription}</p>
+            <p className="confirm-warning-text">
+              {t.resources.storage.purgePreserves}
+            </p>
+            <div className="dialog-actions">
+              <button
+                type="button"
+                className="button button-secondary"
+                onClick={() => setPurgeConfirmOpen(false)}
+              >
+                {t.resources.confirm.cancel}
+              </button>
+              <button
+                type="button"
+                className="button button-danger-quiet"
+                disabled={maintenanceBusy !== ""}
+                onClick={() => void runStorageMaintenance("purge")}
+              >
+                {maintenanceBusy === "purge" ? (
+                  <LoaderCircle size={14} className="spin" />
+                ) : (
+                  <Trash2 size={14} />
+                )}
+                {t.resources.storage.purgeConfirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

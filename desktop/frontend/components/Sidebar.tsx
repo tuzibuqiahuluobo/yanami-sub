@@ -3,7 +3,9 @@
 import type { CSSProperties } from "react";
 import {
   Boxes,
+  BookOpenText,
   Clock3,
+  ListChecks,
   Plus,
   Settings2,
   Download,
@@ -46,7 +48,9 @@ export function Sidebar({
     icon: typeof Plus;
   }> = [
     { route: "new-task", label: t.sidebar.newTask, icon: Plus },
+    { route: "batch", label: t.sidebar.batch, icon: ListChecks },
     { route: "history", label: t.sidebar.history, icon: Clock3 },
+    { route: "knowledge", label: t.sidebar.knowledge, icon: BookOpenText },
     { route: "resources", label: t.sidebar.resources, icon: Boxes },
     { route: "settings", label: t.sidebar.settings, icon: Settings2 },
   ];

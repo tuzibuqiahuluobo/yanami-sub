@@ -39,11 +39,22 @@
   background: #fafbfc;
 }
 
-.advanced-empty {
+.advanced-section-heading {
   grid-column: span 3;
-  margin: 0;
+  display: grid;
+  gap: 3px;
+  padding-bottom: 2px;
+}
+
+.advanced-section-heading strong {
+  color: var(--ink);
+  font-size: 0.84rem;
+}
+
+.advanced-section-heading small {
   color: var(--muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
 }
 
 .advanced-grid-animated {
@@ -69,6 +80,13 @@
   align-items: flex-start;
   gap: 9px;
   padding-top: 3px;
+}
+
+.switch-row-compact {
+  grid-column: span 1;
+  padding: 8px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
 }
 
 .switch-row input {

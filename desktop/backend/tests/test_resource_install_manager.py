@@ -114,3 +114,29 @@ def test_shutdown_pauses_and_joins_an_active_install(tmp_path: Path) -> None:
     assert _wait_for(manager, "git", "paused").state == "paused"
     assert not manager._workers["models"].is_alive()
     assert not manager._workers["git"].is_alive()
+
+
+def test_finished_install_snapshots_can_be_forgotten_after_a_move(
+    tmp_path: Path,
+) -> None:
+    manager = ResourceInstallManager(FakeResources(tmp_path))
+    manager.start("ffmpeg")
+    _wait_for(manager, "ffmpeg", "ready")
+
+    manager.forget_finished()
+
+    assert manager.list() == []
+
+
+def test_active_install_snapshots_cannot_be_forgotten(tmp_path: Path) -> None:
+    manager = ResourceInstallManager(FakeResources(tmp_path))
+    manager.start("ffmpeg")
+    _wait_for_progress(manager, "ffmpeg")
+
+    try:
+        import pytest
+
+        with pytest.raises(RuntimeError, match="正在安装"):
+            manager.forget_finished()
+    finally:
+        manager.shutdown()

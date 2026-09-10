@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
+from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import replace
+import importlib.metadata
+from io import StringIO
 from pathlib import Path
+import shutil
 
 from finesub_bootstrap.environment import (
     RuntimeEnvironment,
@@ -32,23 +36,10 @@ from finesub_bootstrap.system_tools import (
 # also drives the Python runtime install, so it keeps its own branch.
 BOOTSTRAP_RESOURCES = ("ffmpeg", "git", "yt-dlp", "tokcount")
 
-# Needed before any task can run. git and yt-dlp joined this list on
-# 2026-08-08: they are 40MB together, and the desktop trades away exactly this
-# kind of freedom on purpose -- "you may or may not be able to paste a link,
-# depending on what you installed" is a worse product than one download.
-#
-# Bumping a version in the manifest does not re-gate anyone: an installed copy
-# of the wrong version reports "outdated", which `usable` accepts. yt-dlp needs
-# regular bumps, and turning each one into a wall in front of every user --
-# including those who never paste a link -- is what made the distinction worth
-# having. `capability_requirements` still exists for the CLI, which keeps the
-# on-demand behaviour; on the desktop it only names resources this list covers.
-#
-# `tokcount` is deliberately absent, and not for the size: the LLM layer counts
-# tokens through the free `countTokens` endpoint without it, so requiring it
-# would let a dead mirror stop tasks that would otherwise have run. It is an
-# optional row instead -- offered in the panel, never a gate.
-ALWAYS_REQUIRED = ("uv", "ffmpeg", "git", "yt-dlp")
+# Every pipeline run needs these two. URL-only and optional tooling stays in
+# `capability_requirements`, the same shared rule the CLI uses, so a local-file
+# task cannot be blocked by an unrelated yt-dlp or git installation.
+ALWAYS_REQUIRED = ("uv", "ffmpeg")
 
 # The model weights, as one row. Not in BOOTSTRAP_RESOURCES: nothing about them
 # goes through the manifest downloader -- the pipeline's own libraries fetch
@@ -133,9 +124,9 @@ class DesktopResourceService:
     def check_all(self) -> list[ResourceStatus]:
         """Every resource the user can act on, required ones first.
 
-        The on-demand tools are included so that a task refused for a missing
-        git has somewhere to send the user -- but flagged optional, so they do
-        not make a perfectly usable install look half-finished.
+        On-demand tools are included so that a task refused for a missing one
+        has somewhere to send the user -- but flagged optional, so they do not
+        make a perfectly usable install look half-finished.
         """
 
         required = [self.status(resource_id) for resource_id in ALWAYS_REQUIRED]
@@ -163,7 +154,9 @@ class DesktopResourceService:
             )
         return self.bootstrap.status(resource_id)
 
-    def _models_status(self) -> ResourceStatus:
+    def _models_status(
+        self, *, runtime_status: ResourceStatus | None = None
+    ) -> ResourceStatus:
         models_root = self.runtime.paths.models
         missing = missing_pipeline_models(models_root)
         if not missing:
@@ -173,7 +166,7 @@ class DesktopResourceService:
                 state="ready",
                 detail="模型权重已就绪",
             )
-        if not self.runtime.status().usable:
+        if not (runtime_status or self.runtime.status()).usable:
             # There is no interpreter to fetch them with yet, and a button that
             # fails on click is worse than one that says why it cannot run.
             return ResourceStatus(
@@ -388,6 +381,135 @@ class DesktopResourceService:
             capability_requirements(request) if request is not None else ()
         )
         return not self.ensure(required)
+
+    def diagnostics(self) -> dict[str, object]:
+        """Run the expensive health probe and return frontend-neutral facts."""
+
+        # A manual diagnostic means "look again", including system tools that
+        # were installed after launch.
+        self._system_tools.clear()
+        forced_runtime = self.runtime.status(force_probe=True)
+        resources = [
+            forced_runtime if resource_id == "uv" else self.status(resource_id)
+            for resource_id in ALWAYS_REQUIRED
+        ]
+        resources.extend(
+            (
+                self._models_status(runtime_status=forced_runtime)
+                if resource_id == MODELS_RESOURCE
+                else self.status(resource_id)
+            ).model_copy(update={"optional": True})
+            for resource_id in (*BOOTSTRAP_RESOURCES, MODELS_RESOURCE)
+            if resource_id not in ALWAYS_REQUIRED
+        )
+        blocking = [
+            status.id
+            for status in resources
+            if not getattr(status, "optional", False) and not status.usable
+        ]
+        paths = self.runtime.paths
+        try:
+            disk_free_bytes: int | None = shutil.disk_usage(paths.big_data).free
+        except OSError:
+            disk_free_bytes = None
+        try:
+            core_version = importlib.metadata.version("finesub")
+        except importlib.metadata.PackageNotFoundError:
+            core_version = "source"
+        return {
+            "healthy": not blocking,
+            "core_version": core_version,
+            "resources": resources,
+            "blocking_resources": blocking,
+            "python_executable": self.runtime.python_executable,
+            "disk_free_bytes": disk_free_bytes,
+            "paths": {
+                "install": paths.root,
+                "personal_data": paths.user_data,
+                "big_data": paths.big_data,
+                "models": paths.models,
+                "cache": paths.cache,
+                "tasks": paths.tasks,
+                "logs": paths.logs,
+            },
+        }
+
+    def storage_state(self) -> dict[str, object]:
+        """Current core-owned storage locations, without running a health probe."""
+
+        paths = self.runtime.paths
+        return {
+            "big_data": str(paths.big_data),
+            "default_big_data": str(paths.root),
+            "runtime": str(paths.runtime),
+            "models": str(paths.models),
+            "cache": str(paths.cache),
+            "tasks": str(paths.tasks),
+            "agent_capsules": str(paths.agent_capsules),
+            "relocated": paths.big_data != paths.root,
+        }
+
+    def relocate_big_data(
+        self,
+        destination: Path | None = None,
+        *,
+        reset: bool = False,
+    ) -> dict[str, object]:
+        """Use FineSub core's locked, crash-safe big-data relocation."""
+
+        if reset:
+            arguments = ["--reset"]
+        elif destination is not None:
+            arguments = [str(destination)]
+        else:
+            raise ValueError("请选择新的大文件目录。")
+        message = self._run_core_storage_command("relocate", arguments)
+        return {
+            "storage": self.storage_state(),
+            "resources": self.check_all(),
+            "message": message,
+        }
+
+    def purge_rebuildable_data(self) -> dict[str, object]:
+        """Remove runtime, downloads, models, and agent capsules, never user work."""
+
+        message = self._run_core_storage_command(
+            "uninstall", ["--purge-big-data"]
+        )
+        return {
+            "storage": self.storage_state(),
+            "resources": self.check_all(),
+            "message": message,
+        }
+
+    def _run_core_storage_command(
+        self, method_name: str, arguments: list[str]
+    ) -> str:
+        """Run one allowlisted Shell method and adopt any paths it changes."""
+
+        from finesub_bootstrap.shell import Shell
+
+        stdout = StringIO()
+        stderr = StringIO()
+        shell = Shell(
+            paths=self.runtime.paths,
+            resources=self.bootstrap,
+            runtime=self.runtime,
+        )
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            return_code = getattr(shell, method_name)(arguments)
+        output = "\n".join(
+            part.strip()
+            for part in (stdout.getvalue(), stderr.getvalue())
+            if part.strip()
+        )
+        if return_code != 0:
+            raise RuntimeError(output or "FineSub 核心未能完成存储维护。")
+        # Shell owns the relocation record and returns the authoritative paths.
+        # These services are long-lived, so the next operation adopts it now.
+        self.bootstrap.paths = shell.paths
+        self.runtime.paths = shell.paths
+        return output
 
     def tool_directory(self, resource_id: str, filename: str) -> Path | None:
         """Directory to put on PATH for `resource_id`, system copy first."""

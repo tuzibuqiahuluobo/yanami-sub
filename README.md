@@ -29,6 +29,10 @@ FineSub Desktop 是 [FineSub](https://github.com/caca2331/finesub) 的 Windows �
 RC 构建会在打包阶段把本仓库桌面代码与上游 FineSub `v0.5.0` 的固定源码快照组合，仓库本身
 不维护一份核心 / CLI 分叉。后续将继续把这段组合流程收敛为上游提供的版本化接口和构建产物。
 
+桌面端已经覆盖单任务完整生产参数、批处理、模型路由与凭据池、知识库维护/分享、诊断、
+密钥导出和大文件目录维护。仍需上游提供结构化接口的 Agent 控制、运行中批次动态入队等边界，
+见 [FineSub v0.5.0 功能兼容矩阵](docs/core-compatibility.md)。
+
 ## 目录
 
 ```text

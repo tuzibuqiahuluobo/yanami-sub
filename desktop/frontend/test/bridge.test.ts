@@ -56,6 +56,66 @@ test("browser preview exposes update check and release page", async () => {
 });
 
 
+test("browser preview exposes the batch scheduler contract", async () => {
+  const api = createDesktopApi({ preview: true });
+  const bootstrap = await api.getBootstrapState();
+  const template = bootstrap.tasks?.[0]?.request;
+  assert.ok(template);
+  const selected = await api.selectBatchFiles();
+
+  const started = await api.startBatch({
+    items: selected.paths.map((input, index) => ({
+      ...template,
+      input,
+      group: "",
+      priority: selected.paths.length - index,
+    })),
+    workers: { download: 2, asr: 1, llm: 2 },
+    asr_queue_size: 4,
+    retry_failed: 1,
+  });
+
+  assert.equal(started.state, "running");
+  assert.equal(started.items.length, 2);
+  assert.equal((await api.getBatchSnapshot())?.batch_id, started.batch_id);
+  assert.equal((await api.listBatches()).length, 1);
+});
+
+
+test("browser preview exposes the knowledge workspace contract", async () => {
+  const api = createDesktopApi({ preview: true });
+
+  const snapshot = await api.getKnowledgeSnapshot();
+  const entry = await api.getKnowledgeEntry("common/FineSub");
+  const feedback = await api.getTaskKnowledgeFeedback("preview-task");
+  const maintenance = await api.runKnowledgeMaintenance({
+    command: "verify",
+    args: [],
+    content: "",
+  });
+
+  assert.equal(snapshot.revision, 12);
+  assert.equal(snapshot.entries[0]?.qualified_name, "common/FineSub");
+  assert.equal(entry.text.includes("FineSub Desktop"), true);
+  assert.equal(feedback.merged_hints[0]?.entry, "FineSub");
+  assert.equal(maintenance.command, "verify");
+});
+
+
+test("browser preview exposes key export and storage maintenance", async () => {
+  const api = createDesktopApi({ preview: true });
+
+  const exported = await api.exportApiKeys();
+  const moved = await api.relocateData();
+  const purged = await api.purgeRebuildableData("PURGE_REBUILDABLE_DATA");
+
+  assert.equal(exported.cancelled, false);
+  assert.equal(moved.storage.relocated, true);
+  assert.equal(moved.storage.big_data, String.raw`D:\FineSub Data`);
+  assert.equal(purged.resources?.every((resource) => resource.state === "missing"), true);
+});
+
+
 test("desktop API uses the native Python bridge by default", async () => {
   const previousWindow = globalThis.window;
   const calls: string[] = [];

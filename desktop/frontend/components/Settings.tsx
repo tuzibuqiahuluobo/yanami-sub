@@ -5,6 +5,7 @@ import {
   BookOpen,
   CheckCircle2,
   CircleHelp,
+  Download,
   ExternalLink,
   Eye,
   EyeOff,
@@ -32,7 +33,14 @@ import {
 import { detectAvailableFonts } from "@/lib/fonts";
 import { saveUi, uiValue } from "@/lib/preferences";
 import type { AppState } from "@/lib/state";
-import type { RevealedApiKeys, SharedSettings } from "@/lib/types";
+import type {
+  ApiProvider,
+  KeyExportResult,
+  LocalAgentStatus,
+  RevealedApiKeys,
+  RoutingUpdate,
+  SharedSettings,
+} from "@/lib/types";
 import {
   FONT_SCALE_LABELS,
   type AppearanceSettings,
@@ -52,11 +60,16 @@ interface SettingsProps extends UpdateSectionProps {
   appearance: AppearanceSettings;
   onAppearanceChange: (changes: Partial<AppearanceSettings>) => void;
   onSaveKey: (
-    provider: "gemini" | "exa" | "tavily",
+    provider: ApiProvider,
     value: string,
   ) => Promise<void>;
-  onDeleteKey: (provider: "gemini" | "exa" | "tavily") => Promise<void>;
+  onDeleteKey: (provider: ApiProvider) => Promise<void>;
   onRevealKeys: () => Promise<RevealedApiKeys>;
+  onExportKeys: () => Promise<KeyExportResult>;
+  onSaveRouting: (values: RoutingUpdate) => Promise<void>;
+  onSaveProviderKey: (providerId: string, value: string) => Promise<void>;
+  onDeleteProviderKey: (providerId: string) => Promise<void>;
+  onProbeLocalAgents: () => Promise<LocalAgentStatus[]>;
   onSaveSharedSettings: (values: SharedSettings) => Promise<void>;
   onUseRawSubtitle: () => void;
   onRescanGpus: () => Promise<unknown>;
@@ -74,6 +87,11 @@ export function Settings({
   onSaveKey,
   onDeleteKey,
   onRevealKeys,
+  onExportKeys,
+  onSaveRouting,
+  onSaveProviderKey,
+  onDeleteProviderKey,
+  onProbeLocalAgents,
   onSaveSharedSettings,
   onUseRawSubtitle,
   onRescanGpus,
@@ -136,6 +154,28 @@ export function Settings({
   const [showFullKeys, setShowFullKeys] = useState(false);
   const [revealBusy, setRevealBusy] = useState(false);
   const [revealError, setRevealError] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportResult, setExportResult] = useState<KeyExportResult | null>(null);
+  const [exportError, setExportError] = useState(false);
+  const routing = state.routing;
+  const toRoutingDraft = (): RoutingUpdate => ({
+    preset: routing.active_preset_id || "default",
+    execution_policy: routing.execution_policy || routing.policies[0] || "",
+    local_agent_timeout_seconds: routing.local_agent_timeout_seconds,
+    local_agent_allow_unisolated_user_config:
+      routing.local_agent_allow_unisolated_user_config,
+    local_agent_service_tier: routing.local_agent_service_tier,
+    local_agent_reasoning_effort: routing.local_agent_reasoning_effort,
+    local_agent_max_parallel: routing.local_agent_max_parallel,
+  });
+  const [routingDraft, setRoutingDraft] = useState<RoutingUpdate>(toRoutingDraft);
+  const [routingBusy, setRoutingBusy] = useState(false);
+  const [routingError, setRoutingError] = useState("");
+  const [agentProbeBusy, setAgentProbeBusy] = useState(false);
+  const [agentStatuses, setAgentStatuses] = useState<LocalAgentStatus[] | null>(null);
+  useEffect(() => {
+    setRoutingDraft(toRoutingDraft());
+  }, [routing]);
   const apiError = state.task.error?.code === "api_key_required";
   const { language, setLanguage, t } = useLanguage();
   const capability = {
@@ -187,6 +227,7 @@ export function Settings({
     { value: "zh", label: t.settings.language.zh },
     { value: "en", label: t.settings.language.en },
   ];
+  const customProviders = routing.providers.filter((provider) => provider.key_env);
 
   return (
     <div className="page settings-page">
@@ -388,11 +429,19 @@ export function Settings({
         <div className="api-key-list">
           <ApiKeyField
             label="Gemini Free"
-            description={t.settings.translation.gemini}
-            placeholder="AIza…"
-            status={state.settings.api_keys.gemini}
-            onSave={(value) => onSaveKey("gemini", value)}
-            onDelete={() => onDeleteKey("gemini")}
+            description={t.settings.translation.geminiFree}
+            placeholder={t.settings.translation.poolPlaceholder}
+            status={state.settings.api_keys.gemini_free}
+            onSave={(value) => onSaveKey("gemini_free", value)}
+            onDelete={() => onDeleteKey("gemini_free")}
+          />
+          <ApiKeyField
+            label="Gemini Paid"
+            description={t.settings.translation.geminiPaid}
+            placeholder={t.settings.translation.poolPlaceholder}
+            status={state.settings.api_keys.gemini_paid}
+            onSave={(value) => onSaveKey("gemini_paid", value)}
+            onDelete={() => onDeleteKey("gemini_paid")}
           />
           <ApiKeyField
             label="Exa"
@@ -435,13 +484,14 @@ export function Settings({
           ) : (
             <>
               <div className="revealed-keys">
-                {(["gemini", "exa", "tavily"] as const).map((provider) => {
+                {(["gemini_free", "gemini_paid", "exa", "tavily"] as const).map((provider) => {
                   const entries = revealed[provider] ?? [];
                   if (entries.length === 0) {
                     return null;
                   }
                   const labels = {
-                    gemini: "Gemini Free",
+                    gemini_free: "Gemini Free",
+                    gemini_paid: "Gemini Paid",
                     exa: "Exa",
                     tavily: "Tavily",
                   } as const;
@@ -461,7 +511,7 @@ export function Settings({
                     </div>
                   );
                 })}
-                {(["gemini", "exa", "tavily"] as const).every(
+                {(["gemini_free", "gemini_paid", "exa", "tavily"] as const).every(
                   (provider) => (revealed[provider] ?? []).length === 0,
                 ) ? (
                   <p>{t.settings.translation.revealEmpty}</p>
@@ -495,7 +545,261 @@ export function Settings({
           {revealError ? (
             <p className="revealed-error">{t.settings.translation.revealError}</p>
           ) : null}
+          <div className="api-key-export">
+            <button
+              type="button"
+              className="button button-secondary button-compact"
+              disabled={exportBusy}
+              onClick={async () => {
+                setExportBusy(true);
+                setExportError(false);
+                setExportResult(null);
+                try {
+                  const result = await onExportKeys();
+                  if (!result.cancelled) setExportResult(result);
+                } catch {
+                  setExportError(true);
+                } finally {
+                  setExportBusy(false);
+                }
+              }}
+            >
+              <Download size={14} />
+              {exportBusy
+                ? t.settings.translation.exporting
+                : t.settings.translation.export}
+            </button>
+            <p>{t.settings.translation.exportHint}</p>
+          </div>
+          {exportResult ? (
+            <p className="revealed-note">
+              {exportResult.count > 0 && exportResult.path
+                ? t.settings.translation.exported
+                    .replace("{count}", String(exportResult.count))
+                    .replace("{path}", exportResult.path)
+                : t.settings.translation.exportEmpty}
+            </p>
+          ) : null}
+          {exportError ? (
+            <p className="revealed-error">{t.settings.translation.exportError}</p>
+          ) : null}
         </div>
+      </section>
+
+      <section className="settings-section routing-settings">
+        <div className="settings-section-heading">
+          <div>
+            <h2>{t.settings.routing.title}</h2>
+            <p>{t.settings.routing.description}</p>
+          </div>
+          <span className={`capability-chip is-${routing.local_agent_bound ? "success" : "neutral"}`}>
+            {routing.local_agent_bound ? t.settings.routing.agentRoute : t.settings.routing.apiRoute}
+          </span>
+        </div>
+
+        {routing.error ? (
+          <p className="routing-error" role="alert">{routing.error}</p>
+        ) : (
+          <>
+            <div className="routing-grid">
+              <div className="field">
+                <span>{t.settings.routing.preset}</span>
+                <CustomSelect
+                  value={routingDraft.preset}
+                  ariaLabel={t.settings.routing.preset}
+                  disabled={routingBusy}
+                  onChange={(value) => setRoutingDraft((current) => ({ ...current, preset: value }))}
+                  options={routing.presets.map((preset) => ({
+                    value: preset.id,
+                    label: `${preset.name} · ${preset.id}`,
+                  }))}
+                />
+              </div>
+              <div className="field">
+                <span>{t.settings.routing.policy}</span>
+                <CustomSelect
+                  value={routingDraft.execution_policy}
+                  ariaLabel={t.settings.routing.policy}
+                  disabled={routingBusy}
+                  onChange={(value) => setRoutingDraft((current) => ({ ...current, execution_policy: value }))}
+                  options={routing.policies.map((policy) => ({ value: policy, label: policy }))}
+                />
+              </div>
+              <div className="field">
+                <span>{t.settings.routing.serviceTier}</span>
+                <CustomSelect
+                  value={routingDraft.local_agent_service_tier}
+                  ariaLabel={t.settings.routing.serviceTier}
+                  disabled={routingBusy}
+                  onChange={(value) => setRoutingDraft((current) => ({
+                    ...current,
+                    local_agent_service_tier: value as RoutingUpdate["local_agent_service_tier"],
+                  }))}
+                  options={[
+                    { value: "", label: t.settings.routing.followCore },
+                    { value: "fast", label: "fast" },
+                    { value: "flex", label: "flex" },
+                  ]}
+                />
+              </div>
+              <div className="field">
+                <span>{t.settings.routing.reasoning}</span>
+                <CustomSelect
+                  value={routingDraft.local_agent_reasoning_effort}
+                  ariaLabel={t.settings.routing.reasoning}
+                  disabled={routingBusy}
+                  onChange={(value) => setRoutingDraft((current) => ({
+                    ...current,
+                    local_agent_reasoning_effort: value as RoutingUpdate["local_agent_reasoning_effort"],
+                  }))}
+                  options={["", "low", "medium", "high", "xhigh"].map((value) => ({
+                    value,
+                    label: value || t.settings.routing.followCell,
+                  }))}
+                />
+              </div>
+              <label className="field">
+                <span>{t.settings.routing.timeout}</span>
+                <input
+                  type="number"
+                  min={10}
+                  step={10}
+                  disabled={routingBusy}
+                  value={routingDraft.local_agent_timeout_seconds}
+                  onChange={(event) => setRoutingDraft((current) => ({
+                    ...current,
+                    local_agent_timeout_seconds: Math.max(10, Number(event.target.value) || 10),
+                  }))}
+                />
+              </label>
+              <label className="field">
+                <span>{t.settings.routing.parallel}</span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  disabled={routingBusy}
+                  value={routingDraft.local_agent_max_parallel}
+                  onChange={(event) => setRoutingDraft((current) => ({
+                    ...current,
+                    local_agent_max_parallel: Math.max(1, Number(event.target.value) || 1),
+                  }))}
+                />
+              </label>
+            </div>
+
+            <label className="switch-row routing-isolation">
+              <input
+                type="checkbox"
+                checked={routingDraft.local_agent_allow_unisolated_user_config}
+                disabled={routingBusy}
+                onChange={(event) => setRoutingDraft((current) => ({
+                  ...current,
+                  local_agent_allow_unisolated_user_config: event.target.checked,
+                }))}
+              />
+              <span>
+                <strong>{t.settings.routing.unisolated}</strong>
+                <small>{t.settings.routing.unisolatedHint}</small>
+              </span>
+            </label>
+
+            <div className="routing-actions">
+              <span>{t.settings.routing.configPath}: <code>{routing.config_path}</code></span>
+              <button
+                type="button"
+                className="button button-primary button-compact"
+                disabled={routingBusy || !routingDraft.preset || !routingDraft.execution_policy}
+                onClick={async () => {
+                  setRoutingBusy(true);
+                  setRoutingError("");
+                  try {
+                    await onSaveRouting(routingDraft);
+                  } catch (error) {
+                    setRoutingError(error instanceof Error ? error.message : t.settings.routing.saveFailed);
+                  } finally {
+                    setRoutingBusy(false);
+                  }
+                }}
+              >
+                {routingBusy ? t.settings.routing.saving : t.settings.routing.save}
+              </button>
+            </div>
+            {routingError ? <p className="routing-error" role="alert">{routingError}</p> : null}
+
+            <details className="routing-catalog">
+              <summary>{t.settings.routing.catalog.replace("{groups}", String(Object.keys(routing.model_groups).length)).replace("{targets}", String(routing.targets.length))}</summary>
+              <div className="routing-catalog-columns">
+                <div>
+                  <strong>{t.settings.routing.groups}</strong>
+                  <ul>{Object.entries(routing.model_groups).map(([group, targets]) => <li key={group}><code>{group}</code><span>{targets.length}</span></li>)}</ul>
+                </div>
+                <div>
+                  <strong>{t.settings.routing.targets}</strong>
+                  <ul>{routing.targets.map((target) => <li key={target.id}><code>{target.id}</code><span>{target.provider_tier}</span></li>)}</ul>
+                </div>
+              </div>
+            </details>
+
+            <div className="agent-diagnostics">
+              <div className="settings-section-heading compact">
+                <div>
+                  <h3>{t.settings.routing.agents}</h3>
+                  <p>{t.settings.routing.agentsHint}</p>
+                </div>
+                <button
+                  type="button"
+                  className="button button-secondary button-compact"
+                  disabled={agentProbeBusy}
+                  onClick={async () => {
+                    setAgentProbeBusy(true);
+                    setRoutingError("");
+                    try {
+                      setAgentStatuses(await onProbeLocalAgents());
+                    } catch (error) {
+                      setRoutingError(error instanceof Error ? error.message : t.settings.routing.probeFailed);
+                    } finally {
+                      setAgentProbeBusy(false);
+                    }
+                  }}
+                >
+                  <RefreshCw size={14} /> {agentProbeBusy ? t.settings.routing.probing : t.settings.routing.probe}
+                </button>
+              </div>
+              {agentStatuses ? (
+                <div className="agent-status-list">
+                  {agentStatuses.map((agent) => (
+                    <div className="agent-status-row" key={agent.provider_tier}>
+                      <div><strong>{agent.provider_tier}</strong><small>{agent.driver || agent.models.join(", ")}</small></div>
+                      <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{t.settings.routing.agentStatus[agent.status]}</span>
+                      <small title={agent.detail}>{agent.version || agent.detail}</small>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            {customProviders.length ? (
+              <div className="custom-provider-keys">
+                <h3>{t.settings.routing.customProviders}</h3>
+                <p>{t.settings.routing.customProvidersHint}</p>
+                <div className="api-key-list">
+                  {customProviders.map((provider) => (
+                    <ApiKeyField
+                      key={provider.id}
+                      label={provider.id}
+                      description={`${provider.kind} · ${provider.base_url || provider.key_env}`}
+                      placeholder={provider.key_env}
+                      status={provider.configured ? "configured" : "missing"}
+                      onSave={(value) => onSaveProviderKey(provider.id, value)}
+                      onDelete={() => onDeleteProviderKey(provider.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        )}
       </section>
 
       <UpdateSection {...update} />

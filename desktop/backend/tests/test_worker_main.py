@@ -102,9 +102,39 @@ def test_worker_maps_request_to_pipeline_keywords(tmp_path: Path) -> None:
         input=str(tmp_path / "a.wav"),
         language="ja",
         gpu_tier="high",
+        gap_sec=0.45,
+        separator_sample_rate=32000,
+        separate=False,
+        vad_silero_assist=True,
+        qwen_verify="on",
+        lang_redecode="off",
+        asr_decode_batch=4,
+        asr_context="full",
+        word=True,
+        asr_stabilize_profile=2,
+        split_length_scale=1.2,
         llm_media="video",
-        llm_retrieval="local",
-        llm_difficulty="quality",
+        llm_correction_media="audio",
+        llm_planning_media="text",
+        llm_retrieval="native",
+        llm_difficulty="intermediate",
+        llm_continuity="parallel",
+        llm_parallel_windows=3,
+        llm_fast="on",
+        llm_output_scale=1.3,
+        llm_video=str(tmp_path / "context.mp4"),
+        extra_info="stream context",
+        extra_style="short lines",
+        task_summary="episode summary",
+        style="vtuber,casual",
+        style_mode="update",
+        download_video_source=False,
+        knowledge="collect",
+        refined_srt=str(tmp_path / "reviewed.srt"),
+        postprocess_profile=4,
+        max_retries_per_window=7,
+        max_replacements_per_window=2,
+        resume=False,
         cleanup_intermediate=True,
     )
 
@@ -133,9 +163,43 @@ def test_worker_maps_request_to_pipeline_keywords(tmp_path: Path) -> None:
     assert kwargs["stage"] == "raw-srt"
     assert kwargs["language"] == "ja"
     assert kwargs["gpu_tier"] == "high"
-    assert kwargs["llm_media"] == "video"
-    assert kwargs["llm_retrieval"] == "local"
-    assert kwargs["llm_difficulty"] == "quality"
+    expected = {
+        "gap_sec": 0.45,
+        "separator_sample_rate": 32000,
+        "separate": False,
+        "vad_silero_assist": True,
+        "qwen_verify": "on",
+        "lang_redecode": "off",
+        "asr_decode_batch": 4,
+        "asr_context": "full",
+        "word": True,
+        "asr_stabilize_profile": 2,
+        "split_length_scale": 1.2,
+        "llm_media": "video",
+        "llm_correction_media": "audio",
+        "llm_planning_media": "text",
+        "llm_retrieval": "native",
+        "llm_difficulty": "intermediate",
+        "llm_continuity": "parallel",
+        "llm_parallel_windows": 3,
+        "llm_fast": "on",
+        "llm_output_scale": 1.3,
+        "llm_video": str(tmp_path / "context.mp4"),
+        "extra_info": "stream context",
+        "extra_style": "short lines",
+        "task_summary": "episode summary",
+        "style": "vtuber,casual",
+        "style_mode": "update",
+        "download_video_source": False,
+        "knowledge": "collect",
+        "refined_srt": str(tmp_path / "reviewed.srt"),
+        "postprocess_profile": 4,
+        "max_retries_per_window": 7,
+        "max_replacements_per_window": 2,
+        "resume": False,
+    }
+    for key, value in expected.items():
+        assert kwargs[key] == value
     assert kwargs["task_id"] == "task-1"
     assert result == {"rawSrt": str(tmp_path / "a-raw.srt")}
     assert (tmp_path / "a-raw.srt").read_text(encoding="utf-8") == "raw subtitle"
@@ -146,6 +210,66 @@ def test_worker_maps_request_to_pipeline_keywords(tmp_path: Path) -> None:
     assert "finalSrt" not in result
     assert events[0].type == "started"
     assert events[-1].type == "completed"
+
+
+def test_worker_applies_and_restores_one_run_model_routing(tmp_path: Path) -> None:
+    from finesub.llm.routing.model_routes import runtime_preferred
+
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    private_output = tmp_path / "private" / "task-route"
+    private_output.mkdir(parents=True)
+    paths = _fake_paths(private_output)
+    paths.raw_srt.write_text("raw subtitle", encoding="utf-8")
+    observed: dict[str, str] = {}
+    before = runtime_preferred()
+
+    def pipeline(_source: str, **_kwargs):
+        observed.update(runtime_preferred())
+        return paths
+
+    run_request(
+        TaskRequest(
+            input=str(source),
+            llm_model=["correction-text=correction-capable"],
+        ),
+        task_id="task-route",
+        pipeline=pipeline,
+        emit=lambda _event: None,
+    )
+
+    assert observed == {"correction-text": "correction-capable"}
+    assert runtime_preferred() == before
+
+
+@pytest.mark.parametrize(
+    ("stage", "attribute", "key"),
+    [
+        ("vocal", "vocal_audio", "vocalAudio"),
+        ("aligned", "aligned_json", "alignedJson"),
+        ("stable", "stable_json", "stableJson"),
+    ],
+)
+def test_an_expert_stage_exposes_its_private_artifact(
+    tmp_path: Path, stage: str, attribute: str, key: str
+) -> None:
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    private_output = tmp_path / "private" / "task-1"
+    private_output.mkdir(parents=True)
+    paths = _fake_paths(private_output)
+    generated = getattr(paths, attribute)
+    generated.write_bytes(b"result")
+
+    result = run_request(
+        TaskRequest(input=str(source), stage=stage),
+        task_id="task-1",
+        pipeline=lambda source, **kwargs: paths,
+        emit=lambda event: None,
+    )
+
+    assert result == {key: str(generated.resolve())}
+    assert not (tmp_path / generated.name).exists()
 
 
 def test_the_cpu_tier_with_an_explicit_cuda_is_refused(tmp_path: Path) -> None:

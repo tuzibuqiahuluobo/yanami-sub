@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 
 import { fileName } from "@/lib/formatters";
-import { preferredSubtitleOutput } from "@/lib/subtitleOutputs";
+import { preferredTaskOutput } from "@/lib/subtitleOutputs";
 import type { JobSnapshot } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
 
@@ -85,7 +85,7 @@ export function TaskHistory({
         <section className="history-list">
           {tasks.map((snapshot) => {
             const id = taskId(snapshot);
-            const output = preferredSubtitleOutput(snapshot.outputs);
+            const output = preferredTaskOutput(snapshot.outputs);
             const stateLabel = t.history.status[snapshot.state];
             return (
               <article className="history-row" key={id}>

@@ -32,40 +32,35 @@ API Key 的配置见上游
 
 ## 界面能设什么
 
-桌面端覆盖单个任务的常用路径。一次任务里能在界面上选的:
+桌面端覆盖单个任务的完整生产路径。一次任务里能在界面上选的：
 
 | 界面上有 | 对应的命令行选项 |
 | --- | --- |
-| 输入文件 / URL、输出名 | 输入、`--name` |
+| 输入文件 / URL、输出名 | 输入、`--name`、`--no-download-video` |
 | 跑到哪一步 | `--stage` |
 | 识别模型 | `--model` |
 | 语言 | `--language` |
 | 处理设备(自动 / 显卡 / CPU)、用哪张卡 | `--device`(选卡是桌面独有,命令行用 `CUDA_VISIBLE_DEVICES`) |
 | 显卡档位 | `--gpu-tier` |
-| 背景信息、翻译风格补充 | `--extra-info`、`--extra-style` |
-| 知识库开关 | `--knowledge` |
-| LLM 的媒体 / 检索 / 难度 / 快速模式 / 输出系数 | `--llm-media`、`--llm-retrieval`、`--llm-difficulty`、`--llm-fast`、`--llm-output-scale` |
-| 稳定化档位、后处理档位、词级 SRT | `--asr-stabilize-profile`、`--postprocess-profile`、`--word` |
+| 背景信息、翻译风格、命名样式 | `--extra-info`、`--extra-style`、`--style`、`--style-mode` |
+| 知识库与人工精修反馈 | `--knowledge`、`--refined-srt`、`--task-summary` |
+| LLM 媒体 / 检索 / 难度 / 连续性 / 并发 / 路由 / 重试 | `--llm-*`、两个窗口重试预算 |
+| 分离、VAD、二次校验、上下文、解码、稳定化与后处理 | 对应的全部生产调优选项 |
 | 跑完清理中间产物 | (命令行不清,产物留在原地) |
 | 设置页:字幕长度偏好 | `--split-length-scale` / `config.toml` 的 `[segmentation] length_scale` |
 
-⚠ **有三处默认值和命令行不一样**,同一个文件两边跑结果可能不同:
+批处理页面支持多个本地文件和 URL、下载/识别/LLM 并发、队列背压、优先级、失败隔离、
+阶段重试、取消和断点续跑；模型路由与知识库有各自的高级管理页面。
+
+⚠ **有一处有意采用更积极的桌面默认值**，同一个文件两边直接运行时需要留意：
 
 | | 桌面端 | 命令行 |
 | --- | --- | --- |
-| 知识库 | `update`(跑完把本次发现写回知识库) | `collect`(只读不写) |
-| LLM 看什么 | `video`(有视频就给画面) | `audio` |
-| 跑完的中间产物 | 可勾选自动清理 | 一律保留 |
+| 知识库 | `update`（跑完写回本次发现） | `collect`（收集反馈但不写回） |
 
-**只有命令行才有的**（需要时请使用上游 FineSub CLI，见下一节）：
-
-- **批量**:多个输入、`--manifest`、`--resume-batch`（上游 [`docs/manual/batch.md`](https://github.com/caca2331/finesub/blob/v0.5.0/docs/manual/batch.md)）
-- **翻译风格库**:`--style` / `--style-mode`,以及把人工精修喂回去的 `--refined-srt`
-- **识别侧的细调**:`--qwen-verify`、`--asr-context`、`--lang-redecode`、`--vad-silero-assist`、
-  `--asr-decode-batch`、`--gap`、`--separator-rate`（上游 [`docs/manual/tuning.md`](https://github.com/caca2331/finesub/blob/v0.5.0/docs/manual/tuning.md)）
-- **LLM 侧的细调**:`--llm-continuity` / `--llm-parallel-windows`(窗口并发)、`--llm-video`、
-  `--extra-info-file`、`--knowledge-root`、两个重试预算
-- **URL 只下音频**:`--no-download-video`
+完整的支持范围、刻意保留在 CLI 的终端/开发能力，以及希望上游补充的结构化接口，见
+[核心兼容矩阵](../docs/core-compatibility.md)。当前主要 CLI 专属项是 Agent join/task 控制、
+向运行中 JSONL manifest 动态追加任务，以及 `--test-profile` 等开发开关。
 
 ## 命令行
 
