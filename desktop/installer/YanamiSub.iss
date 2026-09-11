@@ -42,7 +42,9 @@ Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
 SetupLogging=yes
-UsePreviousAppDir=yes
+; Do not inherit the old FineSub Desktop directory. New installs should use
+; the Yanami Sub folder; an in-place migration can still choose the old path.
+UsePreviousAppDir=no
 UsePreviousTasks=yes
 CloseApplications=yes
 RestartApplications=no

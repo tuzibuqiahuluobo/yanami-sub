@@ -22,6 +22,8 @@ def test_installer_has_per_user_configurable_install_directory() -> None:
     script = _installer_text()
     assert "AppName=Yanami Sub" in script
     assert "DefaultDirName={localappdata}\\Programs\\Yanami Sub" in script
+    assert "UsePreviousAppDir=no" in script
+    assert "UsePreviousAppDir=yes" not in script
     assert "PrivilegesRequired=lowest" in script
     assert "DisableDirPage=no" in script
 
