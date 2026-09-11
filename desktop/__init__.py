@@ -1,1 +1,1 @@
-"""FineSub desktop application package."""
+"""Yanami Sub application package."""

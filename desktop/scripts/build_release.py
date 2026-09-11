@@ -40,7 +40,7 @@ class ReleaseBuildConfig:
     minimum_supported_version: str
     app_supported_from: list[str]
     release_notes: str
-    repository: str = "tuzibuqiahuluobo/finesub-desktop"
+    repository: str = "tuzibuqiahuluobo/yanami-sub"
     platform: Literal["windows-x64"] = "windows-x64"
 
 
@@ -100,8 +100,8 @@ def build_release(config: ReleaseBuildConfig) -> ReleaseArtifacts:
     output = config.output_dir.expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
     asset_platform = "win-x64" if config.platform == "windows-x64" else config.platform
-    app_name = f"finesub-app-{config.version}-{asset_platform}.zip"
-    full_name = f"finesub-full-{config.version}-{asset_platform}.zip"
+    app_name = f"yanami-sub-app-{config.version}-{asset_platform}.zip"
+    full_name = f"yanami-sub-full-{config.version}-{asset_platform}.zip"
     app_zip = output / app_name
     full_zip = output / full_name
     for tree, base in (
@@ -153,10 +153,10 @@ def build_release(config: ReleaseBuildConfig) -> ReleaseArtifacts:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    manifest = output / "update-manifest.json"
+    manifest = output / "yanami-sub-update-manifest.json"
     manifest.write_bytes(manifest_bytes)
     signature = _load_private_key(config.private_key_path).sign(manifest_bytes)
-    manifest_sig = output / "update-manifest.sig"
+    manifest_sig = output / "yanami-sub-update-manifest.sig"
     manifest_sig.write_bytes(base64.b64encode(signature) + b"\n")
     (output / f"{app_name}.sha256").write_text(
         f"{_sha256(app_zip)}  {app_name}\n",
@@ -177,7 +177,7 @@ def build_release(config: ReleaseBuildConfig) -> ReleaseArtifacts:
 
 
 def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Build signed FineSub releases")
+    parser = argparse.ArgumentParser(description="Build signed Yanami Sub releases")
     parser.add_argument("--version", required=True)
     parser.add_argument("--channel", choices=("stable", "beta"), default="stable")
     parser.add_argument("--key-id", required=True)
@@ -190,7 +190,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--supported-from", action="append", default=[])
     parser.add_argument("--release-notes", default="")
     parser.add_argument(
-        "--repository", default="tuzibuqiahuluobo/finesub-desktop"
+        "--repository", default="tuzibuqiahuluobo/yanami-sub"
     )
     return parser.parse_args()
 

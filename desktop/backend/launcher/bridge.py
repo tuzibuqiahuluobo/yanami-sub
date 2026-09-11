@@ -104,6 +104,8 @@ class DesktopBridge:
         update_installs: Any | None = None,
         file_selector: Callable[[], str | None] | None = None,
         batch_file_selector: Callable[[], list[str]] | None = None,
+        batch_manifest_selector: Callable[[], str | None] | None = None,
+        batch_manifest_export_selector: Callable[[], str | None] | None = None,
         directory_selector: Callable[[], str | None] | None = None,
         key_export_selector: Callable[[], str | None] | None = None,
         knowledge: Any | None = None,
@@ -123,6 +125,8 @@ class DesktopBridge:
         self.update_installs = update_installs
         self.file_selector = file_selector
         self.batch_file_selector = batch_file_selector
+        self.batch_manifest_selector = batch_manifest_selector
+        self.batch_manifest_export_selector = batch_manifest_export_selector
         self.directory_selector = directory_selector
         self.key_export_selector = key_export_selector
         self.knowledge = knowledge or KnowledgeService(
@@ -234,6 +238,64 @@ class DesktopBridge:
                 )
             )
         return self._guard(lambda: {"paths": self.batch_file_selector()})
+
+    def import_batch_manifest(self) -> dict[str, Any]:
+        if self.batches is None or self.batch_manifest_selector is None:
+            return _failure(
+                BridgeError(
+                    code="dialog_unavailable",
+                    message="当前窗口无法打开批次清单。",
+                )
+            )
+
+        def import_manifest() -> dict[str, Any]:
+            selected = self.batch_manifest_selector()
+            if not selected:
+                return {
+                    "cancelled": True,
+                    "path": None,
+                    "request": None,
+                    "ignored_fields": [],
+                }
+            request, ignored = self.batches.import_manifest(Path(selected))
+            return {
+                "cancelled": False,
+                "path": str(Path(selected).expanduser().resolve()),
+                "request": request,
+                "ignored_fields": ignored,
+            }
+
+        return self._guard(import_manifest)
+
+    def export_batch_manifest(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if self.batches is None or self.batch_manifest_export_selector is None:
+            return _failure(
+                BridgeError(
+                    code="dialog_unavailable",
+                    message="当前窗口无法导出批次清单。",
+                )
+            )
+        try:
+            request = BatchRequest.model_validate(payload)
+        except ValidationError as error:
+            return _failure(
+                BridgeError(
+                    code="invalid_request",
+                    message="批次清单参数无效。",
+                    action=str(error.errors(include_url=False)),
+                )
+            )
+
+        def export_manifest() -> dict[str, Any]:
+            selected = self.batch_manifest_export_selector()
+            if not selected:
+                return {"cancelled": True, "path": None, "count": 0}
+            return {
+                "cancelled": False,
+                **self.batches.export_manifest(Path(selected), request),
+            }
+
+        return self._guard(export_manifest)
 
     def start_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:

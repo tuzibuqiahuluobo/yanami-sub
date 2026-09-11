@@ -47,7 +47,7 @@ def test_windows_build_redacts_environment_for_packaging_tools() -> None:
 
 
 def test_windows_build_applies_product_names_icon_and_version_resource() -> None:
-    assert '"--name=FineSub Desktop"' in SCRIPT
+    assert '"--name=Yanami Sub"' in SCRIPT
     assert '"--icon=$IconPath"' in SCRIPT
     assert '"--version-file=$LauncherVersionFile"' in SCRIPT
 
@@ -63,7 +63,7 @@ def test_release_build_accepts_ascii_bootstrap_directory() -> None:
     assert "[string]$UpstreamDirectory" in RELEASE_SCRIPT
     assert "-OutputDirectory $BootstrapDirectory" in RELEASE_SCRIPT
     assert "-UpstreamDirectory $UpstreamDirectory" in RELEASE_SCRIPT
-    assert '$Bootstrap = Join-Path $BootstrapDirectory "FineSub Desktop.dist"' in (
+    assert '$Bootstrap = Join-Path $BootstrapDirectory "Yanami Sub.dist"' in (
         RELEASE_SCRIPT
     )
 
@@ -88,19 +88,19 @@ def test_desktop_version_sources_match_canonical_version() -> None:
         ).read_text(encoding="utf-8")
     )
     installer = (
-        REPOSITORY_ROOT / "desktop" / "installer" / "FineSubDesktop.iss"
+        REPOSITORY_ROOT / "desktop" / "installer" / "YanamiSub.iss"
     ).read_text(encoding="utf-8")
     launcher_version = (
         REPOSITORY_ROOT
         / "desktop"
         / "assets"
-        / "finesub-desktop-version.txt"
+        / "yanami-sub-version.txt"
     ).read_text(encoding="utf-8")
     updater_version = (
         REPOSITORY_ROOT
         / "desktop"
         / "assets"
-        / "finesub-desktop-updater-version.txt"
+        / "yanami-sub-updater-version.txt"
     ).read_text(encoding="utf-8")
 
     assert launcher["appVersion"] == version

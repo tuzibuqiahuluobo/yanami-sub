@@ -23,7 +23,7 @@ UPDATE_DIRECTORY_NAME = ".update"
 BACKUP_PREFIX = "backup-"
 #: Present in every healthy install root; its absence is what "unbootable"
 #: means here. Kept in sync with `updates.service.MAIN_EXECUTABLE_NAME`.
-MAIN_EXECUTABLE_NAME = "FineSub Desktop.exe"
+MAIN_EXECUTABLE_NAME = "Yanami Sub.exe"
 
 LogCallback = Callable[[str], None]
 

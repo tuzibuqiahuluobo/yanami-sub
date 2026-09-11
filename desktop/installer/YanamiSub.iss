@@ -1,9 +1,9 @@
 #ifndef AppSource
-  #error AppSource must point to the packaged FineSub Desktop application directory.
+  #error AppSource must point to the packaged Yanami Sub application directory.
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-rc.2"
+  #define AppVersion "0.1.0-rc.3"
 #endif
 
 #ifndef OutputDir
@@ -11,7 +11,7 @@
 #endif
 
 #ifndef SetupIcon
-  #error SetupIcon must point to the FineSub Desktop .ico file.
+  #error SetupIcon must point to the Yanami Sub .ico file.
 #endif
 
 #ifndef ChineseLanguageFile
@@ -19,25 +19,25 @@
 #endif
 
 #define AppPublisher "tuzibuqiahuluobo"
-#define AppExeName "FineSub Desktop.exe"
+#define AppExeName "Yanami Sub.exe"
 
 [Setup]
 AppId={{D4C7C84D-3037-4CF5-B9CA-9EA30265414F}
-AppName=FineSub Desktop
+AppName=Yanami Sub
 AppVersion={#AppVersion}
-AppVerName=FineSub Desktop {#AppVersion}
+AppVerName=Yanami Sub {#AppVersion}
 AppPublisher={#AppPublisher}
-DefaultDirName={localappdata}\Programs\FineSub Desktop
-DefaultGroupName=FineSub Desktop
+DefaultDirName={localappdata}\Programs\Yanami Sub
+DefaultGroupName=Yanami Sub
 DisableDirPage=no
 DisableProgramGroupPage=yes
 PrivilegesRequired=lowest
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 OutputDir={#OutputDir}
-OutputBaseFilename=FineSub-Desktop-{#AppVersion}-Setup
+OutputBaseFilename=Yanami-Sub-{#AppVersion}-Setup
 SetupIconFile={#SetupIcon}
-UninstallDisplayIcon={app}\FineSub Desktop.exe
+UninstallDisplayIcon={app}\Yanami Sub.exe
 Compression=lzma2/ultra64
 SolidCompression=yes
 WizardStyle=modern
@@ -46,16 +46,16 @@ UsePreviousAppDir=yes
 UsePreviousTasks=yes
 CloseApplications=yes
 RestartApplications=no
-; With two languages Setup would open with a picker; detection by UI language
-; answers it correctly for both audiences, and anyone else gets the first entry.
+; Yanami Sub ships a single installer language, so every Windows locale
+; receives the same Simplified Chinese interface without a language picker.
 ShowLanguageDialog=no
 
 [Languages]
 ; Simplified Chinese is not one of the translations Inno Setup ships, so it is
 ; vendored beside this script (see ChineseSimplified.isl for its provenance).
-; Listed first: it is the fallback for every locale that is neither.
+; Keep this as the only entry so automatic locale detection cannot select the
+; compiler's English default on a non-Chinese Windows installation.
 Name: "chinesesimp"; MessagesFile: "{#ChineseLanguageFile}"
-Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: checkedonce
@@ -63,12 +63,20 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 Source: "{#AppSource}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Keep the original AppId so RC3 can migrate an existing installation. Remove
+; obsolete launchers and shortcuts so only the Yanami Sub entry points remain.
+Type: files; Name: "{app}\FineSub Desktop.exe"
+Type: files; Name: "{app}\updater\FineSub Desktop Updater.exe"
+Type: files; Name: "{autoprograms}\FineSub Desktop.lnk"
+Type: files; Name: "{autodesktop}\FineSub Desktop.lnk"
+
 [Icons]
-Name: "{autoprograms}\FineSub Desktop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
-Name: "{autodesktop}\FineSub Desktop"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\Yanami Sub"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"
+Name: "{autodesktop}\Yanami Sub"; Filename: "{app}\{#AppExeName}"; WorkingDir: "{app}"; IconFilename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,FineSub Desktop}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,Yanami Sub}"; Flags: nowait postinstall skipifsilent
 
 [Code]
 { The marker separates an installed copy (personal data in
@@ -114,7 +122,7 @@ begin
   if DirExists(Subtitles) and not UninstallSilent() then
   begin
     if MsgBox(
-      'Also delete the subtitles FineSub produced?'
+      '是否同时删除 Yanami Sub 已生成的字幕？'
         + #13#10 + Subtitles,
       mbConfirmation, MB_YESNO
     ) = IDYES then
@@ -125,9 +133,8 @@ begin
   if DirExists(PersonalData) and not UninstallSilent() then
   begin
     if MsgBox(
-      'Also delete the FineSub data folder (settings, API keys, knowledge '
-        + 'base, task history)? It is shared with the FineSub CLI and with '
-        + 'portable copies on this machine.'
+      '是否同时删除 FineSub 数据目录（设置、API Key、知识库和任务历史）？'
+        + '此目录与 FineSub CLI 及本机便携版共享。'
         + #13#10 + PersonalData,
       mbConfirmation, MB_YESNO
     ) = IDYES then

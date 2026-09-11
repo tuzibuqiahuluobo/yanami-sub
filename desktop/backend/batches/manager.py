@@ -33,6 +33,30 @@ from desktop.backend.jobs.launch import (
 LOGGER = logging.getLogger(__name__)
 
 
+_MANIFEST_TO_DESKTOP = {
+    "source": "input",
+    "model": "model_name",
+    "gap": "gap_sec",
+    "separator_rate": "separator_sample_rate",
+}
+_DESKTOP_TO_MANIFEST = {value: key for key, value in _MANIFEST_TO_DESKTOP.items()}
+_MANAGED_MANIFEST_FIELDS = {
+    "knowledge_root",
+    "output",
+    "task_artifact_dir",
+    "task_id",
+    "test_profile",
+}
+_DESKTOP_ROW_FIELDS = {
+    "cleanup_intermediate",
+    "gpu_index",
+    "gpu_name",
+    "llm_model",
+    "name",
+}
+_BATCH_OPTION_FIELDS = {"workers", "asr_queue_size", "retry_failed"}
+
+
 class BatchAlreadyRunning(RuntimeError):
     pass
 
@@ -180,6 +204,84 @@ class BatchManager:
         with self._lock:
             return self._find(batch_id).request.model_copy(deep=True)
 
+    def import_manifest(self, path: str | Path) -> tuple[BatchRequest, list[str]]:
+        """Read a core-compatible JSONL manifest without accepting owned paths."""
+
+        from finesub.batch_state import strip_view_keys
+        from finesub.pipeline import merge_item_options, read_manifest
+
+        source = Path(path).expanduser().resolve()
+        if source.stat().st_size > 8 * 1024 * 1024:
+            raise ValueError("批次清单不能超过 8 MB。")
+        rows = read_manifest(source)
+        items: list[BatchItemRequest] = []
+        ignored: set[str] = set()
+        batch_options: dict[str, Any] = {}
+        for index, raw in enumerate(rows, 1):
+            desktop = raw.get("_desktop") if isinstance(raw.get("_desktop"), dict) else {}
+            row = strip_view_keys(raw)
+            try:
+                merge_item_options(row, {})
+            except ValueError as error:
+                raise ValueError(f"批次清单第 {index} 行无效：{error}") from error
+            for field in _MANAGED_MANIFEST_FIELDS & row.keys():
+                ignored.add(field)
+                row.pop(field, None)
+            normalized = {
+                _MANIFEST_TO_DESKTOP.get(key, key): value
+                for key, value in row.items()
+            }
+            for field in _DESKTOP_ROW_FIELDS:
+                if field in desktop:
+                    normalized[field] = desktop[field]
+            try:
+                items.append(BatchItemRequest.model_validate(normalized))
+            except ValueError as error:
+                raise ValueError(f"批次清单第 {index} 行无效：{error}") from error
+            if index == 1 and isinstance(desktop.get("batch"), dict):
+                batch_options = {
+                    key: value
+                    for key, value in desktop["batch"].items()
+                    if key in _BATCH_OPTION_FIELDS
+                }
+        try:
+            return (
+                BatchRequest.model_validate({**batch_options, "items": items}),
+                sorted(ignored),
+            )
+        except ValueError as error:
+            raise ValueError(f"批次清单无效：{error}") from error
+
+    def export_manifest(self, path: str | Path, request: BatchRequest) -> dict[str, Any]:
+        """Write a JSONL manifest accepted by both the CLI and Desktop."""
+
+        destination = Path(path).expanduser().resolve()
+        lines: list[str] = []
+        batch_options = {
+            "workers": request.workers.model_dump(mode="json"),
+            "asr_queue_size": request.asr_queue_size,
+            "retry_failed": request.retry_failed,
+        }
+        for index, item in enumerate(request.items):
+            row = item.model_dump(mode="json", exclude_none=True)
+            row.pop("output", None)
+            desktop = {field: row.pop(field) for field in _DESKTOP_ROW_FIELDS if field in row}
+            if index == 0:
+                desktop["batch"] = batch_options
+            normalized = {
+                _DESKTOP_TO_MANIFEST.get(key, key): value
+                for key, value in row.items()
+            }
+            normalized["_desktop"] = desktop
+            lines.append(json.dumps(normalized, ensure_ascii=False, separators=(",", ":")))
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_name(
+            f".{destination.name}.{os.getpid()}.{threading.get_ident()}.tmp"
+        )
+        temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        os.replace(temporary, destination)
+        return {"path": str(destination), "count": len(lines)}
+
     def is_running(self) -> bool:
         with self._lock:
             return bool(
@@ -254,7 +356,7 @@ class BatchManager:
         environment.update(context.environment)
         pinned, _notice = device_environment(request.items[0], self.available_gpus)
         environment.update(pinned)
-        environment["FINESUB_DESKTOP_BATCH_ROOT"] = str(self._batch_dir(batch_id))
+        environment["YANAMI_SUB_BATCH_ROOT"] = str(self._batch_dir(batch_id))
         environment[TASK_ACTIVITY_ROOT_VARIABLE] = str(self.history_path.parent)
         creationflags = (
             getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)

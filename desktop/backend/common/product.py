@@ -3,7 +3,7 @@
 # and shared with the CLI rather than owned by the desktop app.
 from finesub_bootstrap.paths import INSTALLED_MARKER_NAME
 
-PRODUCT_NAME = "FineSub Desktop"
+PRODUCT_NAME = "Yanami Sub"
 MAIN_EXECUTABLE_NAME = f"{PRODUCT_NAME}.exe"
 UPDATER_EXECUTABLE_NAME = f"{PRODUCT_NAME} Updater.exe"
 

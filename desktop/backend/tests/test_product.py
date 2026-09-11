@@ -6,6 +6,6 @@ from desktop.backend.common.product import (
 
 
 def test_windows_product_files_use_the_approved_desktop_name() -> None:
-    assert PRODUCT_NAME == "FineSub Desktop"
-    assert MAIN_EXECUTABLE_NAME == "FineSub Desktop.exe"
-    assert UPDATER_EXECUTABLE_NAME == "FineSub Desktop Updater.exe"
+    assert PRODUCT_NAME == "Yanami Sub"
+    assert MAIN_EXECUTABLE_NAME == "Yanami Sub.exe"
+    assert UPDATER_EXECUTABLE_NAME == "Yanami Sub Updater.exe"

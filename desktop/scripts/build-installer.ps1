@@ -15,8 +15,8 @@ if (-not $Version) {
         Get-Content -LiteralPath (Join-Path $RepoRoot "VERSION") -Raw
     ).Trim()
 }
-$Definition = Join-Path $RepoRoot "desktop\installer\FineSubDesktop.iss"
-$SetupIcon = Join-Path $RepoRoot "desktop\assets\finesub-desktop.ico"
+$Definition = Join-Path $RepoRoot "desktop\installer\YanamiSub.iss"
+$SetupIcon = Join-Path $RepoRoot "desktop\assets\yanami-sub.ico"
 $ChineseLanguageFile = Join-Path $RepoRoot "desktop\installer\ChineseSimplified.isl"
 . (Join-Path $PSScriptRoot "authenticode.ps1")
 
@@ -56,7 +56,7 @@ if (-not (Test-Path -LiteralPath $Definition -PathType Leaf)) {
     throw "Installer definition not found: $Definition"
 }
 if (-not (Test-Path -LiteralPath $SetupIcon -PathType Leaf)) {
-    throw "FineSub Desktop setup icon not found: $SetupIcon"
+    throw "Yanami Sub setup icon not found: $SetupIcon"
 }
 if (-not (Test-Path -LiteralPath $ChineseLanguageFile -PathType Leaf)) {
     throw "Chinese installer language file not found: $ChineseLanguageFile"
@@ -70,11 +70,11 @@ if (-not $OutputDirectory) {
     $OutputDirectory = Join-Path $RepoRoot "dist\installer"
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-$SigningCertificate = Get-FineSubCodeSigningCertificate `
+$SigningCertificate = Get-YanamiSubCodeSigningCertificate `
     -Required:$RequireAuthenticode
 
 $RequiredFiles = @(
-    "FineSub Desktop.exe",
+    "Yanami Sub.exe",
     "app\current.json",
     "app\versions\$Version\src\finesub_bootstrap\runtime-manifest.json",
     "app\versions\$Version\src\finesub_bootstrap\download-sources.json",
@@ -97,8 +97,8 @@ if ($CurrentPointer.current -ne $Version) {
     throw "Packaged app version '$($CurrentPointer.current)' does not match installer version '$Version'."
 }
 if ($SigningCertificate) {
-    Set-FineSubAuthenticodeSignature `
-        -FilePath (Get-FineSubPackagedExecutables $ApplicationDirectory) `
+    Set-YanamiSubAuthenticodeSignature `
+        -FilePath (Get-YanamiSubPackagedExecutables $ApplicationDirectory) `
         -Certificate $SigningCertificate
 }
 
@@ -118,16 +118,16 @@ if ($LASTEXITCODE -ne 0) {
     throw "Inno Setup compilation failed with exit code $LASTEXITCODE."
 }
 
-$InstallerName = "FineSub-Desktop-$Version-Setup.exe"
+$InstallerName = "Yanami-Sub-$Version-Setup.exe"
 $InstallerPath = Join-Path $OutputDirectory $InstallerName
 if (-not (Test-Path -LiteralPath $InstallerPath -PathType Leaf)) {
     throw "Inno Setup completed without producing the expected installer: $InstallerPath"
 }
 if ($SigningCertificate) {
-    Set-FineSubAuthenticodeSignature `
+    Set-YanamiSubAuthenticodeSignature `
         -FilePath @($InstallerPath) `
         -Certificate $SigningCertificate
 }
 
-Write-Host "FineSub Desktop installer ready:"
+Write-Host "Yanami Sub installer ready:"
 Write-Host $InstallerPath

@@ -45,8 +45,8 @@ def prepare_assets(
         raise FileNotFoundError(f"Brand image not found: {source_image}")
 
     root = repo_root.expanduser().resolve()
-    source_target = root / "desktop" / "assets" / "source" / "finesub-desktop.png"
-    icon_target = root / "desktop" / "assets" / "finesub-desktop.ico"
+    source_target = root / "desktop" / "assets" / "source" / "yanami-sub.png"
+    icon_target = root / "desktop" / "assets" / "yanami-sub.ico"
     public_root = root / "desktop" / "frontend" / "public"
     favicon_target = public_root / "icon.png"
 
@@ -67,7 +67,7 @@ def prepare_assets(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Prepare FineSub Desktop icon assets."
+        description="Prepare Yanami Sub icon assets."
     )
     parser.add_argument("--source-image", type=Path, required=True)
     parser.add_argument("--repo-root", type=Path, required=True)
@@ -80,7 +80,7 @@ def main() -> int:
         source_image=args.source_image,
         repo_root=args.repo_root,
     )
-    print(f"FineSub Desktop icon: {result.icon}")
+    print(f"Yanami Sub icon: {result.icon}")
     return 0
 
 

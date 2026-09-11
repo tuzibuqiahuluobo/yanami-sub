@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "FineSub Desktop",
+  title: "Yanami Sub",
   description: "专注、可靠的本地字幕工作台",
 };
 

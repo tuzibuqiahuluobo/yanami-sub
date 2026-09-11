@@ -1,69 +1,94 @@
-# FineSub Desktop
+# Yanami Sub
 
-FineSub Desktop 是 [FineSub](https://github.com/caca2331/finesub) 的 Windows 图形客户端。
-本仓库从 FineSub 单仓中的 `desktop/` 独立而来，负责桌面界面、Windows 启动器、资源管理、
-任务展示与应用更新；字幕处理引擎和命令行能力继续由上游 FineSub 提供。
-
-## 项目关系与来源
-
-- **桌面端仓库**：<https://github.com/tuzibuqiahuluobo/finesub-desktop>
-- **FineSub 核心 / CLI**：<https://github.com/caca2331/finesub>
-- **迁移源快照**：[`0.5.0pre/desktop`](https://github.com/caca2331/finesub/tree/0.5.0pre/desktop)
-- **对应的上游正式版本**：[`FineSub v0.5.0`](https://github.com/caca2331/finesub/releases/tag/v0.5.0)
-- **迁移后的发行版**：<https://github.com/tuzibuqiahuluobo/finesub-desktop/releases>
-
-`0.5.0pre` 是桌面端从原单仓剥离前的公开迁移锚点，不是安装包版本。本仓库以该快照为基线，
-后续只维护桌面端；需要新增或调整处理能力时，由 FineSub 核心 / CLI 提供稳定接口，桌面端跟随接口更新。
-
-## 当前状态
-
-代码快照已经迁入 `desktop/`，独立桌面端从 `0.1.0` 开始维护自己的产品版本。
-当前候选版本为 `v0.1.0-rc.2`。它在首个 RC 的安装、运行和自动更新链路之上，
-增加多资源并行下载、经 SHA-256 校验的本地资源复用、清华大学 TUNA 国内 Python
-依赖镜像，以及发布者为 `tuzibuqiahuluobo` 的 Authenticode 发布流程。
-
-中国大陆网络会自动使用 [清华大学 TUNA 开源软件镜像站](https://mirrors.tuna.tsinghua.edu.cn/)
-的 PyPI 镜像；镜像不可用时会回退到官方源。资源安装前会在本机磁盘查找同名候选文件，
-只有大小和 SHA-256 都与目标版本一致时才复用，旧版或损坏文件不会进入运行环境。
-
-RC 构建会在打包阶段把本仓库桌面代码与上游 FineSub `v0.5.0` 的固定源码快照组合，仓库本身
-不维护一份核心 / CLI 分叉。后续将继续把这段组合流程收敛为上游提供的版本化接口和构建产物。
-
-桌面端已经覆盖单任务完整生产参数、批处理、模型路由与凭据池、知识库维护/分享、诊断、
-密钥导出和大文件目录维护。仍需上游提供结构化接口的 Agent 控制、运行中批次动态入队等边界，
-见 [FineSub v0.5.0 功能兼容矩阵](docs/core-compatibility.md)。
-
-## 目录
+基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台。
 
 ```text
-desktop/
-  backend/      Python / pywebview 后端与 Windows 启动器
-  frontend/     Next.js 静态界面
-  installer/    Inno Setup 安装器定义
-  resources/    更新配置与信任密钥
-  scripts/      开发、测试和发布脚本
+音频 / 视频 / URL → 人声分离 → VAD + ASR → 字幕稳定化 → LLM 纠错翻译 → SRT
 ```
 
-旧单仓时期的用户说明和维护说明分别保留在
-[`desktop/README.md`](desktop/README.md) 与
-[`desktop/README_DEV.md`](desktop/README_DEV.md)，用于迁移核对；其中涉及旧仓库目录结构的命令
-需要在独立构建适配后更新。
+Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管理、知识库与应用更新。
+字幕核心与命令行仍由上游 FineSub 维护；本仓库不复制或分叉核心实现。
+
+## 快速开始
+
+1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
+   `Yanami-Sub-0.1.0-rc.3-Setup.exe`。
+2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
+3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
+4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
+
+首次使用相关阶段时，程序会准备隔离的 Python 3.12、FFmpeg 和模型资源，完整环境约需
+5 GB。下载器会先扫描本机可用资源并核对大小与 SHA-256；缺失资源可并行下载。中国大陆
+网络的 Python 依赖会优先使用
+[清华大学 TUNA 镜像](https://mirrors.tuna.tsinghua.edu.cn/)，失败时回退官方源。
+
+> `v0.1.0-rc.3` 是从 FineSub Desktop 改名后的迁移预览版。安装器沿用原 AppId，能覆盖
+> 旧版并移除旧可执行文件与快捷方式。由于当前发布环境没有受信任的 Authenticode 证书，
+> RC3 安装包未签名；请从本仓库 Release 下载并按页面提供的 SHA-256 校验。
+
+## 能做什么
+
+- 单任务：本地音频、视频或 URL 输入，完整暴露 FineSub 的识别、稳定化、翻译与知识参数。
+- 批处理：混合本地文件和 URL，设置下载 / ASR / LLM 并发、优先级、重试与断点续跑。
+- 模型路由：Gemini 免费 / 付费池、自定义服务商、本机 Agent 和按任务覆盖。
+- 知识库：浏览、修订、任务反馈、材料蒸馏、冲突处理、共享与维护者审核。
+- 资源管理：依赖诊断、多资源并行下载、本地复用、日志查看和大文件目录迁移。
+- 输出管理：本地媒体只把可交付的 `.srt` 字幕发布到源文件旁，内部产物留在受管任务目录。
+
+各页面的实际操作、数据位置和常见问题见
+[中文使用说明](docs/usage.zh-CN.md)。桌面与核心的功能边界见
+[FineSub v0.5.1 兼容矩阵](docs/core-compatibility.md)。
+
+## 系统要求
+
+| 项目 | 要求 |
+| --- | --- |
+| 系统 | Windows 10 / 11，64 位 |
+| 内存 | ASR 建议至少 8 GB；仅 LLM 阶段建议至少 4 GB |
+| 显卡 | 人声分离与 ASR 建议 RTX 20 系或更新、显存至少 4 GB；部分阶段可回退 CPU |
+| 网络 | 首次准备运行环境、模型、URL 下载和在线 LLM 时需要 |
+| 磁盘 | 完整运行资源约 5 GB，模型和缓存可迁移到其他磁盘 |
+
+更完整的显卡、模型和资源要求以 FineSub 上游的
+[资源说明](https://github.com/caca2331/finesub/blob/v0.5.1/docs/manual/resources.md) 为准。
+
+## 数据与上游共享
+
+- 设置、API Key、知识库和任务历史：`%LOCALAPPDATA%\FineSub\user-data`
+- 运行环境、模型、缓存和任务目录：默认位于安装目录，也可以在应用内迁移
+- 本地输入的可交付字幕：源媒体所在目录
+
+保留 `FineSub` 用户数据目录是有意的兼容设计：Yanami Sub 与同机安装的 FineSub CLI
+可以共享设置和知识库，不会因产品改名而丢失已有数据。
+
+## 项目关系
+
+- **Yanami Sub 仓库**：<https://github.com/tuzibuqiahuluobo/yanami-sub>
+- **FineSub 上游 / CLI**：<https://github.com/caca2331/finesub>
+- **当前固定核心版本**：[`FineSub v0.5.1`](https://github.com/caca2331/finesub/tree/v0.5.1)
+- **桌面端迁移锚点**：[`FineSub 0.5.0pre/desktop`](https://github.com/caca2331/finesub/tree/0.5.0pre/desktop)
+
+桌面端从 FineSub `0.5.0pre` 的 `desktop/` 目录独立出来，从 `0.1.0` 开始维护自己的版本号。
+需要新的处理能力时，优先由上游 FineSub 提供稳定接口，Yanami Sub 再跟进接入。
+
+## 文档
+
+- [中文使用说明](docs/usage.zh-CN.md)
+- [桌面端维护与发布](desktop/README_DEV.md)
+- [核心功能兼容矩阵](docs/core-compatibility.md)
+- [来源与第三方许可](NOTICE.md)
+- [FineSub 上游文档](https://github.com/caca2331/finesub/tree/v0.5.1/docs/manual)
 
 ## 作者与贡献者
 
-- **桌面端仓库维护者**：[tuzibuqiahuluobo](https://github.com/tuzibuqiahuluobo)
+- **Yanami Sub 维护者**：[tuzibuqiahuluobo](https://github.com/tuzibuqiahuluobo)
 - **FineSub 原作者 / 上游维护者**：[caca2331](https://github.com/caca2331)
-- **原桌面端署名贡献者**：caca2331、tuzibuqiahuluobo、回不去的星光
-
-本次迁移保留原项目署名和来源链接。更完整的变更来源可通过上游
-[`0.5.0pre`](https://github.com/caca2331/finesub/releases/tag/0.5.0pre) 锚点核对。
+- **桌面端署名贡献者**：caca2331、tuzibuqiahuluobo、回不去的星光
 
 ## 许可证
 
-本仓库从 `0.5.0pre` 迁入的代码遵循
+Yanami Sub 遵循上游当前使用的
 [GNU General Public License v3.0 or later](LICENSE)（SPDX：`GPL-3.0-or-later`）。
-许可证文本取自上游同一迁移锚点；
-上游 FineSub 的许可说明见其
-[`LICENSE`](https://github.com/caca2331/finesub/blob/v0.5.0/LICENSE)。
-
-再分发或修改本项目时，请保留许可证、版权声明以及上述来源与作者归属。
+本仓库保留上游来源、作者和许可证信息。随包分发的 FineSub prompt 模板另按其目录中的
+[CC BY-SA 4.0](https://github.com/caca2331/finesub/blob/v0.5.1/src/finesub/llm/prompt_templates/LICENSE.md)
+授权。再分发或修改时请一并保留对应声明。

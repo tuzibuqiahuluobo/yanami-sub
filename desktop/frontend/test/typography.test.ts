@@ -37,13 +37,13 @@ test("the UI does not bundle web fonts", () => {
 });
 
 
-test("FineSub Desktop metadata and title bar use the supplied icon", () => {
-  assert.match(layout, /title:\s*"FineSub Desktop"/);
+test("Yanami Sub metadata and title bar use the supplied icon", () => {
+  assert.match(layout, /title:\s*"Yanami Sub"/);
   assert.match(layout, /href="\.\/icon\.png"/);
   assert.match(titleBar, /src="\.\/icon\.png"/);
   assert.doesNotMatch(titleBar, /brand-glyph/);
   assert.match(titleBar, /className="brand-icon"/);
-  assert.match(titleBar, /<span>FineSub Desktop<\/span>/);
+  assert.match(titleBar, /<span>Yanami Sub<\/span>/);
   assert.doesNotMatch(page, /className="brand-glyph"/);
 });
 

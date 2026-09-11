@@ -15,13 +15,13 @@ VSVersionInfo(
         '040904B0',
         [
           StringStruct('CompanyName', 'tuzibuqiahuluobo'),
-          StringStruct('FileDescription', 'FineSub Desktop Updater'),
+          StringStruct('FileDescription', 'Yanami Sub'),
           StringStruct('FileVersion', '0.1.0.0'),
-          StringStruct('InternalName', 'FineSub Desktop Updater'),
-          StringStruct('LegalCopyright', 'Copyright (c) FineSub contributors'),
-          StringStruct('OriginalFilename', 'FineSub Desktop Updater.exe'),
-          StringStruct('ProductName', 'FineSub Desktop'),
-          StringStruct('ProductVersion', '0.1.0-rc.2')
+          StringStruct('InternalName', 'Yanami Sub'),
+          StringStruct('LegalCopyright', 'Copyright (c) Yanami Sub contributors'),
+          StringStruct('OriginalFilename', 'Yanami Sub.exe'),
+          StringStruct('ProductName', 'Yanami Sub'),
+          StringStruct('ProductVersion', '0.1.0-rc.3')
         ]
       )
     ]),

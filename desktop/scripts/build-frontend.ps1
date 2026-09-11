@@ -51,4 +51,4 @@ if (-not $PythonPath) {
 if ($LASTEXITCODE -ne 0) {
     throw "Static WebView export validation failed."
 }
-Write-Host "FineSub frontend ready: $Index"
+Write-Host "Yanami Sub frontend ready: $Index"

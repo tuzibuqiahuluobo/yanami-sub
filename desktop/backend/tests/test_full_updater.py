@@ -45,7 +45,7 @@ def test_default_preserved_list_keeps_the_installed_marker(
         target=str(tmp_path),
         backup=str(tmp_path / ".update" / "backup"),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
     )
 
     assert "installed.marker" in request.preserved
@@ -61,7 +61,7 @@ def test_full_update_replaces_program_and_preserves_mutable_data(
     source = target / ".update" / "source"
     backup = target / ".update" / "backup"
     source.mkdir(parents=True)
-    (source / "FineSub Desktop.exe").write_bytes(b"new")
+    (source / "Yanami Sub.exe").write_bytes(b"new")
     (source / "desktop").mkdir()
     (source / "desktop" / "marker.txt").write_text("new", encoding="utf-8")
     new_app = source / "app" / "versions" / "2.0.0"
@@ -76,7 +76,7 @@ def test_full_update_replaces_program_and_preserves_mutable_data(
         encoding="utf-8",
     )
     target.mkdir(exist_ok=True)
-    (target / "FineSub Desktop.exe").write_bytes(b"old")
+    (target / "Yanami Sub.exe").write_bytes(b"old")
     for directory in ("user-data", "models", "runtime", "cache"):
         path = target / directory
         path.mkdir()
@@ -94,15 +94,15 @@ def test_full_update_replaces_program_and_preserves_mutable_data(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
         preserved=["app", "user-data", "models", "runtime", "cache"],
     )
 
     apply_full_update(request, relaunch=False)
 
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"new"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"new"
     assert (target / "desktop" / "marker.txt").read_text("utf-8") == "new"
-    assert (backup / "FineSub Desktop.exe").read_bytes() == b"old"
+    assert (backup / "Yanami Sub.exe").read_bytes() == b"old"
     app_pointer = json.loads(
         (target / "app" / "current.json").read_text(encoding="utf-8")
     )
@@ -137,7 +137,7 @@ def test_full_update_rejects_source_outside_application_root(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
     )
 
     with pytest.raises(ValueError, match="source"):
@@ -160,7 +160,7 @@ def test_a_failed_update_records_the_reason_instead_of_blocking(
                 "target": str(tmp_path / "missing-target"),
                 "backup": str(tmp_path / "backup"),
                 "parent_pid": 0,
-                "relaunch_path": "FineSub Desktop.exe",
+                "relaunch_path": "Yanami Sub.exe",
             }
         ),
         encoding="utf-8",
@@ -186,11 +186,11 @@ def _minimal_full_update(tmp_path: Path) -> tuple[Path, Path, Path]:
     source = target / ".update" / "source"
     backup = target / ".update" / "backup"
     source.mkdir(parents=True)
-    (source / "FineSub Desktop.exe").write_bytes(b"new")
+    (source / "Yanami Sub.exe").write_bytes(b"new")
     (source / "extra").mkdir()
     (source / "extra" / "payload.txt").write_text("new", encoding="utf-8")
     target.mkdir(exist_ok=True)
-    (target / "FineSub Desktop.exe").write_bytes(b"old")
+    (target / "Yanami Sub.exe").write_bytes(b"old")
     (target / "finesub.cmd").write_text("old shim", encoding="utf-8")
     return target, source, backup
 
@@ -212,7 +212,7 @@ def test_a_shutdown_mid_swap_still_puts_the_program_back(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
         preserved=[],
     )
 
@@ -226,7 +226,7 @@ def test_a_shutdown_mid_swap_still_puts_the_program_back(
         apply_full_update(request, relaunch=False)
     monkeypatch.setattr(shutil_module, "copy2", original)
 
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"old"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"old"
     assert (target / "finesub.cmd").read_text("utf-8") == "old shim"
 
 
@@ -247,7 +247,7 @@ def test_an_old_services_shorter_preserved_list_cannot_eat_user_data(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
         # Exactly what a shipped 0.3.2 service serializes.
         preserved=[
             "app",
@@ -263,7 +263,7 @@ def test_an_old_services_shorter_preserved_list_cannot_eat_user_data(
 
     assert (target / "tasks" / "finished.srt").read_text("utf-8") == "subtitle"
     assert (target / "locations.json").read_text("utf-8") == "{}"
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"new"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"new"
 
 
 def test_a_transient_lock_on_program_files_is_waited_out(
@@ -282,7 +282,7 @@ def test_a_transient_lock_on_program_files_is_waited_out(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
         preserved=[],
     )
 
@@ -300,7 +300,7 @@ def test_a_transient_lock_on_program_files_is_waited_out(
 
     apply_full_update(request, relaunch=False)
 
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"new"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"new"
     assert denials["remaining"] == 0
 
 
@@ -325,7 +325,7 @@ def test_a_persistent_lock_leaves_every_tree_whole(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
         preserved=[],
     )
 
@@ -346,7 +346,7 @@ def test_a_persistent_lock_leaves_every_tree_whole(
     # moved to the backup came home.
     assert (held / "early.dll").read_text("utf-8") == "early"
     assert (held / "locked.dll").read_text("utf-8") == "locked"
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"old"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"old"
     assert (target / "finesub.cmd").read_text("utf-8") == "old shim"
 
 
@@ -358,14 +358,14 @@ def test_recovery_restores_an_install_left_without_an_executable(
     target = tmp_path / "FineSub"
     backup = target / ".update" / "backup-2.0.0"
     backup.mkdir(parents=True)
-    (backup / "FineSub Desktop.exe").write_bytes(b"old")
+    (backup / "Yanami Sub.exe").write_bytes(b"old")
     (backup / "updater").mkdir()
     (backup / "updater" / "u.exe").write_bytes(b"old updater")
 
     message = recover_interrupted_update(target)
 
     assert message is not None and "上次更新未完成" in message
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"old"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"old"
     assert (target / "updater" / "u.exe").is_file()
 
 
@@ -374,13 +374,13 @@ def test_recovery_leaves_a_healthy_install_alone(tmp_path: Path) -> None:
 
     target = tmp_path / "FineSub"
     target.mkdir()
-    (target / "FineSub Desktop.exe").write_bytes(b"current")
+    (target / "Yanami Sub.exe").write_bytes(b"current")
     backup = target / ".update" / "backup-2.0.0"
     backup.mkdir(parents=True)
-    (backup / "FineSub Desktop.exe").write_bytes(b"old")
+    (backup / "Yanami Sub.exe").write_bytes(b"old")
 
     assert recover_interrupted_update(target) is None
-    assert (target / "FineSub Desktop.exe").read_bytes() == b"current"
+    assert (target / "Yanami Sub.exe").read_bytes() == b"current"
 
 
 def test_backups_are_never_discarded_while_the_install_is_broken(
@@ -392,12 +392,12 @@ def test_backups_are_never_discarded_while_the_install_is_broken(
     target = tmp_path / "FineSub"
     backup = target / ".update" / "backup-2.0.0"
     backup.mkdir(parents=True)
-    (backup / "FineSub Desktop.exe").write_bytes(b"the only copy")
+    (backup / "Yanami Sub.exe").write_bytes(b"the only copy")
 
     discard_backups(target)
     assert backup.is_dir(), "an unbootable root must keep its backup"
 
-    (target / "FineSub Desktop.exe").write_bytes(b"restored")
+    (target / "Yanami Sub.exe").write_bytes(b"restored")
     discard_backups(target)
     assert not backup.exists()
 
@@ -425,7 +425,7 @@ def test_an_incomplete_app_version_is_replaced_rather_than_adopted(
         target=str(target),
         backup=str(backup),
         parent_pid=0,
-        relaunch_path="FineSub Desktop.exe",
+        relaunch_path="Yanami Sub.exe",
         preserved=["app"],
     )
     apply_full_update(request, relaunch=False)

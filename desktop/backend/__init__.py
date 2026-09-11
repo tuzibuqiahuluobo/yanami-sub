@@ -1,1 +1,1 @@
-"""Backend services used by the FineSub desktop launcher and worker."""
+"""Backend services used by the Yanami Sub launcher and worker."""

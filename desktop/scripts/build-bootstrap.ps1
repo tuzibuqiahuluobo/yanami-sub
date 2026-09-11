@@ -49,10 +49,10 @@ $ActualCoreVersion = (Get-Content -LiteralPath $CoreVersionFile -Raw).Trim()
 if ($ActualCoreVersion -ne $ExpectedCoreVersion) {
     throw "FineSub source version '$ActualCoreVersion' does not match desktop dependency '$ExpectedCoreVersion'."
 }
-$IconPath = Join-Path $RepoRoot "desktop\assets\finesub-desktop.ico"
-$TrayIconPath = Join-Path $RepoRoot "desktop\assets\source\finesub-desktop.png"
-$LauncherVersionTemplate = Join-Path $RepoRoot "desktop\assets\finesub-desktop-version.txt"
-$UpdaterVersionTemplate = Join-Path $RepoRoot "desktop\assets\finesub-desktop-updater-version.txt"
+$IconPath = Join-Path $RepoRoot "desktop\assets\yanami-sub.ico"
+$TrayIconPath = Join-Path $RepoRoot "desktop\assets\source\yanami-sub.png"
+$LauncherVersionTemplate = Join-Path $RepoRoot "desktop\assets\yanami-sub-version.txt"
+$UpdaterVersionTemplate = Join-Path $RepoRoot "desktop\assets\yanami-sub-updater-version.txt"
 foreach (
     $BrandAsset in @(
         $IconPath,
@@ -62,7 +62,7 @@ foreach (
     )
 ) {
     if (-not (Test-Path -LiteralPath $BrandAsset -PathType Leaf)) {
-        throw "FineSub Desktop brand asset not found: $BrandAsset"
+        throw "Yanami Sub brand asset not found: $BrandAsset"
     }
 }
 
@@ -136,7 +136,7 @@ function New-VersionResource {
     )
 
     if ($Version -notmatch "^(?<core>\d+(?:\.\d+){0,3})(?:-[0-9A-Za-z.-]+)?$") {
-        throw "Invalid FineSub Desktop release version: $Version"
+        throw "Invalid Yanami Sub release version: $Version"
     }
     $Parts = @($Matches.core.Split(".") | ForEach-Object { [int]$_ })
     while ($Parts.Count -lt 4) {
@@ -177,8 +177,8 @@ function New-VersionResource {
 }
 
 if (-not $VenvPath) {
-    if ($env:FINESUB_DESKTOP_VENV) {
-        $VenvPath = $env:FINESUB_DESKTOP_VENV
+    if ($env:YANAMI_SUB_VENV) {
+        $VenvPath = $env:YANAMI_SUB_VENV
     }
     else {
         $VenvPath = Join-Path $RepoRoot ".venv-desktop"
@@ -225,7 +225,7 @@ if (
 if ($OutputDirectory -match "[^\u0000-\u007F]") {
     throw @"
 PyInstaller build paths must contain ASCII characters only on Windows.
-Use -OutputDirectory with a path such as G:\finesub-build\current.
+Use -OutputDirectory with a path such as G:\yanami-sub-build\current.
 The source repository may remain in its current Unicode path.
 "@
 }
@@ -256,7 +256,7 @@ $DistDirectory = Join-Path $OutputDirectory ".pyinstaller-dist"
 $WorkDirectory = Join-Path $OutputDirectory ".pyinstaller-work"
 $SpecDirectory = Join-Path $OutputDirectory ".pyinstaller-spec"
 $VersionResourceDirectory = Join-Path $OutputDirectory ".version-resources"
-$LauncherDist = Join-Path $OutputDirectory "FineSub Desktop.dist"
+$LauncherDist = Join-Path $OutputDirectory "Yanami Sub.dist"
 foreach (
     $BuildChild in @(
         $StageDirectory,
@@ -271,19 +271,19 @@ foreach (
 }
 
 New-Item -ItemType Directory -Force -Path $VersionResourceDirectory | Out-Null
-$LauncherVersionFile = Join-Path $VersionResourceDirectory "FineSub Desktop.txt"
+$LauncherVersionFile = Join-Path $VersionResourceDirectory "Yanami Sub.txt"
 New-VersionResource `
     -TemplatePath $LauncherVersionTemplate `
     -DestinationPath $LauncherVersionFile `
     -Version $Version
-$UpdaterVersionFile = Join-Path $VersionResourceDirectory "FineSub Desktop Updater.txt"
+$UpdaterVersionFile = Join-Path $VersionResourceDirectory "Yanami Sub Updater.txt"
 New-VersionResource `
     -TemplatePath $UpdaterVersionTemplate `
     -DestinationPath $UpdaterVersionFile `
     -Version $Version
 $StageDesktop = Join-Path $StageDirectory "desktop"
 New-Item -ItemType Directory -Force -Path $StageDesktop | Out-Null
-foreach ($EntryPoint in @("__init__.py", "FineSub.py", "FineSubUpdater.py")) {
+foreach ($EntryPoint in @("__init__.py", "YanamiSub.py", "YanamiSubUpdater.py")) {
     Copy-Item `
         -LiteralPath (Join-Path $RepoRoot "desktop\$EntryPoint") `
         -Destination $StageDesktop `
@@ -314,11 +314,11 @@ try {
         "--paths=$StageDirectory"
     )
 
-    $LauncherStdout = Join-Path $OutputDirectory "FineSub.pyinstaller.log"
-    $LauncherStderr = Join-Path $OutputDirectory "FineSub.pyinstaller.err.log"
+    $LauncherStdout = Join-Path $OutputDirectory "YanamiSub.pyinstaller.log"
+    $LauncherStderr = Join-Path $OutputDirectory "YanamiSub.pyinstaller.err.log"
     $LauncherArgs = $CommonArgs + @(
-        "--name=FineSub Desktop",
-        "--workpath=$(Join-Path $WorkDirectory 'FineSub Desktop')",
+        "--name=Yanami Sub",
+        "--workpath=$(Join-Path $WorkDirectory 'Yanami Sub')",
         "--icon=$IconPath",
         "--version-file=$LauncherVersionFile",
         "--add-data=$TrayIconPath;.",
@@ -326,7 +326,7 @@ try {
         "--hidden-import=webview.platforms.winforms",
         "--hidden-import=webview.platforms.edgechromium",
         "--hidden-import=webview.platforms.win32",
-        (Join-Path $StageDesktop "FineSub.py")
+        (Join-Path $StageDesktop "YanamiSub.py")
     )
     $LauncherExitCode = Invoke-NativeCommand `
         -FilePath $Python `
@@ -336,21 +336,21 @@ try {
         -RedactSensitiveEnvironment
     if ($LauncherExitCode -ne 0) {
         Get-Content -LiteralPath $LauncherStderr -Tail 80
-        throw "FineSub launcher build failed."
+        throw "Yanami Sub launcher build failed."
     }
 
     # A full update replaces the running install, so whatever performs it cannot
     # be the process being replaced. GitHubUpdateService copies this directory
     # aside and runs the copy; without it _install_full stops at "Installed
     # updater runtime is missing" and only app deltas can ever install.
-    $UpdaterStdout = Join-Path $OutputDirectory "FineSubUpdater.pyinstaller.log"
-    $UpdaterStderr = Join-Path $OutputDirectory "FineSubUpdater.pyinstaller.err.log"
+    $UpdaterStdout = Join-Path $OutputDirectory "YanamiSubUpdater.pyinstaller.log"
+    $UpdaterStderr = Join-Path $OutputDirectory "YanamiSubUpdater.pyinstaller.err.log"
     $UpdaterArgs = $CommonArgs + @(
-        "--name=FineSub Desktop Updater",
-        "--workpath=$(Join-Path $WorkDirectory 'FineSub Desktop Updater')",
+        "--name=Yanami Sub Updater",
+        "--workpath=$(Join-Path $WorkDirectory 'Yanami Sub Updater')",
         "--icon=$IconPath",
         "--version-file=$UpdaterVersionFile",
-        (Join-Path $StageDesktop "FineSubUpdater.py")
+        (Join-Path $StageDesktop "YanamiSubUpdater.py")
     )
     $UpdaterExitCode = Invoke-NativeCommand `
         -FilePath $Python `
@@ -360,7 +360,7 @@ try {
         -RedactSensitiveEnvironment
     if ($UpdaterExitCode -ne 0) {
         Get-Content -LiteralPath $UpdaterStderr -Tail 80
-        throw "FineSub updater build failed."
+        throw "Yanami Sub updater build failed."
     }
 }
 finally {
@@ -373,11 +373,11 @@ finally {
 }
 
 Move-Item `
-    -LiteralPath (Join-Path $DistDirectory "FineSub Desktop") `
+    -LiteralPath (Join-Path $DistDirectory "Yanami Sub") `
     -Destination $LauncherDist
 
 Move-Item `
-    -LiteralPath (Join-Path $DistDirectory "FineSub Desktop Updater") `
+    -LiteralPath (Join-Path $DistDirectory "Yanami Sub Updater") `
     -Destination (Join-Path $LauncherDist "updater")
 
 & (Join-Path $PSScriptRoot "package-bootstrap.ps1") `
@@ -401,4 +401,4 @@ foreach (
     Remove-BuildChild -Path $BuildChild
 }
 
-Write-Host "FineSub Windows build completed: $LauncherDist"
+Write-Host "Yanami Sub Windows build completed: $LauncherDist"

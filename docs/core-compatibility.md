@@ -1,7 +1,7 @@
 # FineSub core compatibility
 
-FineSub Desktop `0.1.x` is built and tested against the exact upstream
-[FineSub `v0.5.0`](https://github.com/caca2331/finesub/releases/tag/v0.5.0)
+Yanami Sub `0.1.x` is built and tested against the exact upstream
+[FineSub `v0.5.1`](https://github.com/caca2331/finesub/tree/v0.5.1)
 source snapshot. The desktop repository owns presentation, Windows integration,
 resource installation, and update delivery; FineSub core remains the only owner
 of subtitle processing, scheduling, model routing, knowledge semantics, and
@@ -16,7 +16,7 @@ storage migration.
 | ASR and separation tuning | Supported | Model, language, device/GPU tier, separation/rate, VAD assist, Qwen verification, language re-decode, context, decode batch, gap, stabilization, word timestamps, and split scale are forwarded to core. |
 | LLM correction/translation tuning | Supported | Media per phase, retrieval, difficulty, continuity, parallel windows, fast mode, output scale, per-task model routes, retry budgets, extra context/style, named styles, and resume are forwarded to core. |
 | Knowledge collection/update and refined-SRT feedback | Supported | The task form and Knowledge Center use the core knowledge implementation in an isolated worker. |
-| Multiple files/URLs | Supported | The batch page uses the core scheduler, worker limits, queue back-pressure, priorities, retries, failure isolation, durable progress, cancel, and resume. |
+| Multiple files/URLs | Supported | The batch page uses the core scheduler, worker limits, queue back-pressure, priorities, retries, failure isolation, durable progress, cancel, resume, and core-compatible static JSONL manifest import/export. |
 | API-key pools and custom providers | Supported | Free/paid Gemini pools, Exa, Tavily, and provider keys from the core catalog use the same encrypted `.env`; plaintext export is available through a native Save dialog. |
 | Model routing and local-Agent routes | Supported | Core presets, policies, providers, targets, per-task overrides, and non-spending local CLI readiness checks are exposed. |
 | Knowledge maintenance and sharing | Supported | Browse revisions, edit/create/retire entries, verify/repair/refresh, ingest, candidates, rollback/restore, refined feedback, remote registration, mark/push/pull, status, and conflict review are available. |
@@ -34,14 +34,15 @@ desktop product policy, not a second pipeline implementation.
 
 These are not missing subtitle-processing features:
 
-- `agent-join` and `agent-task` remain CLI-only. Core `v0.5.0` exposes them as
+- `agent-join` and `agent-task` remain CLI-only. Core `v0.5.1` exposes them as
   terminal-oriented runtime modules, not a structured service suitable for a
   long-lived GUI. Desktop can configure Agent routes and verify local CLIs.
 - `agent-ping` spends quota. Desktop currently performs the safe, non-spending
   readiness probe instead of issuing model calls without a task.
-- Live append to a running JSONL manifest and arbitrary manifest import/export
-  remain CLI-only. Desktop starts and resumes owned batches, but does not yet
-  attach an editor to the scheduler's live intake channel.
+- Live append to a running JSONL manifest remains CLI-only. Desktop can import
+  and export static core-compatible JSONL manifests, start and resume owned
+  batches, but does not yet attach an editor to the scheduler's live intake
+  channel.
 - Arbitrary `--output`, `--knowledge-root`, `--task-artifact-dir`, and
   `--task-id` are managed by the desktop task store so a web renderer cannot
   escape app-owned paths. `--extra-info-file` is represented by the equivalent

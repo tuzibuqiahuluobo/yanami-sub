@@ -95,7 +95,7 @@ def test_the_desktop_release_uses_one_version_number() -> None:
         ).read_text(encoding="utf-8")
     )
     installer = (
-        REPOSITORY_ROOT / "desktop" / "installer" / "FineSubDesktop.iss"
+        REPOSITORY_ROOT / "desktop" / "installer" / "YanamiSub.iss"
     ).read_text(encoding="utf-8")
 
     assert "version" in project["project"].get("dynamic", [])

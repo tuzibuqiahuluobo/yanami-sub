@@ -3,9 +3,9 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "finesub-desktop"
+name = "yanami-sub"
 dynamic = ["version"]
-description = "Windows desktop client for FineSub."
+description = "Yanami Sub, a Windows desktop client powered by FineSub."
 readme = "README.md"
 license = "GPL-3.0-or-later"
 requires-python = ">=3.12"
@@ -15,12 +15,12 @@ authors = [
   { name = "回不去的星光" },
 ]
 maintainers = [{ name = "tuzibuqiahuluobo" }]
-dependencies = ["finesub==0.5.0"]
+dependencies = ["finesub==0.5.1"]
 
 [project.urls]
-Homepage = "https://github.com/tuzibuqiahuluobo/finesub-desktop"
-Repository = "https://github.com/tuzibuqiahuluobo/finesub-desktop"
-Issues = "https://github.com/tuzibuqiahuluobo/finesub-desktop/issues"
+Homepage = "https://github.com/tuzibuqiahuluobo/yanami-sub"
+Repository = "https://github.com/tuzibuqiahuluobo/yanami-sub"
+Issues = "https://github.com/tuzibuqiahuluobo/yanami-sub/issues"
 Upstream = "https://github.com/caca2331/finesub"
 Migration-Source = "https://github.com/caca2331/finesub/tree/0.5.0pre/desktop"
 

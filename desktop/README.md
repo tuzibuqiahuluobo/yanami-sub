@@ -1,19 +1,21 @@
-# FineSub Desktop
+# Yanami Sub
 
 > 本文由原 FineSub 单仓的桌面端说明迁入。独立仓库的来源、作者、许可证和迁移状态请先看
 > [仓库根 README](../README.md)。
 
-FineSub Desktop 是 FineSub 的可选 Windows 客户端：用图形界面创建任务、管理资源、
+面向普通用户的完整流程请直接阅读[中文使用说明](../docs/usage.zh-CN.md)。
+
+Yanami Sub 是 FineSub 的可选 Windows 客户端：用图形界面创建任务、管理资源、
 查看日志。它跑的是同一套 pipeline（`src/finesub/pipeline.py`，在隔离的
 worker 进程里），**不取代命令行**——同一台机器上装了 CLI 的话，两边共用设置、
 API Key 和知识库。
 
 ## 安装
 
-从 [Releases](https://github.com/tuzibuqiahuluobo/finesub-desktop/releases) 取任一种：
+从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 取任一种：
 
-- `FineSub-Desktop-<版本>-Setup.exe` —— 安装器，写开始菜单与卸载项。
-- `finesub-full-<版本>-win-x64.zip` —— 解压即用，不写注册表。
+- `Yanami-Sub-<版本>-Setup.exe` —— 安装器，写开始菜单与卸载项。
+- `yanami-sub-full-<版本>-win-x64.zip` —— 解压即用，不写注册表。
 
 首次运行会自动下载并安装隔离的 Python 3.12 运行环境与 AI 依赖（约 5 GB）、
 FFmpeg，模型按需下载。这一步在应用内有进度与日志；装不上时可以暂停后重试。
@@ -26,9 +28,9 @@ FFmpeg，模型按需下载。这一步在应用内有进度与日志；装不�
   也可以让多个安装共用一份，不必重复下载。
 
 搬盘、共用、卸载时删哪些，见上游
-[`docs/manual/resources.md`](https://github.com/caca2331/finesub/blob/v0.5.0/docs/manual/resources.md)。
+[`docs/manual/resources.md`](https://github.com/caca2331/finesub/blob/v0.5.1/docs/manual/resources.md)。
 API Key 的配置见上游
-[`docs/manual/env.md`](https://github.com/caca2331/finesub/blob/v0.5.0/docs/manual/env.md)。
+[`docs/manual/env.md`](https://github.com/caca2331/finesub/blob/v0.5.1/docs/manual/env.md)。
 
 ## 界面能设什么
 
@@ -71,8 +73,11 @@ API Key 的配置见上游
 ## 更新
 
 应用内检查并安装：小版本只换应用层（重启生效），大版本换整个安装（需要先退出
-FineSub，由随包发布的 updater 完成）。个人数据、模型、缓存、任务产物都会保留。
+Yanami Sub，由随包发布的 updater 完成）。个人数据、模型、缓存、任务产物都会保留。
 也可以到 Release 页手动下载。
+
+`v0.1.0-rc.3` 是改名迁移版。旧 FineSub Desktop 必须手动运行 RC3 安装器；RC3 使用新的
+Yanami Sub 更新清单，后续版本再由应用内更新接管。
 
 ---
 

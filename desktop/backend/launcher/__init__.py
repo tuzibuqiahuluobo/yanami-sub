@@ -1,1 +1,1 @@
-"""FineSub pywebview desktop launcher."""
+"""Yanami Sub pywebview launcher."""

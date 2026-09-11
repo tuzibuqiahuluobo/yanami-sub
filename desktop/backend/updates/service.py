@@ -95,11 +95,11 @@ class GitHubUpdateService:
             if isinstance(asset, dict)
         }
         try:
-            manifest_url = assets["update-manifest.json"]
-            signature_url = assets["update-manifest.sig"]
+            manifest_url = assets["yanami-sub-update-manifest.json"]
+            signature_url = assets["yanami-sub-update-manifest.sig"]
         except KeyError as error:
             raise ValueError(
-                "GitHub Release is missing the signed update manifest"
+                "GitHub Release is missing the signed Yanami Sub update manifest"
             ) from error
         manifest_bytes = self.bytes_fetcher(manifest_url, 1024 * 1024)
         signature_bytes = self.bytes_fetcher(signature_url, 4096)
@@ -179,7 +179,7 @@ class GitHubUpdateService:
             self.paths.root
             / ".update"
             / "downloads"
-            / f"finesub-app-{manifest.version}.zip"
+            / f"yanami-sub-app-{manifest.version}.zip"
         )
         stage("downloading", "正在下载更新包")
         archive = self.asset_downloader(
@@ -207,7 +207,7 @@ class GitHubUpdateService:
             manifest.assets.full,
             update_root
             / "downloads"
-            / f"finesub-full-{manifest.version}.zip",
+            / f"yanami-sub-full-{manifest.version}.zip",
             progress,
         )
         stage("installing", "正在校验并准备安装")
@@ -329,9 +329,10 @@ def is_desktop_release(
         return False
     if bool(release.get("prerelease")) != (channel == "beta"):
         return False
-    return {"update-manifest.json", "update-manifest.sig"} <= set(
-        release_assets(release)
-    )
+    return {
+        "yanami-sub-update-manifest.json",
+        "yanami-sub-update-manifest.sig",
+    } <= set(release_assets(release))
 
 
 def _fetch_release(
@@ -341,7 +342,7 @@ def _fetch_release(
     headers = {
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "FineSub-Desktop-Updater",
+        "User-Agent": "Yanami-Sub-Updater",
     }
     timeout = httpx.Timeout(connect=20.0, read=30.0, write=20.0, pool=20.0)
     attempts: list[tuple[str, BaseException]] = []
@@ -363,7 +364,7 @@ def _fetch_release(
                     if is_desktop_release(release, channel):
                         return release
                 raise ValueError(
-                    f"No signed FineSub Desktop release was found on the "
+                    f"No signed Yanami Sub release was found on the "
                     f"{channel} channel"
                 )
         except Exception as error:

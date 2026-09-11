@@ -3,6 +3,7 @@
 
 .page-knowledge {
   width: min(100%, 1280px);
+  min-width: 0;
 }
 
 .knowledge-header {
@@ -12,9 +13,7 @@
 
 .knowledge-header-actions,
 .knowledge-actions,
-.knowledge-command-row,
-.knowledge-inline-form,
-.knowledge-file-row {
+.knowledge-command-row {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -109,7 +108,7 @@
 
 .knowledge-library {
   display: grid;
-  grid-template-columns: minmax(250px, 0.38fr) minmax(0, 1fr);
+  grid-template-columns: minmax(280px, 0.34fr) minmax(0, 1fr);
   gap: 14px;
 }
 
@@ -120,9 +119,15 @@
   padding: 20px;
 }
 
+.knowledge-browser,
+.knowledge-editor,
+.knowledge-section {
+  min-width: 0;
+}
+
 .knowledge-browser {
   display: flex;
-  min-height: 570px;
+  min-height: 500px;
   flex-direction: column;
 }
 
@@ -186,7 +191,7 @@
   align-content: start;
   gap: 5px;
   min-height: 0;
-  max-height: 450px;
+  max-height: 380px;
   overflow-y: auto;
 }
 
@@ -259,7 +264,7 @@
 .knowledge-editor {
   display: flex;
   min-width: 0;
-  min-height: 570px;
+  min-height: 500px;
   flex-direction: column;
 }
 
@@ -305,6 +310,19 @@
   gap: 12px;
 }
 
+.knowledge-form-grid-three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.knowledge-action-grid {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+
+.knowledge-form-action {
+  min-width: 180px;
+}
+
 .field-span-all {
   grid-column: 1 / -1;
 }
@@ -320,6 +338,12 @@
   justify-content: flex-end;
 }
 
+.knowledge-section > .knowledge-actions,
+.knowledge-form-grid + .knowledge-command-row,
+.knowledge-list + .knowledge-command-row {
+  margin-top: 14px;
+}
+
 .knowledge-section .section-heading {
   margin-bottom: 16px;
 }
@@ -327,6 +351,7 @@
 .knowledge-maintenance-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 14px;
 }
 
@@ -361,12 +386,49 @@
 
 .knowledge-file-row,
 .knowledge-inline-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
   min-width: 0;
 }
 
 .knowledge-file-row input,
 .knowledge-inline-form input {
-  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.knowledge-workflow-row,
+.knowledge-connection-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.knowledge-workflow-row .knowledge-actions,
+.knowledge-connection-row .knowledge-command-row {
+  justify-content: flex-end;
+}
+
+.knowledge-split-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+
+.knowledge-split-actions .knowledge-inline-form {
+  width: min(100%, 340px);
+}
+
+.knowledge-section .button {
+  white-space: nowrap;
 }
 
 .knowledge-list {
@@ -509,6 +571,30 @@
   .knowledge-entry-list {
     max-height: 270px;
   }
+
+  .knowledge-form-grid-three {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .knowledge-form-grid-three > .field:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .knowledge-workflow-row,
+  .knowledge-connection-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .knowledge-workflow-row .knowledge-actions,
+  .knowledge-connection-row .knowledge-command-row {
+    justify-content: flex-start;
+  }
+
+  .knowledge-split-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 700px) {
@@ -535,6 +621,10 @@
     grid-column: auto;
   }
 
+  .knowledge-form-grid-three > .field:last-child {
+    grid-column: auto;
+  }
+
   .knowledge-command-group {
     grid-template-columns: 1fr 1fr;
   }
@@ -546,7 +636,36 @@
   .knowledge-file-row,
   .knowledge-inline-form {
     align-items: stretch;
-    flex-direction: column;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .knowledge-form-action {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .knowledge-workflow-row .knowledge-actions,
+  .knowledge-connection-row .knowledge-command-row,
+  .knowledge-split-actions .knowledge-command-row {
+    align-items: stretch;
+  }
+
+  .knowledge-workflow-row .button,
+  .knowledge-connection-row .button,
+  .knowledge-split-actions .button {
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 520px) {
+  .knowledge-browser-tools,
+  .knowledge-command-group {
+    grid-template-columns: 1fr;
+  }
+
+  .knowledge-command-group > strong {
+    grid-column: auto;
   }
 }
 

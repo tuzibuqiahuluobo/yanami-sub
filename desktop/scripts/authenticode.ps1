@@ -1,20 +1,20 @@
-$script:FineSubExpectedPublisher = "tuzibuqiahuluobo"
-$script:FineSubCodeSigningOid = "1.3.6.1.5.5.7.3.3"
+$script:YanamiSubExpectedPublisher = "tuzibuqiahuluobo"
+$script:YanamiSubCodeSigningOid = "1.3.6.1.5.5.7.3.3"
 
-function Get-FineSubCodeSigningCertificate {
+function Get-YanamiSubCodeSigningCertificate {
     param([switch]$Required)
 
-    $PfxPath = $env:FINESUB_AUTHENTICODE_PFX
-    $Thumbprint = $env:FINESUB_AUTHENTICODE_THUMBPRINT
+    $PfxPath = $env:YANAMI_SUB_AUTHENTICODE_PFX
+    $Thumbprint = $env:YANAMI_SUB_AUTHENTICODE_THUMBPRINT
     if ($PfxPath -and $Thumbprint) {
-        throw "Set only one of FINESUB_AUTHENTICODE_PFX or FINESUB_AUTHENTICODE_THUMBPRINT."
+        throw "Set only one of YANAMI_SUB_AUTHENTICODE_PFX or YANAMI_SUB_AUTHENTICODE_THUMBPRINT."
     }
     if (-not $PfxPath -and -not $Thumbprint) {
         if ($Required) {
             throw @"
 Authenticode signing is required, but no certificate is configured.
-Set FINESUB_AUTHENTICODE_PFX and FINESUB_AUTHENTICODE_PASSWORD, or set
-FINESUB_AUTHENTICODE_THUMBPRINT to a certificate in Cert:\CurrentUser\My.
+Set YANAMI_SUB_AUTHENTICODE_PFX and YANAMI_SUB_AUTHENTICODE_PASSWORD, or set
+YANAMI_SUB_AUTHENTICODE_THUMBPRINT to a certificate in Cert:\CurrentUser\My.
 "@
         }
         return $null
@@ -30,7 +30,7 @@ FINESUB_AUTHENTICODE_THUMBPRINT to a certificate in Cert:\CurrentUser\My.
             -bor [System.Security.Cryptography.X509Certificates.X509KeyStorageFlags]::EphemeralKeySet
         $Certificate.Import(
             $ResolvedPfx,
-            $env:FINESUB_AUTHENTICODE_PASSWORD,
+            $env:YANAMI_SUB_AUTHENTICODE_PASSWORD,
             $Flags
         )
     }
@@ -44,11 +44,11 @@ FINESUB_AUTHENTICODE_THUMBPRINT to a certificate in Cert:\CurrentUser\My.
         }
     }
 
-    Assert-FineSubCodeSigningCertificate -Certificate $Certificate
+    Assert-YanamiSubCodeSigningCertificate -Certificate $Certificate
     return $Certificate
 }
 
-function Assert-FineSubCodeSigningCertificate {
+function Assert-YanamiSubCodeSigningCertificate {
     param(
         [Parameter(Mandatory = $true)]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
@@ -58,8 +58,8 @@ function Assert-FineSubCodeSigningCertificate {
         [System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName,
         $false
     )
-    if ($Publisher -cne $script:FineSubExpectedPublisher) {
-        throw "Authenticode certificate publisher must be '$script:FineSubExpectedPublisher'; got '$Publisher'."
+    if ($Publisher -cne $script:YanamiSubExpectedPublisher) {
+        throw "Authenticode certificate publisher must be '$script:YanamiSubExpectedPublisher'; got '$Publisher'."
     }
     if (-not $Certificate.HasPrivateKey) {
         throw "Authenticode certificate has no private key."
@@ -81,7 +81,7 @@ function Assert-FineSubCodeSigningCertificate {
             $Eku.Critical
         )
     $HasCodeSigning = $ParsedEku.EnhancedKeyUsages |
-        Where-Object { $_.Value -eq $script:FineSubCodeSigningOid }
+        Where-Object { $_.Value -eq $script:YanamiSubCodeSigningOid }
     if (-not $HasCodeSigning) {
         throw "Authenticode certificate is not valid for Code Signing."
     }
@@ -93,14 +93,14 @@ function Assert-FineSubCodeSigningCertificate {
     }
 }
 
-function Set-FineSubAuthenticodeSignature {
+function Set-YanamiSubAuthenticodeSignature {
     param(
         [Parameter(Mandatory = $true)][string[]]$FilePath,
         [Parameter(Mandatory = $true)]
         [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate
     )
 
-    $TimestampServer = $env:FINESUB_AUTHENTICODE_TIMESTAMP_URL
+    $TimestampServer = $env:YANAMI_SUB_AUTHENTICODE_TIMESTAMP_URL
     if (-not $TimestampServer) {
         $TimestampServer = "http://timestamp.digicert.com"
     }
@@ -122,18 +122,18 @@ function Set-FineSubAuthenticodeSignature {
             [System.Security.Cryptography.X509Certificates.X509NameType]::SimpleName,
             $false
         )
-        if ($Verified.Status -ne "Valid" -or $Publisher -cne $script:FineSubExpectedPublisher) {
+        if ($Verified.Status -ne "Valid" -or $Publisher -cne $script:YanamiSubExpectedPublisher) {
             throw "Authenticode verification failed for $ResolvedPath."
         }
     }
 }
 
-function Get-FineSubPackagedExecutables {
+function Get-YanamiSubPackagedExecutables {
     param([Parameter(Mandatory = $true)][string]$ApplicationDirectory)
 
     $Candidates = @(
-        (Join-Path $ApplicationDirectory "FineSub Desktop.exe"),
-        (Join-Path $ApplicationDirectory "updater\FineSub Desktop Updater.exe")
+        (Join-Path $ApplicationDirectory "Yanami Sub.exe"),
+        (Join-Path $ApplicationDirectory "updater\Yanami Sub Updater.exe")
     )
     foreach ($Candidate in $Candidates) {
         if (-not (Test-Path -LiteralPath $Candidate -PathType Leaf)) {

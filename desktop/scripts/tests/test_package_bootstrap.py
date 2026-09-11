@@ -15,7 +15,7 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources() -> None:
     work = REPO_ROOT / "dist" / f"package-bootstrap-test-{os.getpid()}"
     fixture_repo = work / "repo"
     output = work / "output"
-    launcher_dist = output / "FineSub Desktop.dist"
+    launcher_dist = output / "Yanami Sub.dist"
     try:
         (fixture_repo / "src" / "finesub").mkdir(parents=True)
         (fixture_repo / "src" / "finesub" / "pipeline.py").write_text(
@@ -94,7 +94,7 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources() -> None:
         trusted_keys.write_text('{"keys":[]}\n', "utf-8")
 
         launcher_dist.mkdir(parents=True)
-        (launcher_dist / "FineSub Desktop.exe").write_bytes(b"launcher")
+        (launcher_dist / "Yanami Sub.exe").write_bytes(b"launcher")
 
         result = subprocess.run(
             [

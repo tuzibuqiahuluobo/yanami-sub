@@ -162,9 +162,9 @@ export const en: Translations = {
       install: "Download and Install",
       installing: "Installing update…",
       downloading: "Downloading {done} / {total}",
-      restartRequired: "Update ready. Restart FineSub to apply it.",
+      restartRequired: "Update ready. Restart Yanami Sub to apply it.",
       restartNow: "Restart Now",
-      exitRequired: "The installer is running. Quit FineSub to let it finish.",
+      exitRequired: "The installer is running. Quit Yanami Sub to let it finish.",
       exitNow: "Quit and Finish Update",
       installFailed: "Update install failed: {error}",
       retryInstall: "Retry",
@@ -198,7 +198,7 @@ export const en: Translations = {
       viewDocs: "View Docs",
       docs: {
         title: "User Guide",
-        intro: "FineSub Desktop processes media locally. Runtime resources and models are downloaded online when first needed.",
+        intro: "Yanami Sub processes media locally. Runtime resources and models are downloaded online when first needed.",
         close: "Done",
         sections: [
           {
@@ -591,7 +591,7 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     outputs: "Output Files",
     readyTitle: "Your subtitles are ready",
     done: "Completed",
-    summary: "FineSub completed this task",
+    summary: "Yanami Sub completed this task",
     fallbackName: "Subtitle Output",
     description: "The subtitle is saved beside the original media and ready for editing or import.",
     openDirectory: "Open Output Directory",
@@ -622,6 +622,11 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     sourcesTitle: "Input Queue",
     sourcesHint: "Mix local media and video links. Queue order is also the default priority.",
     addFiles: "Add Files",
+    importManifest: "Import Manifest",
+    exportManifest: "Export Manifest",
+    manifestImported: "Loaded {count} items from the manifest with their per-item settings.",
+    manifestImportedIgnored: "Loaded {count} items. Desktop-managed fields were ignored: {fields}.",
+    manifestExported: "Batch manifest saved to {path}",
     addUrls: "Add Links",
     urlPlaceholder: "One video link per line",
     empty: "Nothing queued yet. Select multiple media files or paste links above.",
@@ -668,6 +673,8 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     },
     errors: {
       select: "Could not select batch files.",
+      manifestImport: "Could not import the batch manifest.",
+      manifestExport: "Could not export the batch manifest.",
       start: "Could not start the batch.",
       cancel: "Could not stop the batch.",
       resume: "Could not resume the batch.",
@@ -831,7 +838,7 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
   },
   // Bootstrap Page
   bootstrap: {
-    brand: "FineSub Desktop",
+    brand: "Yanami Sub",
     connectionError: "Cannot connect to desktop service",
     reconnect: "Reconnect",
     loading: "Checking FineSub runtime status",

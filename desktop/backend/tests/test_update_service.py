@@ -39,8 +39,8 @@ def _fixture(
     # fixtures behind -- which is exactly what happened once.
     app_body = _zip(tmp_path / "app.zip", app_files())
     full_files = {
-        "FineSub Desktop.exe": b"launcher",
-        "updater/FineSub Desktop Updater.exe": b"updater",
+        "Yanami Sub.exe": b"launcher",
+        "updater/Yanami Sub Updater.exe": b"updater",
     }
     if include_full_app:
         full_files["app/current.json"] = (
@@ -98,11 +98,11 @@ def _fixture(
         "prerelease": False,
         "assets": [
             {
-                "name": "update-manifest.json",
+                "name": "yanami-sub-update-manifest.json",
                 "browser_download_url": "https://downloads.example/manifest",
             },
             {
-                "name": "update-manifest.sig",
+                "name": "yanami-sub-update-manifest.sig",
                 "browser_download_url": "https://downloads.example/signature",
             },
         ],
@@ -121,7 +121,7 @@ def _fixture(
             launcher_version="1.0.0",
             channel="stable",
             platform="windows-x64",
-            release_repository="tuzibuqiahuluobo/finesub-desktop",
+            release_repository="tuzibuqiahuluobo/yanami-sub",
         ),
         trusted_keys={
             "release-key": base64.b64encode(public).decode("ascii")
@@ -148,7 +148,7 @@ def test_check_verifies_release_and_selects_small_app_update(
     assert result["mandatory"] is False
     assert result["size"] > 0
     assert result["releaseUrl"] == (
-        "https://github.com/tuzibuqiahuluobo/finesub-desktop/releases/tag/v1.1.0"
+        "https://github.com/tuzibuqiahuluobo/yanami-sub/releases/tag/v1.1.0"
     )
 
 
@@ -177,7 +177,7 @@ def test_check_rejects_release_metadata_that_conflicts_with_manifest(
 ) -> None:
     service, _, _ = _fixture(tmp_path)
     release = service.release_fetcher(
-        "tuzibuqiahuluobo/finesub-desktop", "stable"
+        "tuzibuqiahuluobo/yanami-sub", "stable"
     )
     service.release_fetcher = lambda repository, channel: {
         **release,
@@ -194,11 +194,11 @@ def test_full_update_stages_archive_and_launches_isolated_updater(
     service, _, launched = _fixture(tmp_path, minimum_launcher="2.0.0")
     installed_updater = service.paths.root / "updater"
     installed_updater.mkdir(parents=True)
-    (installed_updater / "FineSub Desktop Updater.exe").write_bytes(
+    (installed_updater / "Yanami Sub Updater.exe").write_bytes(
         b"current-updater"
     )
     service.paths.root.mkdir(exist_ok=True)
-    (service.paths.root / "FineSub Desktop.exe").write_bytes(
+    (service.paths.root / "Yanami Sub.exe").write_bytes(
         b"current-launcher"
     )
     service.check()
@@ -212,9 +212,9 @@ def test_full_update_stages_archive_and_launches_isolated_updater(
     request_path = Path(launched[0][2])
     assert runner.is_file()
     request = json.loads(request_path.read_text("utf-8"))
-    assert Path(request["source"], "FineSub Desktop.exe").is_file()
+    assert Path(request["source"], "Yanami Sub.exe").is_file()
     assert Path(request["target"]) == service.paths.root
-    assert request["relaunch_path"] == "FineSub Desktop.exe"
+    assert request["relaunch_path"] == "Yanami Sub.exe"
     assert "app" in request["preserved"]
 
 
@@ -226,7 +226,7 @@ def test_full_update_without_versioned_app_is_rejected(tmp_path: Path) -> None:
     )
     installed_updater = service.paths.root / "updater"
     installed_updater.mkdir(parents=True)
-    (installed_updater / "FineSub Desktop Updater.exe").write_bytes(b"updater")
+    (installed_updater / "Yanami Sub Updater.exe").write_bytes(b"updater")
     service.check()
 
     with pytest.raises(FileNotFoundError, match="App"):
@@ -267,7 +267,11 @@ def _release(
     }
 
 
-SIGNED = ("update-manifest.json", "update-manifest.sig", "finesub-app-0.3.1-win-x64.zip")
+SIGNED = (
+    "yanami-sub-update-manifest.json",
+    "yanami-sub-update-manifest.sig",
+    "yanami-sub-app-0.3.1-win-x64.zip",
+)
 
 
 def test_a_release_without_the_signed_manifest_is_not_a_desktop_release() -> None:
@@ -281,6 +285,16 @@ def test_a_release_without_the_signed_manifest_is_not_a_desktop_release() -> Non
 
     assert not is_desktop_release(ct2_wheel, "stable")
     assert not is_desktop_release(cli_snapshot, "stable")
+
+
+def test_legacy_finesub_desktop_manifest_is_not_a_yanami_sub_release() -> None:
+    legacy = _release(
+        "v0.1.0-rc.2",
+        assets=("update-manifest.json", "update-manifest.sig"),
+        prerelease=True,
+    )
+
+    assert not is_desktop_release(legacy, "beta")
 
 
 def test_a_signed_stable_release_is_a_desktop_release() -> None:
@@ -307,7 +321,7 @@ def test_draft_releases_are_never_eligible() -> None:
 def test_a_partially_uploaded_release_is_not_eligible() -> None:
     # Assets upload one at a time; a check landing mid-publish must not treat
     # the release as ready and then fail on the missing signature.
-    half = _release("v0.3.1", assets=("update-manifest.json",))
+    half = _release("v0.3.1", assets=("yanami-sub-update-manifest.json",))
 
     assert not is_desktop_release(half, "stable")
 

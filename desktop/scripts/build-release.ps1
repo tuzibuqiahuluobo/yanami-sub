@@ -7,15 +7,14 @@ param(
     [string]$VenvPath = "",
     [string]$BootstrapDirectory = "",
     [string]$UpstreamDirectory = "",
-    # This is the first release in the independent desktop version line, so no
-    # older build may take an app-only delta. An empty SupportedFrom list makes
-    # every earlier installation use the complete package, which is the safe
-    # default until a later desktop release explicitly opts in compatible builds.
-    [string]$MinimumLauncherVersion = "0.1.0-rc.1",
-    [string]$MinimumSupportedVersion = "0.1.0-rc.1",
+    # RC3 is the first Yanami Sub-branded build. Earlier FineSub Desktop builds
+    # use a different executable and updater protocol, so they migrate through
+    # the RC3 installer rather than an application-only delta.
+    [string]$MinimumLauncherVersion = "0.1.0-rc.3",
+    [string]$MinimumSupportedVersion = "0.1.0-rc.3",
     [string[]]$SupportedFrom = @(),
     [string]$ReleaseNotes = "",
-    [string]$Repository = "tuzibuqiahuluobo/finesub-desktop",
+    [string]$Repository = "tuzibuqiahuluobo/yanami-sub",
     [switch]$SkipBootstrap,
     [switch]$RequireAuthenticode
 )
@@ -23,11 +22,11 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $PSScriptRoot "authenticode.ps1")
-$SigningCertificate = Get-FineSubCodeSigningCertificate `
+$SigningCertificate = Get-YanamiSubCodeSigningCertificate `
     -Required:$RequireAuthenticode
 if (-not $VenvPath) {
-    if ($env:FINESUB_DESKTOP_VENV) {
-        $VenvPath = $env:FINESUB_DESKTOP_VENV
+    if ($env:YANAMI_SUB_VENV) {
+        $VenvPath = $env:YANAMI_SUB_VENV
     }
     else {
         $VenvPath = Join-Path $RepoRoot ".venv-desktop"
@@ -39,11 +38,11 @@ if (-not $BootstrapDirectory) {
     if ($BootstrapDirectory -match "[^\u0000-\u007F]") {
         $BootstrapDirectory = Join-Path `
             ([System.IO.Path]::GetTempPath()) `
-            "finesub-build\$Version"
+            "yanami-sub-build\$Version"
     }
 }
 $BootstrapDirectory = [System.IO.Path]::GetFullPath($BootstrapDirectory)
-$Bootstrap = Join-Path $BootstrapDirectory "FineSub Desktop.dist"
+$Bootstrap = Join-Path $BootstrapDirectory "Yanami Sub.dist"
 if (-not $SkipBootstrap) {
     & (Join-Path $PSScriptRoot "build-bootstrap.ps1") `
         -VenvPath $VenvPath `
@@ -52,8 +51,8 @@ if (-not $SkipBootstrap) {
         -Version $Version
 }
 if ($SigningCertificate) {
-    Set-FineSubAuthenticodeSignature `
-        -FilePath (Get-FineSubPackagedExecutables $Bootstrap) `
+    Set-YanamiSubAuthenticodeSignature `
+        -FilePath (Get-YanamiSubPackagedExecutables $Bootstrap) `
         -Certificate $SigningCertificate
 }
 $AppSource = Join-Path $Bootstrap "app\versions\$Version"

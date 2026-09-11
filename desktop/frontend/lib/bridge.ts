@@ -134,13 +134,13 @@ const previewBootstrap: BootstrapState = {
   shared_settings: { split_length_scale: null },
   config_path: String.raw`C:\Users\preview\AppData\Local\FineSub\user-data\config.toml`,
   storage: {
-    big_data: String.raw`C:\FineSub Desktop`,
-    default_big_data: String.raw`C:\FineSub Desktop`,
-    runtime: String.raw`C:\FineSub Desktop\runtime`,
-    models: String.raw`C:\FineSub Desktop\models`,
-    cache: String.raw`C:\FineSub Desktop\cache`,
-    tasks: String.raw`C:\FineSub Desktop\tasks`,
-    agent_capsules: String.raw`C:\FineSub Desktop\agent`,
+    big_data: String.raw`C:\Yanami Sub`,
+    default_big_data: String.raw`C:\Yanami Sub`,
+    runtime: String.raw`C:\Yanami Sub\runtime`,
+    models: String.raw`C:\Yanami Sub\models`,
+    cache: String.raw`C:\Yanami Sub\cache`,
+    tasks: String.raw`C:\Yanami Sub\tasks`,
+    agent_capsules: String.raw`C:\Yanami Sub\agent`,
     relocated: false,
   },
   task: null,
@@ -157,7 +157,7 @@ const previewBootstrap: BootstrapState = {
       events: [],
       request: {
         input: "D:/Media/示例视频.mp4",
-        output: "C:/FineSub/tasks/示例视频-260806-2210-a1b2c3/示例视频.srt",
+        output: "C:/Yanami Sub/tasks/示例视频-260806-2210-a1b2c3/示例视频.srt",
         name: "",
         cleanup_intermediate: false,
         stage: "raw-srt",
@@ -220,18 +220,18 @@ function previewApi(): DesktopApi {
       return {
         healthy: true,
         app_version: previewBootstrap.app_version,
-        core_version: "0.5.0",
+        core_version: "0.5.1",
         resources: structuredClone(previewBootstrap.resources),
         blocking_resources: [],
-        python_executable: String.raw`C:\FineSub Desktop\runtime\python\Scripts\python.exe`,
+        python_executable: String.raw`C:\Yanami Sub\runtime\python\Scripts\python.exe`,
         disk_free_bytes: 80 * 1024 ** 3,
         paths: {
-          install: String.raw`C:\FineSub Desktop`,
+          install: String.raw`C:\Yanami Sub`,
           personal_data: String.raw`C:\Users\preview\AppData\Local\FineSub\user-data`,
-          big_data: String.raw`C:\FineSub Desktop`,
-          models: String.raw`C:\FineSub Desktop\models`,
-          cache: String.raw`C:\FineSub Desktop\cache`,
-          tasks: String.raw`C:\FineSub Desktop\tasks`,
+          big_data: String.raw`C:\Yanami Sub`,
+          models: String.raw`C:\Yanami Sub\models`,
+          cache: String.raw`C:\Yanami Sub\cache`,
+          tasks: String.raw`C:\Yanami Sub\tasks`,
           logs: String.raw`C:\Users\preview\AppData\Local\FineSub\user-data\logs`,
         },
         capabilities: structuredClone(previewBootstrap.capabilities),
@@ -245,6 +245,33 @@ function previewApi(): DesktopApi {
     async selectBatchFiles() {
       return {
         paths: ["D:/Media/示例视频-1.mp4", "D:/Media/示例视频-2.mp4"],
+      };
+    },
+    async importBatchManifest() {
+      return {
+        cancelled: false,
+        path: "D:/Media/finesub-batch.jsonl",
+        request: {
+          items: [
+            {
+              input: "D:/Media/清单视频.mp4",
+              ...requestDefaults,
+              group: "",
+              priority: 1,
+            },
+          ],
+          workers: { download: 2, asr: 1, llm: 2 },
+          asr_queue_size: 4,
+          retry_failed: 1,
+        },
+        ignored_fields: [],
+      };
+    },
+    async exportBatchManifest(request) {
+      return {
+        cancelled: false,
+        path: "D:/Media/finesub-batch.jsonl",
+        count: request.items.length,
       };
     },
     async startTask(request) {
@@ -321,8 +348,8 @@ function previewApi(): DesktopApi {
         created_at: now,
         updated_at: now,
         error: "",
-        log_path: "C:/FineSub/tasks/batches/batch-preview/batch-log.txt",
-        status_path: "C:/FineSub/tasks/batches/batch-preview/batch-status.jsonl",
+        log_path: "C:/Yanami Sub/tasks/batches/batch-preview/batch-log.txt",
+        status_path: "C:/Yanami Sub/tasks/batches/batch-preview/batch-status.jsonl",
       };
       return structuredClone(batch);
     },
@@ -343,13 +370,13 @@ function previewApi(): DesktopApi {
       return batch ? [structuredClone(batch)] : [];
     },
     async openBatchDirectory() {
-      return { path: "C:/FineSub/tasks/batches/batch-preview" };
+      return { path: "C:/Yanami Sub/tasks/batches/batch-preview" };
     },
     async openBatchOutput(_batchId, path) {
       return { path };
     },
     async openBatchLog() {
-      return { path: "C:/FineSub/tasks/batches/batch-preview/batch-log.txt" };
+      return { path: "C:/Yanami Sub/tasks/batches/batch-preview/batch-log.txt" };
     },
     async installResource(resourceId) {
       const now = Date.now() / 1000;
@@ -362,8 +389,8 @@ function previewApi(): DesktopApi {
         downloaded: 42_000_000,
         total: 100_000_000,
         bytes_per_second: 3_200_000,
-        cache_path: "C:\\FineSub Desktop\\cache\\downloads",
-        install_path: `C:\\FineSub Desktop\\runtime\\${resourceId}`,
+        cache_path: "C:\\Yanami Sub\\cache\\downloads",
+        install_path: `C:\\Yanami Sub\\runtime\\${resourceId}`,
         logs: [],
         error: "",
         started_at: now,
@@ -395,8 +422,8 @@ function previewApi(): DesktopApi {
       return {
         path:
           kind === "cache"
-            ? "C:\\FineSub Desktop\\cache\\downloads"
-            : `C:\\FineSub Desktop\\runtime\\${resourceId}`,
+            ? "C:\\Yanami Sub\\cache\\downloads"
+            : `C:\\Yanami Sub\\runtime\\${resourceId}`,
       };
     },
     async openInstallLogs() {
@@ -531,7 +558,7 @@ function previewApi(): DesktopApi {
     async relocateData(reset = false) {
       const root = reset
         ? storage.default_big_data
-        : String.raw`D:\FineSub Data`;
+        : String.raw`D:\Yanami Sub Data`;
       storage = {
         ...storage,
         big_data: root,
@@ -570,7 +597,7 @@ function previewApi(): DesktopApi {
             category: "common",
             entry_type: "其他",
             intro: "字幕处理项目",
-            aliases: ["FineSub Desktop"],
+            aliases: ["Yanami Sub"],
             visibility: "local",
             maturity: "normal",
             valid_from_rev: 3,
@@ -601,7 +628,7 @@ function previewApi(): DesktopApi {
         category: "common",
         revision: rev ?? 12,
         valid_from_rev: 3,
-        text: "# FineSub\n\n字幕处理项目\n\n## 术语\n\n- FineSub Desktop",
+        text: "# FineSub\n\n字幕处理项目\n\n## 术语\n\n- Yanami Sub",
       };
     },
     async runKnowledgeMaintenance(request) {
@@ -620,7 +647,7 @@ function previewApi(): DesktopApi {
     },
     async getTaskKnowledgeFeedback(): Promise<KnowledgeFeedback> {
       return {
-        artifact_dir: String.raw`C:\FineSub\tasks\preview.llm-artifacts`,
+        artifact_dir: String.raw`C:\Yanami Sub\tasks\preview.llm-artifacts`,
         windows: [],
         research: null,
         merged_hints: [
@@ -667,10 +694,10 @@ function previewApi(): DesktopApi {
       return null;
     },
     async openUpdatePage() {
-      return { url: "https://github.com/tuzibuqiahuluobo/finesub-desktop/releases" };
+      return { url: "https://github.com/tuzibuqiahuluobo/yanami-sub/releases" };
     },
     async openTasksDirectory() {
-      return { path: "C:\\FineSub Desktop\\user-data\\tasks" };
+      return { path: "C:\\Yanami Sub\\tasks" };
     },
     async openOutput(path) {
       return { path };
@@ -766,6 +793,8 @@ function nativeApi(): DesktopApi {
     getDiagnostics: () => call<DiagnosticsReport>("get_diagnostics"),
     selectInputFile: () => call<{ path: string | null }>("select_input_file"),
     selectBatchFiles: () => call<{ paths: string[] }>("select_batch_files"),
+    importBatchManifest: () => call("import_batch_manifest"),
+    exportBatchManifest: (request) => call("export_batch_manifest", request),
     startTask: (request) => call<JobSnapshot>("start_task", request),
     cancelTask: (taskId) => call<JobSnapshot>("cancel_task", taskId),
     retryTask: (taskId) => call<JobSnapshot>("retry_task", taskId),

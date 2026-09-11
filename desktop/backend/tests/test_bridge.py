@@ -94,7 +94,7 @@ class FakeResources:
     def diagnostics(self):
         return {
             "healthy": self.ready,
-            "core_version": "0.5.0",
+            "core_version": "0.5.1",
             "resources": self.check_all(),
             "blocking_resources": [],
             "python_executable": Path("C:/FineSub/runtime/python/python.exe"),
@@ -125,11 +125,11 @@ class FakeUpdates:
         return {
             "available": True,
             "version": "1.1.0",
-            "releaseUrl": "https://github.com/tuzibuqiahuluobo/finesub-desktop/releases/tag/v1.1.0",
+            "releaseUrl": "https://github.com/tuzibuqiahuluobo/yanami-sub/releases/tag/v1.1.0",
         }
 
     def release_url(self):
-        return "https://github.com/tuzibuqiahuluobo/finesub-desktop/releases/tag/v1.1.0"
+        return "https://github.com/tuzibuqiahuluobo/yanami-sub/releases/tag/v1.1.0"
 
 
 class FakeTray:
@@ -146,6 +146,8 @@ class FakeBatches:
         self.requests: list[BatchRequest] = []
         self.worker_context: WorkerLaunchContext | None = None
         self.output_root: Path | None = None
+        self.imported_path: Path | None = None
+        self.exported: tuple[Path, BatchRequest] | None = None
 
     def is_running(self) -> bool:
         return self.running
@@ -165,6 +167,15 @@ class FakeBatches:
         if not self.requests:
             raise KeyError(batch_id)
         return self.requests[-1]
+
+    def import_manifest(self, path: Path):
+        self.imported_path = Path(path).resolve()
+        return BatchRequest.model_validate({"items": [{"input": "D:/media/a.wav"}]}), ["output"]
+
+    def export_manifest(self, path: Path, request: BatchRequest):
+        destination = Path(path).resolve()
+        self.exported = (destination, request)
+        return {"path": str(destination), "count": len(request.items)}
 
     def cancel(self, batch_id: str):
         self.running = False
@@ -228,7 +239,7 @@ def test_bridge_exposes_a_structured_diagnostic_report(tmp_path: Path) -> None:
 
     assert result["ok"] is True
     assert result["data"]["healthy"] is True
-    assert result["data"]["core_version"] == "0.5.0"
+    assert result["data"]["core_version"] == "0.5.1"
     assert result["data"]["python_executable"].endswith("python.exe")
     assert result["data"]["gpu"] == {"state": "unavailable", "devices": []}
 
@@ -302,6 +313,33 @@ def test_bridge_starts_a_core_batch_and_requests_url_capabilities(
     assert result["ok"] is True
     assert batches.requests[0].workers.download == 2
     assert resources.ensured[-1] == ("uv", "ffmpeg", "yt-dlp")
+
+
+def test_bridge_imports_and_exports_manifests_only_through_native_dialogs(
+    tmp_path: Path,
+) -> None:
+    batches = FakeBatches()
+    imported_path = tmp_path / "import.jsonl"
+    exported_path = tmp_path / "export.jsonl"
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        batches=batches,
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        batch_manifest_selector=lambda: str(imported_path),
+        batch_manifest_export_selector=lambda: str(exported_path),
+    )
+
+    imported = bridge.import_batch_manifest()
+    exported = bridge.export_batch_manifest(imported["data"]["request"])
+
+    assert imported["ok"] is True
+    assert imported["data"]["ignored_fields"] == ["output"]
+    assert batches.imported_path == imported_path.resolve()
+    assert exported["ok"] is True
+    assert exported["data"]["count"] == 1
+    assert batches.exported is not None
+    assert batches.exported[0] == exported_path.resolve()
 
 
 def test_single_task_is_blocked_while_a_batch_is_running(tmp_path: Path) -> None:
@@ -503,7 +541,7 @@ def test_update_check_opens_release_page_without_installing(
     assert checked["data"]["available"] is True
     assert opened_result["ok"] is True
     assert opened == [
-        "https://github.com/tuzibuqiahuluobo/finesub-desktop/releases/tag/v1.1.0"
+        "https://github.com/tuzibuqiahuluobo/yanami-sub/releases/tag/v1.1.0"
     ]
 
 

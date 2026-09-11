@@ -113,9 +113,9 @@ function Write-Utf8NoBom {
     )
 }
 
-$LauncherDist = Join-Path $OutputDirectory "FineSub Desktop.dist"
-if (-not (Test-Path -LiteralPath (Join-Path $LauncherDist "FineSub Desktop.exe") -PathType Leaf)) {
-    throw "FineSub Desktop.exe was not generated."
+$LauncherDist = Join-Path $OutputDirectory "Yanami Sub.dist"
+if (-not (Test-Path -LiteralPath (Join-Path $LauncherDist "Yanami Sub.exe") -PathType Leaf)) {
+    throw "Yanami Sub.exe was not generated."
 }
 
 $VersionRoot = Join-Path $LauncherDist "app\versions\$Version"
@@ -203,4 +203,4 @@ Write-Utf8NoBom `
     -Content $LauncherConfigJson
 Copy-Item -LiteralPath $TrustedKeysPath -Destination (Join-Path $LauncherDist "trusted-update-keys.json") -Force
 
-Write-Host "FineSub onedir package: $LauncherDist"
+Write-Host "Yanami Sub onedir package: $LauncherDist"

@@ -51,7 +51,7 @@ test("browser preview exposes update check and release page", async () => {
   assert.equal(check.kind, "app");
   assert.ok(check.releaseNotes);
   assert.deepEqual(release, {
-    url: "https://github.com/tuzibuqiahuluobo/finesub-desktop/releases",
+    url: "https://github.com/tuzibuqiahuluobo/yanami-sub/releases",
   });
 });
 
@@ -82,6 +82,19 @@ test("browser preview exposes the batch scheduler contract", async () => {
 });
 
 
+test("browser preview round-trips a static batch manifest", async () => {
+  const api = createDesktopApi({ preview: true });
+
+  const imported = await api.importBatchManifest();
+  assert.ok(imported.request);
+  const exported = await api.exportBatchManifest(imported.request);
+
+  assert.equal(imported.request.items.length, 1);
+  assert.equal(exported.count, 1);
+  assert.equal(exported.path, "D:/Media/finesub-batch.jsonl");
+});
+
+
 test("browser preview exposes the knowledge workspace contract", async () => {
   const api = createDesktopApi({ preview: true });
 
@@ -96,7 +109,7 @@ test("browser preview exposes the knowledge workspace contract", async () => {
 
   assert.equal(snapshot.revision, 12);
   assert.equal(snapshot.entries[0]?.qualified_name, "common/FineSub");
-  assert.equal(entry.text.includes("FineSub Desktop"), true);
+  assert.equal(entry.text.includes("Yanami Sub"), true);
   assert.equal(feedback.merged_hints[0]?.entry, "FineSub");
   assert.equal(maintenance.command, "verify");
 });
@@ -111,7 +124,7 @@ test("browser preview exposes key export and storage maintenance", async () => {
 
   assert.equal(exported.cancelled, false);
   assert.equal(moved.storage.relocated, true);
-  assert.equal(moved.storage.big_data, String.raw`D:\FineSub Data`);
+  assert.equal(moved.storage.big_data, String.raw`D:\Yanami Sub Data`);
   assert.equal(purged.resources?.every((resource) => resource.state === "missing"), true);
 });
 

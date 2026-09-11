@@ -5,7 +5,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 INSTALLER = (
-    REPO_ROOT / "desktop" / "installer" / "FineSubDesktop.iss"
+    REPO_ROOT / "desktop" / "installer" / "YanamiSub.iss"
 )
 BUILD_SCRIPT = REPO_ROOT / "desktop" / "scripts" / "build-installer.ps1"
 
@@ -20,18 +20,18 @@ def _build_script_text() -> str:
 
 def test_installer_has_per_user_configurable_install_directory() -> None:
     script = _installer_text()
-    assert "AppName=FineSub Desktop" in script
-    assert "DefaultDirName={localappdata}\\Programs\\FineSub Desktop" in script
+    assert "AppName=Yanami Sub" in script
+    assert "DefaultDirName={localappdata}\\Programs\\Yanami Sub" in script
     assert "PrivilegesRequired=lowest" in script
     assert "DisableDirPage=no" in script
 
 
 def test_installer_creates_shortcuts_and_can_launch_application() -> None:
     script = _installer_text()
-    assert 'Name: "{autoprograms}\\FineSub Desktop"' in script
-    assert 'Name: "{autodesktop}\\FineSub Desktop"' in script
+    assert 'Name: "{autoprograms}\\Yanami Sub"' in script
+    assert 'Name: "{autodesktop}\\Yanami Sub"' in script
     assert "Tasks: desktopicon" in script
-    assert '#define AppExeName "FineSub Desktop.exe"' in script
+    assert '#define AppExeName "Yanami Sub.exe"' in script
     assert 'Filename: "{app}\\{#AppExeName}"' in script
     assert "postinstall" in script
 
@@ -41,8 +41,8 @@ def test_installer_uses_branding_and_exact_output_name() -> None:
     assert '#define AppPublisher "tuzibuqiahuluobo"' in script
     assert "AppPublisher={#AppPublisher}" in script
     assert "SetupIconFile={#SetupIcon}" in script
-    assert "UninstallDisplayIcon={app}\\FineSub Desktop.exe" in script
-    assert "OutputBaseFilename=FineSub-Desktop-{#AppVersion}-Setup" in script
+    assert "UninstallDisplayIcon={app}\\Yanami Sub.exe" in script
+    assert "OutputBaseFilename=Yanami-Sub-{#AppVersion}-Setup" in script
     assert "Compression=lzma2/ultra64" in script
     assert "SolidCompression=yes" in script
 
@@ -50,12 +50,12 @@ def test_installer_uses_branding_and_exact_output_name() -> None:
 def test_installer_build_requires_a_valid_authenticode_signature_on_request() -> None:
     script = _build_script_text()
     assert "[switch]$RequireAuthenticode" in script
-    assert "Get-FineSubCodeSigningCertificate" in script
-    assert "Get-FineSubPackagedExecutables" in script
-    assert "Set-FineSubAuthenticodeSignature" in script
+    assert "Get-YanamiSubCodeSigningCertificate" in script
+    assert "Get-YanamiSubPackagedExecutables" in script
+    assert "Set-YanamiSubAuthenticodeSignature" in script
     # The second call is after Inno produced the Setup executable.
-    assert script.rfind("Set-FineSubAuthenticodeSignature") > script.index(
-        'InstallerName = "FineSub-Desktop-$Version-Setup.exe"'
+    assert script.rfind("Set-YanamiSubAuthenticodeSignature") > script.index(
+        'InstallerName = "Yanami-Sub-$Version-Setup.exe"'
     )
 
 
@@ -78,18 +78,23 @@ def test_installer_always_uses_bundled_chinese_language() -> None:
     ).is_file()
 
 
-def test_installer_keeps_english_without_asking_which_language() -> None:
-    # Two languages would open Setup with a picker; detection answers it. The
-    # Chinese entry is listed first, so it is also what an unrecognised locale
-    # gets -- the product's own language.
+def test_installer_uses_only_chinese_without_asking_which_language() -> None:
+    # A second language lets automatic locale detection choose English on an
+    # English Windows installation. One Chinese entry makes every build and
+    # every locale deterministic without presenting a language picker.
     installer = _installer_text()
     languages = installer.split("[Languages]", 1)[1].split("[", 1)[0]
     entries = [line for line in languages.splitlines() if line.startswith("Name:")]
 
     assert "ShowLanguageDialog=no" in installer
-    assert len(entries) == 2
-    assert entries[0].startswith('Name: "chinesesimp"')
-    assert 'Name: "english"; MessagesFile: "compiler:Default.isl"' in entries[1]
+    assert entries == [
+        'Name: "chinesesimp"; MessagesFile: "{#ChineseLanguageFile}"'
+    ]
+    assert "compiler:Default.isl" not in installer
+    assert "是否同时删除 Yanami Sub 已生成的字幕？" in installer
+    assert "是否同时删除 FineSub 数据目录" in installer
+    assert "Also delete the subtitles" not in installer
+    assert "Also delete the FineSub data folder" not in installer
 
 
 def test_installer_writes_the_installed_marker() -> None:
@@ -102,6 +107,18 @@ def test_installer_writes_the_installed_marker() -> None:
         "SaveStringToFile(ExpandConstant('{app}\\installed.marker')" in script
     )
     assert "ssPostInstall" in script
+
+
+def test_rc3_removes_obsolete_finesub_desktop_entry_points() -> None:
+    script = _installer_text()
+    assert "[InstallDelete]" in script
+    for obsolete in (
+        "{app}\\FineSub Desktop.exe",
+        "{app}\\updater\\FineSub Desktop Updater.exe",
+        "{autoprograms}\\FineSub Desktop.lnk",
+        "{autodesktop}\\FineSub Desktop.lnk",
+    ):
+        assert f'Type: files; Name: "{obsolete}"' in script
 
 
 def test_uninstall_removes_only_what_can_be_rebuilt_without_asking() -> None:
@@ -146,7 +163,7 @@ def test_installer_build_validates_required_application_files() -> None:
     # out of `desktop/` in 2026-09, and a basename check kept passing while
     # the script still required them from a directory that no longer exists.
     for expected in (
-        "FineSub Desktop.exe",
+        "Yanami Sub.exe",
         "app\\current.json",
         "src\\finesub_bootstrap\\runtime-manifest.json",
         "src\\finesub_bootstrap\\download-sources.json",
@@ -155,4 +172,4 @@ def test_installer_build_validates_required_application_files() -> None:
     ):
         assert expected in script
     assert "ISCC.exe" in script
-    assert "FineSub-Desktop-$Version-Setup.exe" in script
+    assert "Yanami-Sub-$Version-Setup.exe" in script

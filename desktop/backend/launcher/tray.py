@@ -24,9 +24,9 @@ class TrayController:
                 return
             image = Image.open(self.icon_path).convert("RGBA")
             self._icon = pystray.Icon(
-                "finesub-desktop",
+                "yanami-sub",
                 image,
-                "FineSub Desktop",
+                "Yanami Sub",
                 menu=pystray.Menu(
                     pystray.MenuItem(
                         "\u663e\u793a\u4e3b\u754c\u9762",
@@ -38,7 +38,7 @@ class TrayController:
             )
             self._thread = Thread(
                 target=self._icon.run,
-                name="finesub-system-tray",
+                name="yanami-sub-system-tray",
                 daemon=True,
             )
             self._thread.start()

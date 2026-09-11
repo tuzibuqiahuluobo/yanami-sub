@@ -35,8 +35,8 @@ def _write_app_source(root: Path, version: str) -> None:
 
 def _write_full_source(root: Path, version: str) -> None:
     root.mkdir(parents=True, exist_ok=True)
-    (root / "FineSub Desktop.exe").write_bytes(b"launcher")
-    (root / "FineSub Desktop Updater.exe").write_bytes(b"updater")
+    (root / "Yanami Sub.exe").write_bytes(b"launcher")
+    (root / "Yanami Sub Updater.exe").write_bytes(b"updater")
     _write_app_source(root / "app" / "versions" / version, version)
 
 
@@ -67,12 +67,14 @@ def test_release_builder_emits_signed_assets(tmp_path: Path) -> None:
             minimum_launcher_version="0.1.0",
             minimum_supported_version="0.1.0",
             app_supported_from=["0.1.0"],
-            release_notes="FineSub Desktop 0.2.0",
+            release_notes="Yanami Sub 0.2.0",
         )
     )
 
-    assert result.app_zip.name == "finesub-app-0.2.0-win-x64.zip"
-    assert result.full_zip.name == "finesub-full-0.2.0-win-x64.zip"
+    assert result.app_zip.name == "yanami-sub-app-0.2.0-win-x64.zip"
+    assert result.full_zip.name == "yanami-sub-full-0.2.0-win-x64.zip"
+    assert result.manifest.name == "yanami-sub-update-manifest.json"
+    assert result.manifest_sig.name == "yanami-sub-update-manifest.sig"
     assert result.manifest_sig.is_file()
     public = private.public_key().public_bytes(
         encoding=serialization.Encoding.Raw,

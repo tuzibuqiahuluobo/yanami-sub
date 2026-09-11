@@ -160,9 +160,9 @@ export const zh = {
       install: "下载并安装",
       installing: "正在安装更新…",
       downloading: "正在下载 {done} / {total}",
-      restartRequired: "更新已就绪，重启 FineSub 后生效",
+      restartRequired: "更新已就绪，重启 Yanami Sub 后生效",
       restartNow: "立即重启",
-      exitRequired: "安装程序已启动，退出 FineSub 后将自动完成更新",
+      exitRequired: "安装程序已启动，退出 Yanami Sub 后将自动完成更新",
       exitNow: "退出并完成更新",
       installFailed: "更新安装失败：{error}",
       retryInstall: "重试",
@@ -196,7 +196,7 @@ export const zh = {
       viewDocs: "查看文档",
       docs: {
         title: "使用说明",
-        intro: "FineSub Desktop 在本机完成音频处理，运行资源和模型会在首次使用时在线下载。",
+        intro: "Yanami Sub 在本机完成音频处理，运行资源和模型会在首次使用时在线下载。",
         close: "知道了",
         sections: [
           {
@@ -588,7 +588,7 @@ export const zh = {
     outputs: "输出文件",
     readyTitle: "字幕已经准备好了",
     done: "处理完成",
-    summary: "FineSub 已完成本次任务",
+    summary: "Yanami Sub 已完成本次任务",
     fallbackName: "字幕输出",
     description: "字幕已保存在原媒体所在目录，可以继续编辑或导入剪辑软件。",
     openDirectory: "打开输出目录",
@@ -619,6 +619,11 @@ export const zh = {
     sourcesTitle: "输入队列",
     sourcesHint: "可混合本地媒体和视频链接，队列顺序同时作为默认优先级。",
     addFiles: "添加文件",
+    importManifest: "导入清单",
+    exportManifest: "导出清单",
+    manifestImported: "已从清单载入 {count} 项；逐项参数会原样保留。",
+    manifestImportedIgnored: "已载入 {count} 项；为保护桌面端数据目录，已忽略：{fields}。",
+    manifestExported: "批次清单已保存到 {path}",
     addUrls: "添加链接",
     urlPlaceholder: "每行一个视频链接",
     empty: "还没有项目。选择多个媒体文件，或在上方粘贴链接。",
@@ -665,6 +670,8 @@ export const zh = {
     },
     errors: {
       select: "无法选择批处理文件。",
+      manifestImport: "无法导入批次清单。",
+      manifestExport: "无法导出批次清单。",
       start: "无法开始批处理。",
       cancel: "无法停止批处理。",
       resume: "无法继续批处理。",
@@ -828,7 +835,7 @@ export const zh = {
   },
   // 启动页面
   bootstrap: {
-    brand: "FineSub Desktop",
+    brand: "Yanami Sub",
     connectionError: "无法连接桌面服务",
     reconnect: "重新连接",
     loading: "正在检查 FineSub 运行状态",

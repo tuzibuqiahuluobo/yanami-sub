@@ -4,9 +4,11 @@ import base64
 import json
 from pathlib import Path
 import shutil
+import sys
 
 import finesub_bootstrap
 from finesub_bootstrap.paths import AppPaths
+from desktop.YanamiSub import _activate_packaged_source
 from desktop.backend.common.product import INSTALLED_MARKER_NAME
 from desktop.backend.launcher.main import (
     create_backend_services,
@@ -28,6 +30,34 @@ RUNTIME_MANIFEST = (
 )
 
 
+def test_frozen_entrypoint_activates_the_versioned_core_before_startup(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    source = tmp_path / "app" / "versions" / "1.2.0" / "src"
+    (source / "finesub").mkdir(parents=True)
+    (source / "finesub" / "pipeline.py").write_text("ok", encoding="utf-8")
+    (source.parent / "pyproject.toml").write_text("[project]", encoding="utf-8")
+    (tmp_path / "app" / "current.json").write_text(
+        '{"current":"1.2.0"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path))
+    original_path = list(sys.path)
+    try:
+        _activate_packaged_source()
+        assert sys.path[0] == str(source.resolve())
+    finally:
+        sys.path[:] = original_path
+    entrypoint = (Path(__file__).resolve().parents[2] / "YanamiSub.py").read_text(
+        encoding="utf-8"
+    )
+    assert entrypoint.index("\n_activate_packaged_source()\n") < entrypoint.index(
+        "\nfrom desktop.backend.launcher.main import main"
+    )
+
+
 def test_personal_data_is_the_same_place_for_every_form(
     tmp_path: Path,
     monkeypatch,
@@ -35,7 +65,7 @@ def test_personal_data_is_the_same_place_for_every_form(
     # Installed and portable copies used to disagree, which is how one user
     # ended up with three knowledge bases. The install directory still owns the
     # big, rebuildable half.
-    installed = tmp_path / "Programs" / "FineSub Desktop"
+    installed = tmp_path / "Programs" / "Yanami Sub"
     installed.mkdir(parents=True)
     (installed / INSTALLED_MARKER_NAME).write_text("", encoding="utf-8")
     portable = tmp_path / "FineSubPortable"
@@ -117,6 +147,8 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "get_diagnostics",
         "select_input_file",
         "select_batch_files",
+        "import_batch_manifest",
+        "export_batch_manifest",
         "start_task",
         "cancel_task",
         "retry_task",
@@ -334,7 +366,7 @@ def test_update_service_loads_only_with_configured_trusted_key(
                 "launcherVersion": "1.0.0",
                 "channel": "stable",
                 "platform": "windows-x64",
-                "releaseRepository": "tuzibuqiahuluobo/finesub-desktop",
+                "releaseRepository": "tuzibuqiahuluobo/yanami-sub",
             }
         ),
         encoding="utf-8",
@@ -354,7 +386,7 @@ def test_update_service_loads_only_with_configured_trusted_key(
     service = load_update_service(paths)
 
     assert service is not None
-    assert service.config.release_repository == "tuzibuqiahuluobo/finesub-desktop"
+    assert service.config.release_repository == "tuzibuqiahuluobo/yanami-sub"
     assert service.trusted_keys == {
         "release-key": base64.b64encode(b"k" * 32).decode("ascii")
     }

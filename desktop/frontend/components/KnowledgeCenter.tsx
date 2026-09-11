@@ -462,14 +462,14 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
               <div><h2>{t.knowledge.feedback.title}</h2><p>{t.knowledge.feedback.hint}</p></div>
             </div>
             <div className="knowledge-action-grid">
-              <label className="field field-span-all">
+              <label className="field">
                 <span>{t.knowledge.feedback.task}</span>
                 <select value={feedbackTaskId} onChange={(event) => { setFeedbackTaskId(event.target.value); setFeedback(null); }}>
                   <option value="">{t.knowledge.feedback.noTask}</option>
                   {completedTasks.map((task) => <option key={task.task_id} value={task.task_id}>{taskLabel(task)}</option>)}
                 </select>
               </label>
-              <button type="button" className="button button-secondary" disabled={busy || !feedbackTaskId} onClick={() => void loadFeedback()}>
+              <button type="button" className="button button-secondary knowledge-form-action" disabled={busy || !feedbackTaskId} onClick={() => void loadFeedback()}>
                 <BookOpenText size={15} />{t.knowledge.feedback.inspect}
               </button>
             </div>
@@ -497,13 +497,15 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
             <div className="section-heading">
               <div><h2>{t.knowledge.feedback.refinedTitle}</h2><p>{t.knowledge.feedback.refinedHint}</p></div>
             </div>
-            <div className="knowledge-file-row">
-              <input value={refinedPath} placeholder={t.knowledge.feedback.refinedPlaceholder} onChange={(event) => setRefinedPath(event.target.value)} />
-              <button type="button" className="button button-secondary" onClick={() => void chooseFile("refined")}>{t.knowledge.browse}</button>
-            </div>
-            <div className="knowledge-actions">
-              <button type="button" className="button button-secondary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(false)}>{t.knowledge.feedback.propose}</button>
-              <button type="button" className="button button-primary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(true)}>{t.knowledge.feedback.apply}</button>
+            <div className="knowledge-workflow-row">
+              <div className="knowledge-file-row">
+                <input value={refinedPath} placeholder={t.knowledge.feedback.refinedPlaceholder} aria-label={t.knowledge.feedback.refinedPlaceholder} onChange={(event) => setRefinedPath(event.target.value)} />
+                <button type="button" className="button button-secondary" onClick={() => void chooseFile("refined")}>{t.knowledge.browse}</button>
+              </div>
+              <div className="knowledge-actions">
+                <button type="button" className="button button-secondary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(false)}>{t.knowledge.feedback.propose}</button>
+                <button type="button" className="button button-primary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(true)}>{t.knowledge.feedback.apply}</button>
+              </div>
             </div>
           </section>
         </div>
@@ -565,8 +567,8 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.maintenance.ingest}</h2><p>{t.knowledge.maintenance.ingestHint}</p></div></div>
             <div className="knowledge-form-grid">
-              <label className="field"><span>{t.knowledge.maintenance.subject}</span><select value={ingest.subject} onChange={(event) => setIngest((current) => ({ ...current, subject: event.target.value }))}><option value="">{t.common.select}</option>{snapshot?.entries.map((entry) => <option value={entry.qualified_name} key={entry.id}>{entry.qualified_name}</option>)}</select></label>
-              <label className="field"><span>{t.knowledge.maintenance.material}</span><div className="knowledge-file-row"><input value={ingest.material} onChange={(event) => setIngest((current) => ({ ...current, material: event.target.value }))} /><button type="button" className="button button-secondary" onClick={() => void chooseFile("material")}>{t.knowledge.browse}</button></div></label>
+              <label className="field field-span-all"><span>{t.knowledge.maintenance.subject}</span><select value={ingest.subject} onChange={(event) => setIngest((current) => ({ ...current, subject: event.target.value }))}><option value="">{t.common.select}</option>{snapshot?.entries.map((entry) => <option value={entry.qualified_name} key={entry.id}>{entry.qualified_name}</option>)}</select></label>
+              <label className="field field-span-all"><span>{t.knowledge.maintenance.material}</span><div className="knowledge-file-row"><input value={ingest.material} onChange={(event) => setIngest((current) => ({ ...current, material: event.target.value }))} /><button type="button" className="button button-secondary" onClick={() => void chooseFile("material")}>{t.knowledge.browse}</button></div></label>
               <label className="field field-span-all"><span>{t.knowledge.maintenance.prompt}</span><textarea rows={3} value={ingest.prompt} onChange={(event) => setIngest((current) => ({ ...current, prompt: event.target.value }))} /></label>
             </div>
             <div className="knowledge-actions">
@@ -582,28 +584,32 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
         <div className="knowledge-stack">
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.connection}</h2><p>{t.knowledge.sharing.connectionHint}</p></div></div>
-            <label className="field"><span>{t.knowledge.sharing.remote}</span><input list="knowledge-remotes" value={remote} placeholder="https://…" onChange={(event) => setRemote(event.target.value)} /><datalist id="knowledge-remotes">{snapshot?.registered_remotes.map((value) => <option value={value} key={value} />)}</datalist></label>
-            <div className="knowledge-command-row">
-              <button type="button" className="button button-secondary" disabled={busy || !remote.trim()} onClick={() => void runShare("register", ["--remote", remote.trim()])}><ShieldCheck size={15} />{t.knowledge.sharing.register}</button>
-              <button type="button" className="button button-secondary" disabled={busy || !remote.trim()} onClick={() => void runShare("pull", ["--remote", remote.trim()])}><Download size={15} />{t.knowledge.sharing.pull}</button>
+            <div className="knowledge-connection-row">
+              <label className="field"><span>{t.knowledge.sharing.remote}</span><input list="knowledge-remotes" value={remote} placeholder="https://…" onChange={(event) => setRemote(event.target.value)} /><datalist id="knowledge-remotes">{snapshot?.registered_remotes.map((value) => <option value={value} key={value} />)}</datalist></label>
+              <div className="knowledge-command-row">
+                <button type="button" className="button button-secondary" disabled={busy || !remote.trim()} onClick={() => void runShare("register", ["--remote", remote.trim()])}><ShieldCheck size={15} />{t.knowledge.sharing.register}</button>
+                <button type="button" className="button button-secondary" disabled={busy || !remote.trim()} onClick={() => void runShare("pull", ["--remote", remote.trim()])}><Download size={15} />{t.knowledge.sharing.pull}</button>
+              </div>
             </div>
           </section>
 
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.publish}</h2><p>{t.knowledge.sharing.publishHint}</p></div></div>
-            <div className="knowledge-form-grid">
+            <div className="knowledge-form-grid knowledge-form-grid-three">
               <label className="field"><span>{t.knowledge.sharing.subject}</span><select value={selectedName} onChange={(event) => setSelectedName(event.target.value)}><option value="">{t.common.select}</option>{snapshot?.entries.map((entry) => <option key={entry.id} value={entry.qualified_name}>{entry.qualified_name}</option>)}</select></label>
               <label className="field"><span>{t.knowledge.sharing.kinds}</span><input value={shareKinds} placeholder="note,rule" onChange={(event) => setShareKinds(event.target.value)} /></label>
               <label className="field"><span>{t.knowledge.sharing.match}</span><input value={shareMatch} onChange={(event) => setShareMatch(event.target.value)} /></label>
             </div>
-            <div className="knowledge-command-row">
-              <button type="button" className="button button-secondary" disabled={busy || !selectedName} onClick={() => void runShare("mark", [selectedName, ...(shareKinds ? ["--kinds", shareKinds] : []), ...(shareMatch ? ["--match", shareMatch] : [])])}>{t.knowledge.sharing.mark}</button>
-              <button type="button" className="button button-secondary" disabled={busy || !selectedName} onClick={() => void runShare("unmark", [selectedName, ...(shareKinds ? ["--kinds", shareKinds] : []), ...(shareMatch ? ["--match", shareMatch] : [])])}>{t.knowledge.sharing.unmark}</button>
-              <button type="button" className="button button-primary" disabled={busy || !selectedName || !remote.trim()} onClick={() => void runShare("push", [selectedName, "--remote", remote.trim()])}><Upload size={15} />{t.knowledge.sharing.push}</button>
-            </div>
-            <div className="knowledge-inline-form">
-              <input value={queueId} inputMode="numeric" placeholder={t.knowledge.sharing.queueId} onChange={(event) => setQueueId(event.target.value)} />
-              <button type="button" className="button button-secondary" disabled={busy || !remote.trim() || !queueId} onClick={() => void runShare("status", ["--remote", remote.trim(), "--queue-id", queueId])}>{t.knowledge.sharing.status}</button>
+            <div className="knowledge-split-actions">
+              <div className="knowledge-command-row">
+                <button type="button" className="button button-secondary" disabled={busy || !selectedName} onClick={() => void runShare("mark", [selectedName, ...(shareKinds ? ["--kinds", shareKinds] : []), ...(shareMatch ? ["--match", shareMatch] : [])])}>{t.knowledge.sharing.mark}</button>
+                <button type="button" className="button button-secondary" disabled={busy || !selectedName} onClick={() => void runShare("unmark", [selectedName, ...(shareKinds ? ["--kinds", shareKinds] : []), ...(shareMatch ? ["--match", shareMatch] : [])])}>{t.knowledge.sharing.unmark}</button>
+                <button type="button" className="button button-primary" disabled={busy || !selectedName || !remote.trim()} onClick={() => void runShare("push", [selectedName, "--remote", remote.trim()])}><Upload size={15} />{t.knowledge.sharing.push}</button>
+              </div>
+              <div className="knowledge-inline-form">
+                <input value={queueId} inputMode="numeric" placeholder={t.knowledge.sharing.queueId} aria-label={t.knowledge.sharing.queueId} onChange={(event) => setQueueId(event.target.value)} />
+                <button type="button" className="button button-secondary" disabled={busy || !remote.trim() || !queueId} onClick={() => void runShare("status", ["--remote", remote.trim(), "--queue-id", queueId])}>{t.knowledge.sharing.status}</button>
+              </div>
             </div>
           </section>
 
@@ -631,10 +637,10 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
 
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.review}</h2><p>{t.knowledge.sharing.reviewHint}</p></div></div>
-            <div className="knowledge-form-grid">
+            <div className="knowledge-form-grid knowledge-form-grid-three">
               <label className="field"><span>{t.knowledge.sharing.maintainerToken}</span><input type="password" value={maintainer.token} onChange={(event) => setMaintainer((current) => ({ ...current, token: event.target.value }))} /></label>
               <label className="field"><span>{t.knowledge.sharing.queueId}</span><input inputMode="numeric" value={maintainer.queueId} onChange={(event) => setMaintainer((current) => ({ ...current, queueId: event.target.value }))} /></label>
-              <label className="field field-span-all"><span>{t.knowledge.sharing.override}</span><input value={maintainer.override} onChange={(event) => setMaintainer((current) => ({ ...current, override: event.target.value }))} /></label>
+              <label className="field"><span>{t.knowledge.sharing.override}</span><input value={maintainer.override} onChange={(event) => setMaintainer((current) => ({ ...current, override: event.target.value }))} /></label>
             </div>
             <div className="knowledge-command-row">
               {(["preview", "run", "post"] as const).map((mode) => {

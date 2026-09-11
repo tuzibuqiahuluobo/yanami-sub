@@ -99,10 +99,26 @@
 }
 
 .batch-source-actions,
-.batch-summary-actions {
+.batch-summary-actions,
+.batch-heading-actions {
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+.batch-heading-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.batch-manifest-notice {
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-control);
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  font-size: 0.76rem;
+  overflow-wrap: anywhere;
 }
 
 .batch-source-actions button,
@@ -240,6 +256,10 @@
 
   .batch-summary-actions {
     flex-wrap: wrap;
+  }
+
+  .batch-heading-actions {
+    justify-content: flex-start;
   }
 
   .batch-item {

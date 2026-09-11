@@ -1,4 +1,4 @@
-# FineSub Desktop：开发与发布
+# Yanami Sub：开发与发布
 
 > 本文主要保留 `0.5.0pre` 迁移锚点中的旧单仓设计与发布记录。凡是涉及仓库根 `src/`、
 > `cli/`、旧 workflow 或联合发布的段落，都不是当前独立仓库的可执行流程；迁移状态与边界
@@ -422,7 +422,7 @@ FineSub 0.5.0 剥离桌面端时同时移除了只服务旧安装包的 `package
 .\desktop\scripts\run-dev.ps1
 ```
 
-API Key 保存在 FineSub Desktop 用户数据目录的 `.env` 中，不会返回给前端，但
+API Key 保存在 Yanami Sub 用户数据目录的 `.env` 中，不会返回给前端，但
 当前仍是本机明文文件。Desktop 的 Gemini、Exa、Tavily 字段分别注入 CLI 的
 `GEMINI_FREE`、`EXA_KEYS`、`TAVILY_KEYS`；Gemini 用于翻译，Exa/Tavily
 仅在启用网页搜索时使用。旧版 Desktop 保存的三个单 Key 变量会在首次读取时
@@ -473,7 +473,7 @@ PyInstaller bootstrap smoke build。根项目原有 CI 不承担桌面验证。
 未显式传入 `-Version` 时，构建脚本会读取仓库根 `VERSION`；发布自动化如需
 显式传值，也应先从该文件读取，避免生成版本不一致的资源。
 
-bootstrap 产出 `FineSub Desktop.exe` 和 `updater/FineSub Desktop Updater.exe`
+bootstrap 产出 `Yanami Sub.exe` 和 `updater/Yanami Sub Updater.exe`
 两个 PyInstaller 目标，不会生成 `FineSub.exe` 兼容副本。updater 是必需的：full
 更新要替换正在运行的安装，执行替换的进程不能是被替换的那个——缺了它
 `_install_full` 会停在 "Installed updater runtime is missing"，只有 app 增量能装。
@@ -490,7 +490,7 @@ traceback 弹窗，而此时 FineSub 已经退出、没人会去点它。`update
   漏掉它，而那正是空窗期最可能被打断的方式。回滚顺序是**先把程序文件搬回来**再清理，
   且每步独立兜底——清理失败不能成为程序文件回不去的原因。
 - **启动即自愈**。`updates/recovery.recover_interrupted_update()` 在
-  `create_application()` 最早期运行：安装根没有 `FineSub Desktop.exe` 时，自动把
+  `create_application()` 最早期运行：安装根没有 `Yanami Sub.exe` 时，自动把
   `.update/backup-*` 搬回来并告知用户。自动而非询问，因为此时没有界面可供询问。
 - **备份只在安装可启动时才删**。旧代码在**下一次**更新开始时无条件清 `backup-*`，
   而那份备份可能是唯一一份能用的安装。`discard_backups()` 自己会复查这一点。
@@ -503,7 +503,7 @@ traceback 弹窗，而此时 FineSub 已经退出、没人会去点它。`update
 
 ```powershell
 .\desktop\scripts\build-installer.ps1 `
-  -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist"
+  -ApplicationDirectory ".\dist\bootstrap\Yanami Sub.dist"
 ```
 
 独立仓库不再复制 FineSub 核心代码。构建启动器时要传入与 `pyproject.toml` 中
@@ -512,7 +512,7 @@ checkout 中受 Git 跟踪的 `src/` 文件写入应用包：
 
 ```powershell
 .\desktop\scripts\build-bootstrap.ps1 `
-  -UpstreamDirectory "C:\src\finesub-v0.5.0"
+  -UpstreamDirectory "C:\src\finesub-v0.5.1"
 ```
 
 也可以用 `FINESUB_UPSTREAM_SOURCE` 设置同一路径。版本不符或目录不是完整源码时构建会
@@ -524,22 +524,22 @@ checkout 中受 Git 跟踪的 `src/` 文件写入应用包：
 或签名复验失败时终止构建：
 
 ```powershell
-$env:FINESUB_AUTHENTICODE_PFX = "C:\secure\tuzibuqiahuluobo-code-signing.pfx"
-$env:FINESUB_AUTHENTICODE_PASSWORD = "<PFX 密码>"
+$env:YANAMI_SUB_AUTHENTICODE_PFX = "C:\secure\tuzibuqiahuluobo-code-signing.pfx"
+$env:YANAMI_SUB_AUTHENTICODE_PASSWORD = "<PFX 密码>"
 .\desktop\scripts\build-installer.ps1 `
-  -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist" `
+  -ApplicationDirectory ".\dist\bootstrap\Yanami Sub.dist" `
   -RequireAuthenticode
 ```
 
-也可以用 `FINESUB_AUTHENTICODE_THUMBPRINT` 指定当前用户证书库中的证书。时间戳默认
-使用 DigiCert，可通过 `FINESUB_AUTHENTICODE_TIMESTAMP_URL` 覆盖。自签名证书不会被
+也可以用 `YANAMI_SUB_AUTHENTICODE_THUMBPRINT` 指定当前用户证书库中的证书。时间戳默认
+使用 DigiCert，可通过 `YANAMI_SUB_AUTHENTICODE_TIMESTAMP_URL` 覆盖。自签名证书不会被
 当作可信发布证书接受。
 
 ## 发布（签名更新）
 
 **发布私钥不在仓库里，也不在本机构建流程里了**：它是 `release` environment 的
-secret `FINESUB_RELEASE_PRIVATE_KEY`，只有 `.github/workflows/release.yml` 用得到
-（本机 `secrets\finesub-desktop\finesub-release.pem` 留作离线备份）。这把密钥换不掉
+secret `YANAMI_SUB_RELEASE_PRIVATE_KEY`，只有 `.github/workflows/release.yml` 用得到
+（本机 `secrets\yanami-sub\finesub-release.pem` 留作离线备份）。这把密钥换不掉
 ——公钥钉死在已发货客户端里，换了等于让所有在野版本的应用内更新失效。代价是信任
 模型变了：谁能让一个 workflow 改动落到 `main`，谁就能签任意载荷，`release`
 environment 的 reviewer 是唯一的人工闸。
@@ -551,7 +551,9 @@ environment 的 reviewer 是唯一的人工闸。
 更新检查读的是 **GitHub Releases 列表里最新一个带签名 manifest 的 release**，
 不是 `/releases/latest`——这个仓库还发 CLI 快照和 patched CT2 wheel，仓库级的
 "latest" 会被它们顶掉（`is_desktop_release()`）。所以一个 release 要被桌面版
-认作更新，必须同时带 `update-manifest.json` 和 `update-manifest.sig`。
+认作更新，必须同时带 `yanami-sub-update-manifest.json` 和
+`yanami-sub-update-manifest.sig`。旧 FineSub Desktop 只识别旧文件名，因此不会误装
+首次改名的 RC3。
 
 CLI 与桌面**共用一个版本号、一个 tag、一个 Release**，由
 `test_the_cli_and_the_desktop_app_ship_one_version_number` 强制。更新服务按
@@ -573,7 +575,7 @@ CLI 与桌面**共用一个版本号、一个 tag、一个 Release**，由
 dev 的——别信文档口径，`git show v<版本>:desktop/backend/updater_main.py` 看实际
 发货物）。updater 现在把自己的 `DEFAULT_PRESERVED` 当作地板、与 request 取并集，
 旧服务只能扩展不能收窄；但**这只保护带新 updater 的安装**，在野旧安装的 runner 和
-request 都是旧代码。**v0.4.0 因此不带 update-manifest.json/.sig**（有意为之，不是
+request 都是旧代码。**v0.4.0 因此不带旧版 update-manifest.json/.sig**（有意为之，不是
 漏传）：旧版应用内更新一头是必然撞 Defender 扫描窗口的无重试搬移，另一头是成功后
 把 `tasks` 挪进日后会被清掉的 backup——两头都伤用户，让旧版在应用内静默看不到
 0.4.0，release notes 指引下载 Setup 覆盖安装（Inno 不动数据目录）。下一个版本恢复
@@ -603,14 +605,14 @@ updater。
 # 1. 产出 app/full 包 + 签名 manifest（版本号取自仓库根 VERSION）
 .\desktop\scripts\build-release.ps1 `
   -Version (Get-Content VERSION -Raw).Trim() `
-  -UpstreamDirectory "C:\src\finesub-v0.5.0" `
-  -KeyId finesub-release-2026 `
+  -UpstreamDirectory "C:\src\finesub-v0.5.1" `
+  -KeyId yanami-sub-release-2026 `
   -PrivateKeyPath <仓库外的 .pem> `
   -RequireAuthenticode
 
 # 2. Inno 安装器（README 引导新用户从 Release 下载它；full 包兼作 portable 下载）
 .\desktop\scripts\build-installer.ps1 `
-  -ApplicationDirectory ".\dist\bootstrap\FineSub Desktop.dist" `
+  -ApplicationDirectory ".\dist\bootstrap\Yanami Sub.dist" `
   -RequireAuthenticode
 
 # 3. 构建 CLI wheel（与桌面同版本同 Release；见 cli/README.md）
@@ -619,11 +621,11 @@ updater。
 # 4. 建 Release：前四个桌面资产缺一不可；Setup 与 CLI wheel 是面向新用户的
 #    下载入口（根 README 指向它们），一并上传
 gh release create "v$Version" `
-  dist\release\update-manifest.json `
-  dist\release\update-manifest.sig `
-  "dist\release\finesub-app-$Version-win-x64.zip" `
-  "dist\release\finesub-full-$Version-win-x64.zip" `
-  "dist\installer\FineSub-Desktop-$Version-Setup.exe" `
+  dist\release\yanami-sub-update-manifest.json `
+  dist\release\yanami-sub-update-manifest.sig `
+  "dist\release\yanami-sub-app-$Version-win-x64.zip" `
+  "dist\release\yanami-sub-full-$Version-win-x64.zip" `
+  "dist\installer\Yanami-Sub-$Version-Setup.exe" `
   "dist\cli\finesub-$Version-py3-none-any.whl"
 
 # 5. 同一个 wheel 发 PyPI（`uv tool install finesub` 的来源；token 存仓库外，

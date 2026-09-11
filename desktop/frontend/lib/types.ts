@@ -290,6 +290,19 @@ export interface BatchRequest {
   retry_failed: number;
 }
 
+export interface BatchManifestImportResult {
+  cancelled: boolean;
+  path: string | null;
+  request: BatchRequest | null;
+  ignored_fields: string[];
+}
+
+export interface BatchManifestExportResult {
+  cancelled: boolean;
+  path: string | null;
+  count: number;
+}
+
 export interface BatchItemSnapshot {
   index: number;
   input: string;
@@ -574,7 +587,7 @@ export interface UpdateInstallSnapshot {
   /** An app delta only swaps the version pointer: relaunch and it is live. */
   restart_required: boolean;
   /** A full package hands off to an external updater that replaces this
-   *  install, so FineSub has to quit before it can proceed. */
+   *  install, so Yanami Sub has to quit before it can proceed. */
   exit_required: boolean;
   error: string;
   started_at: number;
@@ -586,6 +599,8 @@ export interface DesktopApi {
   getDiagnostics(): Promise<DiagnosticsReport>;
   selectInputFile(): Promise<{ path: string | null }>;
   selectBatchFiles(): Promise<{ paths: string[] }>;
+  importBatchManifest(): Promise<BatchManifestImportResult>;
+  exportBatchManifest(request: BatchRequest): Promise<BatchManifestExportResult>;
   startTask(request: Partial<TaskRequest> & { input: string }): Promise<JobSnapshot>;
   cancelTask(taskId: string): Promise<JobSnapshot>;
   retryTask(taskId: string): Promise<JobSnapshot>;

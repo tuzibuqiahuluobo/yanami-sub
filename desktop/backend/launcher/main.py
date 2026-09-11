@@ -40,6 +40,8 @@ PUBLIC_BRIDGE_METHODS = (
     "get_diagnostics",
     "select_input_file",
     "select_batch_files",
+    "import_batch_manifest",
+    "export_batch_manifest",
     "start_task",
     "cancel_task",
     "retry_task",
@@ -582,7 +584,7 @@ def resolve_frontend_url(
     development_static = paths.root / "desktop" / "frontend" / "out" / "index.html"
     if development_static.is_file():
         return str(development_static.resolve())
-    raise FileNotFoundError("FineSub frontend out/index.html was not found")
+    raise FileNotFoundError("Yanami Sub frontend out/index.html was not found")
 
 
 def resolve_app_version(paths: AppPaths) -> str:
@@ -739,7 +741,7 @@ def create_application(
     session = session or SessionLog.disabled()
     root = resolve_application_root()
     paths = resolve_application_paths(root)
-    development_url = os.environ.get("FINESUB_DESKTOP_DEV_URL")
+    development_url = os.environ.get("YANAMI_SUB_DEV_URL")
     development = bool(development_url)
     installer = AppInstaller(paths)
     if not development:
@@ -778,9 +780,9 @@ def create_application(
     window = webview.create_window(PRODUCT_NAME, frontend_url, **window_options())
     bridge.window = window
     tray_icon_path = (
-        Path(getattr(sys, "_MEIPASS")) / "finesub-desktop.png"
+        Path(getattr(sys, "_MEIPASS")) / "yanami-sub.png"
         if getattr(sys, "frozen", False)
-        else root / "desktop" / "assets" / "source" / "finesub-desktop.png"
+        else root / "desktop" / "assets" / "source" / "yanami-sub.png"
     )
     tray = TrayController(window, tray_icon_path)
     bridge.tray = tray
@@ -843,6 +845,34 @@ def create_application(
         return [str(path) for path in (result or ())]
 
     bridge.batch_file_selector = select_batch_files
+
+    def select_batch_manifest() -> str | None:
+        result = window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            file_types=(
+                "FineSub 批次清单 (*.jsonl)",
+                "所有文件 (*.*)",
+            ),
+        )
+        return str(result[0]) if result else None
+
+    bridge.batch_manifest_selector = select_batch_manifest
+
+    def select_batch_manifest_export() -> str | None:
+        result = window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename="finesub-batch.jsonl",
+            file_types=(
+                "FineSub 批次清单 (*.jsonl)",
+                "所有文件 (*.*)",
+            ),
+        )
+        if not result:
+            return None
+        selected = result[0] if isinstance(result, (list, tuple)) else result
+        return str(selected)
+
+    bridge.batch_manifest_export_selector = select_batch_manifest_export
 
     def select_directory() -> str | None:
         result = window.create_file_dialog(webview.FileDialog.FOLDER)

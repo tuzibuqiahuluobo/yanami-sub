@@ -890,12 +890,12 @@ export function Settings({
             <div className="acknowledgment-info">
               <span className="acknowledgment-label">{t.settings.acknowledgment.github}</span>
               <a
-                href="https://github.com/tuzibuqiahuluobo/finesub-desktop"
+                href="https://github.com/tuzibuqiahuluobo/yanami-sub"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="acknowledgment-link"
               >
-                tuzibuqiahuluobo/finesub-desktop
+                tuzibuqiahuluobo/yanami-sub
                 <ExternalLink size={12} />
               </a>
             </div>
@@ -936,7 +936,7 @@ export function Settings({
           >
             <div className="docs-dialog-header">
               <div>
-                <span className="eyebrow">FineSub Desktop</span>
+                <span className="eyebrow">Yanami Sub</span>
                 <h3>{t.settings.acknowledgment.docs.title}</h3>
               </div>
               <button

@@ -156,7 +156,7 @@ export function Sidebar({
           </div>
         </div>
         <div className="sidebar-version">
-          <span>FineSub Desktop v{appVersion}</span>
+          <span>Yanami Sub v{appVersion}</span>
         </div>
       </div>
     </aside>

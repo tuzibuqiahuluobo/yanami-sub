@@ -1,1 +1,1 @@
-"""FineSub Desktop build and release tooling."""
+"""Yanami Sub build and release tooling."""

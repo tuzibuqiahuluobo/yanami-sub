@@ -70,7 +70,7 @@ def main() -> int:
     try:
         _wait_for_frontend(frontend)
         os.environ["FINESUB_APP_ROOT"] = str(REPOSITORY_ROOT)
-        os.environ["FINESUB_DESKTOP_DEV_URL"] = (
+        os.environ["YANAMI_SUB_DEV_URL"] = (
             f"http://{DEVELOPMENT_HOST}:{DEVELOPMENT_PORT}"
         )
         if str(REPOSITORY_ROOT) not in sys.path:

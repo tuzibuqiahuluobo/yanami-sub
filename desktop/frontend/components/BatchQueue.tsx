@@ -4,7 +4,9 @@ import {
   ArrowDown,
   ArrowUp,
   ExternalLink,
+  FileDown,
   FilePlus2,
+  FileUp,
   FolderOpen,
   Link2,
   ListRestart,
@@ -18,6 +20,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
 import { readProcessingDevice, requestDeviceFields } from "@/lib/processingDevice";
 import type {
+  BatchItemRequest,
   BatchRequest,
   BatchSnapshot,
   CapabilityState,
@@ -38,28 +41,16 @@ interface BatchQueueProps {
 }
 
 
-function addUnique(current: string[], incoming: string[]): string[] {
-  const seen = new Set(current.map((item) => item.toLocaleLowerCase()));
-  return [
-    ...current,
-    ...incoming
-      .map((item) => item.trim())
-      .filter((item) => item && !seen.has(item.toLocaleLowerCase()))
-      .filter((item) => {
-        seen.add(item.toLocaleLowerCase());
-        return true;
-      }),
-  ];
-}
-
-
 function sourceLabel(source: string): string {
-  try {
-    const url = new URL(source);
-    return url.hostname + (url.pathname === "/" ? "" : url.pathname);
-  } catch {
-    return source.split(/[\\/]/).pop() || source;
+  if (/^https?:\/\//i.test(source)) {
+    try {
+      const url = new URL(source);
+      return url.hostname + (url.pathname === "/" ? "" : url.pathname);
+    } catch {
+      // Fall back to a filename for malformed URLs.
+    }
   }
+  return source.split(/[\\/]/).pop() || source;
 }
 
 
@@ -71,14 +62,58 @@ export function BatchQueue({
   onOpenResources,
 }: BatchQueueProps) {
   const { t } = useLanguage();
-  const [sources, setSources] = useState<string[]>([]);
+  const [items, setItems] = useState<BatchItemRequest[]>([]);
   const [urlDraft, setUrlDraft] = useState("");
   const [snapshot, setSnapshot] = useState<BatchSnapshot | null>(null);
   const [history, setHistory] = useState<BatchSnapshot[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; action?: string | null } | null>(null);
   const [workers, setWorkers] = useState({ download: 2, asr: 1, llm: 2 });
+  const [asrQueueSize, setAsrQueueSize] = useState(4);
   const [retryFailed, setRetryFailed] = useState(1);
+  const [manifestBusy, setManifestBusy] = useState(false);
+  const [manifestNotice, setManifestNotice] = useState("");
+
+  const appendSources = (incoming: string[]) => {
+    const device = requestDeviceFields(readProcessingDevice());
+    setItems((current) => {
+      const seen = new Set(current.map((item) => item.input.toLocaleLowerCase()));
+      const inputs = incoming
+        .map((item) => item.trim())
+        .filter((item) => item && !seen.has(item.toLocaleLowerCase()))
+        .filter((item) => {
+          seen.add(item.toLocaleLowerCase());
+          return true;
+        });
+      const nextPriority = current.length
+        ? Math.min(...current.map((item) => item.priority)) - 1
+        : inputs.length;
+      const added = inputs.map((input, index) => ({
+        ...request,
+        ...device,
+        input,
+        output: null,
+        name: "",
+        group: "",
+        priority: nextPriority - index,
+      }));
+      return [...current, ...added];
+    });
+  };
+
+  const batchRequest = (rows: BatchItemRequest[]): BatchRequest => {
+    const device = requestDeviceFields(readProcessingDevice());
+    return {
+      items: rows.map((item) => ({
+        ...item,
+        ...device,
+        output: null,
+      })),
+      workers,
+      asr_queue_size: asrQueueSize,
+      retry_failed: retryFailed,
+    };
+  };
 
   const refreshHistory = async () => {
     try {
@@ -143,7 +178,7 @@ export function BatchQueue({
     setError(null);
     try {
       const result = await desktopApi.selectBatchFiles();
-      setSources((current) => addUnique(current, result.paths));
+      appendSources(result.paths);
     } catch (caught) {
       setError({ message: caught instanceof Error ? caught.message : t.batch.errors.select });
     }
@@ -151,40 +186,75 @@ export function BatchQueue({
 
   const addUrls = () => {
     const rows = urlDraft.split(/\r?\n/).map((item) => item.trim()).filter(Boolean);
-    setSources((current) => addUnique(current, rows));
+    appendSources(rows);
     setUrlDraft("");
   };
 
   const move = (index: number, offset: number) => {
     const target = index + offset;
-    if (target < 0 || target >= sources.length) return;
-    setSources((current) => {
+    if (target < 0 || target >= items.length) return;
+    setItems((current) => {
       const next = [...current];
       [next[index], next[target]] = [next[target], next[index]];
-      return next;
+      return next.map((item, rowIndex) => ({
+        ...item,
+        priority: next.length - rowIndex,
+      }));
     });
   };
 
+  const importManifest = async () => {
+    setManifestBusy(true);
+    setError(null);
+    setManifestNotice("");
+    try {
+      const result = await desktopApi.importBatchManifest();
+      if (result.cancelled || !result.request) return;
+      setItems(result.request.items);
+      setWorkers(result.request.workers);
+      setAsrQueueSize(result.request.asr_queue_size);
+      setRetryFailed(result.request.retry_failed);
+      const { input, group, priority, ...shared } = result.request.items[0];
+      onRequestChange(shared);
+      setManifestNotice(
+        result.ignored_fields.length
+          ? t.batch.manifestImportedIgnored
+              .replace("{count}", String(result.request.items.length))
+              .replace("{fields}", result.ignored_fields.join(", "))
+          : t.batch.manifestImported.replace("{count}", String(result.request.items.length)),
+      );
+      void input;
+      void group;
+      void priority;
+    } catch (caught) {
+      setError({ message: caught instanceof Error ? caught.message : t.batch.errors.manifestImport });
+    } finally {
+      setManifestBusy(false);
+    }
+  };
+
+  const exportManifest = async (payload: BatchRequest) => {
+    setManifestBusy(true);
+    setError(null);
+    setManifestNotice("");
+    try {
+      const result = await desktopApi.exportBatchManifest(payload);
+      if (!result.cancelled) {
+        setManifestNotice(t.batch.manifestExported.replace("{path}", result.path ?? ""));
+      }
+    } catch (caught) {
+      setError({ message: caught instanceof Error ? caught.message : t.batch.errors.manifestExport });
+    } finally {
+      setManifestBusy(false);
+    }
+  };
+
   const start = async () => {
-    if (!sources.length) return;
+    if (!items.length) return;
     setBusy(true);
     setError(null);
     try {
-      const device = requestDeviceFields(readProcessingDevice());
-      const payload: BatchRequest = {
-        items: sources.map((input, index) => ({
-          ...request,
-          ...device,
-          input,
-          output: null,
-          name: "",
-          group: "",
-          priority: sources.length - index,
-        })),
-        workers,
-        asr_queue_size: 4,
-        retry_failed: retryFailed,
-      };
+      const payload = batchRequest(items);
       setSnapshot(await desktopApi.startBatch(payload));
       void refreshHistory();
     } catch (caught) {
@@ -235,12 +305,20 @@ export function BatchQueue({
           <p>{t.batch.description}</p>
         </div>
         {snapshot ? (
-          <button type="button" className="button button-secondary" onClick={() => void desktopApi.openBatchDirectory(snapshot.batch_id)}>
-            <FolderOpen size={15} />
-            {t.batch.openFolder}
-          </button>
+          <div className="batch-heading-actions">
+            <button type="button" className="button button-secondary" disabled={manifestBusy} onClick={() => void exportManifest(snapshot.request)}>
+              <FileUp size={15} />
+              {t.batch.exportManifest}
+            </button>
+            <button type="button" className="button button-secondary" onClick={() => void desktopApi.openBatchDirectory(snapshot.batch_id)}>
+              <FolderOpen size={15} />
+              {t.batch.openFolder}
+            </button>
+          </div>
         ) : null}
       </header>
+
+      {manifestNotice ? <div className="batch-manifest-notice" role="status">{manifestNotice}</div> : null}
 
       {showBuilder ? (
         <div className="batch-layout">
@@ -250,10 +328,20 @@ export function BatchQueue({
                 <h2>{t.batch.sourcesTitle}</h2>
                 <p>{t.batch.sourcesHint}</p>
               </div>
-              <button type="button" className="button button-secondary" onClick={() => void selectFiles()}>
-                <FilePlus2 size={15} />
-                {t.batch.addFiles}
-              </button>
+              <div className="batch-heading-actions">
+                <button type="button" className="button button-secondary" disabled={manifestBusy} onClick={() => void importManifest()}>
+                  <FileDown size={15} />
+                  {t.batch.importManifest}
+                </button>
+                <button type="button" className="button button-secondary" disabled={!items.length || manifestBusy} onClick={() => void exportManifest(batchRequest(items))}>
+                  <FileUp size={15} />
+                  {t.batch.exportManifest}
+                </button>
+                <button type="button" className="button button-secondary" onClick={() => void selectFiles()}>
+                  <FilePlus2 size={15} />
+                  {t.batch.addFiles}
+                </button>
+              </div>
             </div>
 
             <div className="batch-url-row">
@@ -269,19 +357,19 @@ export function BatchQueue({
               </button>
             </div>
 
-            {sources.length ? (
+            {items.length ? (
               <ol className="batch-source-list">
-                {sources.map((source, index) => (
-                  <li key={source}>
+                {items.map((item, index) => (
+                  <li key={`${index}:${item.input}`}>
                     <span className="batch-source-index">{index + 1}</span>
-                    <span className="batch-source-name" title={source}>
-                      <strong>{sourceLabel(source)}</strong>
-                      <small>{source}</small>
+                    <span className="batch-source-name" title={item.input}>
+                      <strong>{sourceLabel(item.input)}</strong>
+                      <small>{item.input}</small>
                     </span>
                     <span className="batch-source-actions">
                       <button type="button" aria-label={t.batch.moveUp} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={14} /></button>
-                      <button type="button" aria-label={t.batch.moveDown} disabled={index === sources.length - 1} onClick={() => move(index, 1)}><ArrowDown size={14} /></button>
-                      <button type="button" aria-label={t.batch.remove} onClick={() => setSources((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={14} /></button>
+                      <button type="button" aria-label={t.batch.moveDown} disabled={index === items.length - 1} onClick={() => move(index, 1)}><ArrowDown size={14} /></button>
+                      <button type="button" aria-label={t.batch.remove} onClick={() => setItems((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={14} /></button>
                     </span>
                   </li>
                 ))}
@@ -298,7 +386,10 @@ export function BatchQueue({
               routing={routing}
               disabled={busy}
               batchMode
-              onChange={onRequestChange}
+              onChange={(changes) => {
+                onRequestChange(changes);
+                setItems((current) => current.map((item) => ({ ...item, ...changes })));
+              }}
             />
 
             <div className="batch-workers">
@@ -328,8 +419,8 @@ export function BatchQueue({
             ) : null}
 
             <div className="task-actions">
-              <div><strong>{t.batch.ready.replace("{count}", String(sources.length))}</strong><span>{t.batch.priorityHint}</span></div>
-              <button type="button" className="button button-primary" disabled={!sources.length || busy} onClick={() => void start()}>
+              <div><strong>{t.batch.ready.replace("{count}", String(items.length))}</strong><span>{t.batch.priorityHint}</span></div>
+              <button type="button" className="button button-primary" disabled={!items.length || busy} onClick={() => void start()}>
                 <Play size={15} />
                 {busy ? t.batch.starting : t.batch.start}
               </button>
@@ -374,7 +465,7 @@ export function BatchQueue({
           </div>
 
           <div className="task-actions">
-            <button type="button" className="button button-secondary" disabled={snapshot.state === "running"} onClick={() => { setSnapshot(null); setSources([]); setError(null); }}>
+            <button type="button" className="button button-secondary" disabled={snapshot.state === "running"} onClick={() => { setSnapshot(null); setItems([]); setAsrQueueSize(4); setError(null); setManifestNotice(""); }}>
               <FilePlus2 size={15} />{t.batch.newBatch}
             </button>
           </div>

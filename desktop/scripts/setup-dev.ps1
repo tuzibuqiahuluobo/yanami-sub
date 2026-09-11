@@ -58,7 +58,7 @@ finally {
     Pop-Location
 }
 
-Write-Host "FineSub desktop development dependencies are ready."
+Write-Host "Yanami Sub development dependencies are ready."
 if ($InstallPipeline) {
     Write-Host "The complete locked ASR and translation runtime is installed."
 }

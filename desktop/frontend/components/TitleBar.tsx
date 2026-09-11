@@ -24,7 +24,7 @@ export function TitleBar({ api }: { api: DesktopApi }) {
           alt=""
           draggable={false}
         />
-        <span>FineSub Desktop</span>
+        <span>Yanami Sub</span>
       </div>
       <div
         className="titlebar-drag pywebview-drag-region"

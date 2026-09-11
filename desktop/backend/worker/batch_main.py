@@ -202,10 +202,10 @@ def main() -> int:
         raise ValueError("batch request is missing")
     request = BatchRequest.model_validate_json(request_line)
     batch_root = Path(
-        os.environ.get("FINESUB_DESKTOP_BATCH_ROOT", "")
+        os.environ.get("YANAMI_SUB_BATCH_ROOT", "")
     ).expanduser()
     if not str(batch_root) or str(batch_root) == ".":
-        raise RuntimeError("FINESUB_DESKTOP_BATCH_ROOT is required")
+        raise RuntimeError("YANAMI_SUB_BATCH_ROOT is required")
     batch_root.mkdir(parents=True, exist_ok=True)
 
     protocol_output = sys.stdout

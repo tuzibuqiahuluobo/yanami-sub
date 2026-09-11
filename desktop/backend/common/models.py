@@ -302,7 +302,7 @@ class UpdateInstallSnapshot(DesktopModel):
     bytes_per_second: float = 0
     # An "app" update swaps the version pointer, so the running launcher keeps
     # its process and only needs a restart. A "full" update hands control to an
-    # external updater that replaces this install, so FineSub has to exit for it
+    # external updater that replaces this install, so Yanami Sub has to exit for it
     # to proceed -- a different ask of the user, hence two flags rather than one.
     restart_required: bool = False
     exit_required: bool = False

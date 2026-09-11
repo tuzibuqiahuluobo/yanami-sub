@@ -236,7 +236,7 @@ def _run_cli(kind: str, command: str, args: list[str], content: str = "") -> dic
     if kind == "maintenance" and command == "edit":
         if len(args) != 1:
             raise ValueError("edit requires exactly one entry name")
-        with tempfile.TemporaryDirectory(prefix="finesub-desktop-kb-") as temporary:
+        with tempfile.TemporaryDirectory(prefix="yanami-sub-kb-") as temporary:
             edit_file = Path(temporary) / "entry.md"
             edit_file.write_text(content, encoding="utf-8")
             exit_code, output = execute([*argv, "--file", str(edit_file)])
