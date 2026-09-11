@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 from types import SimpleNamespace
 
 from finesub.scheduler import BatchItem, ItemResult
@@ -14,6 +15,7 @@ from desktop.backend.worker import batch_main
 def test_batch_worker_uses_core_scheduler_and_isolates_a_bad_item(
     monkeypatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setitem(sys.modules, "finesub.pipeline", None)
     good = tmp_path / "good.wav"
     bad = tmp_path / "missing.wav"
     good.write_bytes(b"audio")
@@ -59,13 +61,6 @@ def test_batch_worker_uses_core_scheduler_and_isolates_a_bad_item(
         kwargs["publish"](items, results)
         return results
 
-    monkeypatch.setattr("finesub.pipeline.build_item", build_item)
-    monkeypatch.setattr("finesub.scheduler.run_batch", run_batch)
-    monkeypatch.setattr(
-        "finesub.stages.default_pipeline_paths",
-        lambda *_args, **_kwargs: SimpleNamespace(final_srt=tmp_path / "internal.srt"),
-    )
-
     def publish_output(*_args, **_kwargs):
         published_file.write_text("subtitle", encoding="utf-8")
         return {"rawSrt": str(published_file)}
@@ -78,6 +73,12 @@ def test_batch_worker_uses_core_scheduler_and_isolates_a_bad_item(
         batch_id="batch-test",
         batch_root=tmp_path / "batch",
         emit=events.append,
+        build_item=build_item,
+        run_batch=run_batch,
+        default_pipeline_paths=lambda *_args, **_kwargs: SimpleNamespace(
+            final_srt=tmp_path / "internal.srt"
+        ),
+        claims=object(),
     )
 
     assert [item.state for item in final] == ["done", "failed"]
@@ -105,25 +106,18 @@ def test_batch_worker_reuses_a_still_present_published_output(
     )
     request = BatchRequest.model_validate({"items": [{"input": str(source)}]})
 
-    monkeypatch.setattr(
-        "finesub.pipeline.build_item",
-        lambda options, *, claims: BatchItem(
+    def build_item(options, *, claims):
+        return BatchItem(
             label=source.name,
             stages={},
             payload={"audio": source, "output": options.get("output")},
-        ),
-    )
+        )
 
     def run_batch(items, **kwargs):
         results = [ItemResult(label=items[0].label, status="done", payload=items[0].payload)]
         kwargs["publish"](items, results)
         return results
 
-    monkeypatch.setattr("finesub.scheduler.run_batch", run_batch)
-    monkeypatch.setattr(
-        "finesub.stages.default_pipeline_paths",
-        lambda *_args, **_kwargs: SimpleNamespace(final_srt=tmp_path / "internal.srt"),
-    )
     publish_calls: list[object] = []
     monkeypatch.setattr(
         batch_main,
@@ -136,6 +130,12 @@ def test_batch_worker_reuses_a_still_present_published_output(
         batch_id="batch-test",
         batch_root=batch_root,
         emit=lambda _event: None,
+        build_item=build_item,
+        run_batch=run_batch,
+        default_pipeline_paths=lambda *_args, **_kwargs: SimpleNamespace(
+            final_srt=tmp_path / "internal.srt"
+        ),
+        claims=object(),
     )
 
     assert publish_calls == []

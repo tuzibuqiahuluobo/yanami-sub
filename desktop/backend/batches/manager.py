@@ -57,6 +57,26 @@ _DESKTOP_ROW_FIELDS = {
 _BATCH_OPTION_FIELDS = {"workers", "asr_queue_size", "retry_failed"}
 
 
+def _read_manifest_rows(path: Path) -> list[dict[str, Any]]:
+    """Parse the core JSONL shape without importing its GPU pipeline."""
+
+    rows: list[dict[str, Any]] = []
+    for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            row = json.loads(line)
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                f"manifest line {line_number} is not valid JSON: {error}"
+            ) from error
+        if not isinstance(row, dict):
+            raise ValueError(f"manifest line {line_number} must be a JSON object")
+        rows.append(row)
+    return rows
+
+
 class BatchAlreadyRunning(RuntimeError):
     pass
 
@@ -208,22 +228,17 @@ class BatchManager:
         """Read a core-compatible JSONL manifest without accepting owned paths."""
 
         from finesub.batch_state import strip_view_keys
-        from finesub.pipeline import merge_item_options, read_manifest
 
         source = Path(path).expanduser().resolve()
         if source.stat().st_size > 8 * 1024 * 1024:
             raise ValueError("批次清单不能超过 8 MB。")
-        rows = read_manifest(source)
+        rows = _read_manifest_rows(source)
         items: list[BatchItemRequest] = []
         ignored: set[str] = set()
         batch_options: dict[str, Any] = {}
         for index, raw in enumerate(rows, 1):
             desktop = raw.get("_desktop") if isinstance(raw.get("_desktop"), dict) else {}
             row = strip_view_keys(raw)
-            try:
-                merge_item_options(row, {})
-            except ValueError as error:
-                raise ValueError(f"批次清单第 {index} 行无效：{error}") from error
             for field in _MANAGED_MANIFEST_FIELDS & row.keys():
                 ignored.add(field)
                 row.pop(field, None)

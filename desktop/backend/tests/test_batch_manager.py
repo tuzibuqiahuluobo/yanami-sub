@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from io import StringIO
+import json
 from pathlib import Path
+import sys
 import time
 
 import pytest
@@ -155,9 +157,10 @@ def test_batch_output_root_can_move_only_while_idle(tmp_path: Path) -> None:
     assert manager.output_root == (tmp_path / "new").resolve()
 
 
-def test_batch_manifest_round_trip_is_core_compatible(tmp_path: Path) -> None:
-    from finesub.pipeline import read_manifest
-
+def test_batch_manifest_round_trip_is_core_compatible(
+    monkeypatch, tmp_path: Path
+) -> None:
+    monkeypatch.setitem(sys.modules, "finesub.pipeline", None)
     manager = BatchManager(
         python_executable="python.exe",
         worker_env={},
@@ -188,7 +191,11 @@ def test_batch_manifest_round_trip_is_core_compatible(tmp_path: Path) -> None:
     destination = tmp_path / "batch.jsonl"
 
     exported = manager.export_manifest(destination, request)
-    core_rows = read_manifest(destination)
+    core_rows = [
+        json.loads(line)
+        for line in destination.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
     imported, ignored = manager.import_manifest(destination)
 
     assert exported == {"path": str(destination.resolve()), "count": 1}

@@ -77,14 +77,27 @@ def run_batch_request(
     batch_id: str,
     batch_root: Path,
     emit,
+    build_item=None,
+    run_batch=None,
+    default_pipeline_paths=None,
+    claims=None,
 ) -> list[BatchItemSnapshot]:
-    from finesub.pipeline import OutputClaims, build_item
-    from finesub.scheduler import run_batch
-    from finesub.stages import default_pipeline_paths
+    if build_item is None or claims is None:
+        from finesub.pipeline import OutputClaims, build_item as core_build_item
+
+        build_item = build_item or core_build_item
+        claims = claims or OutputClaims()
+    if run_batch is None:
+        from finesub.scheduler import run_batch as core_run_batch
+
+        run_batch = core_run_batch
+    if default_pipeline_paths is None:
+        from finesub.stages import default_pipeline_paths as core_pipeline_paths
+
+        default_pipeline_paths = core_pipeline_paths
 
     batch_root.mkdir(parents=True, exist_ok=True)
     workers = request.workers.model_dump(mode="python")
-    claims = OutputClaims()
     items = []
     llm_model = request.items[0].llm_model
     with _routing_override(llm_model):
