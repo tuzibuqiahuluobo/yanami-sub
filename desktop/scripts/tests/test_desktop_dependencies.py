@@ -68,6 +68,7 @@ def test_desktop_extra_declares_every_direct_python_dependency() -> None:
         "pydantic",
         "pystray",
         "pywebview",
+        "tzdata",
     }
 
     development = document["project"]["optional-dependencies"]["dev"]
