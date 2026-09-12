@@ -165,6 +165,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "install_resource",
         "get_resource_install",
         "list_resource_installs",
+        "get_resource_statuses",
         "pause_resource_install",
         "open_resource_location",
         "rescan_gpus",

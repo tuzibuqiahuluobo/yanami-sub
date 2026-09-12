@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from finesub import config as app_config
-from desktop.backend.common.models import RoutingUpdate
+from desktop.backend.common.models import RoutingUpdate, TaskRequest
 from desktop.backend.settings.store import SettingsStore
 from finesub_bootstrap import secrets
 from finesub.llm.routing.api_keys import (
@@ -301,6 +301,28 @@ def test_paid_gemini_alone_enables_translation_and_reaches_the_worker(
     assert store.get_capabilities().translation is True
     assert store.validate_stage("final-srt") is None
     assert store.build_worker_env() == {"GEMINI_PAID": "paid-only"}
+
+
+def test_native_retrieval_requires_a_configured_native_search_route(
+    tmp_path: Path,
+):
+    store = SettingsStore(tmp_path)
+    store._read_keys = lambda: {"GEMINI_FREE": "free-only"}  # type: ignore[method-assign]
+    request = TaskRequest(input="D:/media/a.mp4", stage="final-srt", llm_retrieval="native")
+
+    error = store.validate_request(request)
+
+    assert error is not None
+    assert error.code == "native_search_unavailable"
+    assert error.action == "open_settings"
+
+
+def test_paid_native_route_passes_the_launch_guard(tmp_path: Path):
+    store = SettingsStore(tmp_path)
+    store._read_keys = lambda: {"GEMINI_PAID": "paid-only"}  # type: ignore[method-assign]
+    request = TaskRequest(input="D:/media/a.mp4", stage="final-srt", llm_retrieval="native")
+
+    assert store.validate_request(request) is None
 
 
 def test_routing_settings_are_projected_from_the_core_catalog(tmp_path: Path) -> None:

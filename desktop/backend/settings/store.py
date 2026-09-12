@@ -73,6 +73,114 @@ class SettingsStore:
             action="open_settings",
         )
 
+    def validate_request(self, request) -> BridgeError | None:
+        """Validate launch-time capabilities before the worker starts."""
+
+        stage_error = self.validate_stage(request.stage, request.llm_model)
+        if stage_error is not None:
+            return stage_error
+        if request.stage not in {"translated-srt", "final-srt"}:
+            return None
+        try:
+            from finesub.llm.routing.capabilities import (
+                CapabilityUnavailableError,
+                validate_profile_capabilities,
+            )
+            from finesub.llm.routing.profiles import (
+                SwitchConflictError,
+                resolve_profile,
+            )
+            from finesub.llm.routing.model_routes import (
+                install_runtime_preferred,
+                parse_llm_model_args,
+                runtime_preferred,
+            )
+        except (ImportError, OSError, RuntimeError):
+            # Keep the settings panel usable if an optional core module is not
+            # available; the worker will report the concrete import error.
+            return None
+
+        previous_routes = runtime_preferred()
+        try:
+            install_runtime_preferred(parse_llm_model_args(request.llm_model))
+            profile = resolve_profile(
+                media=request.llm_media,
+                retrieval=request.llm_retrieval,
+                difficulty=request.llm_difficulty,
+                continuity=request.llm_continuity,
+                correction_media=request.llm_correction_media,
+                planning_media=request.llm_planning_media,
+                output_scale=request.llm_output_scale,
+            )
+            if request.llm_retrieval == "native" and not self._has_native_route(
+                profile,
+                fast_enabled=request.llm_fast == "on",
+            ):
+                return BridgeError(
+                    code="native_search_unavailable",
+                    message=(
+                        "当前模型不支持原生联网搜索。请将检索改为“本地检索”，"
+                        "或在设置中选择支持原生搜索的模型。"
+                    ),
+                    action="open_settings",
+                )
+            validate_profile_capabilities(
+                profile,
+                fast_enabled=request.llm_fast == "on",
+            )
+        except CapabilityUnavailableError as error:
+            if (
+                request.llm_retrieval != "native"
+                or "native_search" not in str(error)
+            ):
+                return BridgeError(
+                    code="capability_unavailable",
+                    message="当前翻译配置没有可用的模型，请在设置中检查路由或 API Key。",
+                    action="open_settings",
+                )
+            return BridgeError(
+                code="native_search_unavailable",
+                message=(
+                    "当前模型不支持原生联网搜索。请将检索改为“本地检索”，"
+                    "或在设置中选择支持原生搜索的模型。"
+                ),
+                action="open_settings",
+            )
+        except SwitchConflictError as error:
+            return BridgeError(code="invalid_request", message=str(error))
+        except (ImportError, OSError, RuntimeError, ValueError):
+            # A malformed custom route remains the core's responsibility; the
+            # key/stage guard above still prevents the common misconfiguration.
+            return None
+        finally:
+            install_runtime_preferred(previous_routes)
+        return None
+
+    def _has_native_route(self, profile, *, fast_enabled: bool) -> bool:
+        """Whether a native-search chain has both the tool and a real key."""
+
+        from finesub.llm.routing.capabilities import required_chains
+        from finesub.llm.routing.model_routes import default_model_routes
+
+        routes = default_model_routes()
+        keys = self._read_keys()
+        for requirement in required_chains(profile, fast_enabled=fast_enabled):
+            if not requirement.needs_native_search:
+                continue
+            for endpoint in requirement.endpoints:
+                if not endpoint.native_search_tool:
+                    continue
+                if endpoint.backend in {"local_agent", "conversational_agent"}:
+                    return True
+                try:
+                    provider = routes.provider_for_target(endpoint.target_id)
+                except (KeyError, ValueError):
+                    continue
+                env_name = provider.key_env or endpoint.provider_tier
+                if keys.get(env_name):
+                    return True
+        return False
+
     def _has_llm_route(
         self,
         keys: dict[str, str],

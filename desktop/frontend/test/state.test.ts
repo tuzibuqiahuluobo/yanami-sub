@@ -97,6 +97,48 @@ test("bootstrap restores an active worker task and its progress", () => {
 });
 
 
+test("task polling adds work started outside the current renderer", () => {
+  const next = reduceAppState(initialState, {
+    type: "tasksLoaded",
+    tasks: [
+      {
+        task_id: "api-task",
+        state: "running",
+        events: [],
+        updated_at: 20,
+      },
+    ],
+  });
+
+  assert.equal(next.history[0]?.task_id, "api-task");
+  assert.equal(next.history[0]?.state, "running");
+});
+
+
+test("a resource refresh replaces optimistic install state", () => {
+  const next = reduceAppState(
+    {
+      ...initialState,
+      resources: [{ id: "ffmpeg", version: "2", state: "downloading" }],
+    },
+    {
+      type: "resourcesLoaded",
+      resources: [
+        {
+          id: "ffmpeg",
+          version: "2",
+          installed_version: "2",
+          state: "ready",
+        },
+      ],
+    },
+  );
+
+  assert.equal(next.resources[0]?.state, "ready");
+  assert.equal(next.resources[0]?.installed_version, "2");
+});
+
+
 test("stages reported as reused are remembered as such", () => {
   // A rerun skips whatever is already on disk. Ticking those the same way as
   // work that just happened would tell the user the run redid it.

@@ -522,6 +522,16 @@ def test_resource_install_refreshes_worker_context(tmp_path: Path) -> None:
     assert jobs.worker_context.environment["FINESUB_MODEL_DIR"] == "C:/FineSub/models"
 
 
+def test_resource_status_refresh_uses_authoritative_catalog(tmp_path: Path) -> None:
+    bridge, _ = _bridge(tmp_path)
+
+    result = bridge.get_resource_statuses()
+
+    assert result["ok"] is True
+    assert result["data"][0]["id"] == "ffmpeg"
+    assert result["data"][0]["state"] == "ready"
+
+
 def test_update_check_opens_release_page_without_installing(
     tmp_path: Path,
 ) -> None:

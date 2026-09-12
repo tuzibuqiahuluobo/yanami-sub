@@ -85,3 +85,15 @@ def test_empty_lines_are_not_events() -> None:
     writer.write("\n\nkept\n")
 
     assert emitted == ["kept"]
+
+
+def test_known_accelerator_fallbacks_are_file_only_debug_events() -> None:
+    events = []
+    writer = EventLogWriter("task-1", events.append)
+
+    writer.write("AOTInductorStreamHandle API failed; falling back to eager\n")
+    writer.write("OutOfResources: shared memory required 128KiB\n")
+
+    assert [event.type for event in events] == ["debug", "debug"]
+    assert events[0].payload["message"].startswith("AOTInductorStreamHandle")
+    assert events[1].payload["message"].startswith("OutOfResources")

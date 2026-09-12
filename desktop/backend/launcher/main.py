@@ -58,6 +58,7 @@ PUBLIC_BRIDGE_METHODS = (
     "install_resource",
     "get_resource_install",
     "list_resource_installs",
+    "get_resource_statuses",
     "pause_resource_install",
     "open_resource_location",
     "rescan_gpus",

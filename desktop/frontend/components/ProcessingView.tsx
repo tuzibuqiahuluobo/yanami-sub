@@ -11,7 +11,11 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { downloadText, formatDuration } from "@/lib/formatters";
+import {
+  downloadText,
+  formatDuration,
+  summarizeTaskError,
+} from "@/lib/formatters";
 import type { TaskState } from "@/lib/state";
 import type { PipelineStage } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
@@ -115,9 +119,9 @@ export function ProcessingView({
                 : t.processing.currentStage}
             </p>
             <h2>{headline}</h2>
-            <span>
+            <span title={task.phase === "failed" ? task.error?.message : undefined}>
               {task.phase === "failed"
-                ? task.error?.message
+                ? summarizeTaskError(task.error?.message)
                 : task.statusMessage || t.processing.initializing}
             </span>
           </div>

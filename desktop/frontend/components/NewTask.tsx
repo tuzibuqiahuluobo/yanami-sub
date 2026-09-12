@@ -2,7 +2,7 @@
 
 import { ArrowRight, ShieldCheck } from "lucide-react";
 
-import { invalidOutputName } from "@/lib/formatters";
+import { invalidOutputName, summarizeTaskError } from "@/lib/formatters";
 import { blockingResources } from "@/lib/resources";
 import { reusableAsrTask } from "@/lib/reuse";
 import type { AppState } from "@/lib/state";
@@ -153,7 +153,9 @@ export function NewTask({
 
           {state.task.error ? (
             <div className="error-banner" role="alert">
-              <strong>{state.task.error.message}</strong>
+              <strong title={state.task.error.message}>
+                {summarizeTaskError(state.task.error.message)}
+              </strong>
               {state.task.error.code === "api_key_required" ? (
                 <span>{t.newTask.apiKeyError}</span>
               ) : null}

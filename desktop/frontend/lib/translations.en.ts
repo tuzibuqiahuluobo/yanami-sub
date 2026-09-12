@@ -110,7 +110,7 @@ export const en: Translations = {
     },
     routing: {
       title: "Model Routing & Local Agents",
-      description: "Uses FineSub core presets, policies, and model catalog directly; Desktop writes only core-validated scalar settings.",
+      description: "Uses upstream core presets, policies, and model catalog directly; Desktop writes only core-validated scalar settings.",
       agentRoute: "Includes local agents",
       apiRoute: "API route",
       preset: "Routing preset",
@@ -247,7 +247,7 @@ export const en: Translations = {
       passed: "Passed",
       failed: "Needs attention",
       desktopVersion: "Desktop",
-      coreVersion: "FineSub core",
+      coreVersion: "Upstream core",
       freeSpace: "Big-data free space",
       taskState: "Task state",
       taskRunning: "Task running",
@@ -278,7 +278,7 @@ export const en: Translations = {
       purged: "Rebuildable data was removed. Tasks and personal settings were preserved.",
       failed: "Storage maintenance failed. Please retry.",
       purgeTitle: "Clear rebuildable data?",
-      purgeDescription: "This removes the Python runtime, download cache, model weights, and local-agent capsules. FineSub can download them again later.",
+      purgeDescription: "This removes the Python runtime, download cache, model weights, and local-agent capsules. Yanami Sub can download them again later.",
       purgePreserves: "Completed subtitles, task history, API keys, appearance settings, and other personal data are preserved.",
       purgeConfirm: "Clear data",
     },
@@ -289,7 +289,7 @@ export const en: Translations = {
     items: {
       uv: {
         title: "Python Runtime",
-        detail: "Installs and isolates FineSub's Python and AI dependencies",
+        detail: "Installs and isolates Yanami Sub's Python and AI dependencies",
       },
       ffmpeg: {
         title: "FFmpeg Media Component",
@@ -313,7 +313,7 @@ export const en: Translations = {
       },
       unknown: {
         title: "",
-        detail: "FineSub runtime resource",
+        detail: "Yanami Sub runtime resource",
       },
     },
     blockedBy: "Install {resource} first",
@@ -348,15 +348,15 @@ export const en: Translations = {
     },
     modelNote: {
       title: "How are models managed?",
-      description: "Model weights -- speech recognition large-v3-turbo ~1.6 GB, BS-RoFormer vocal separation ~0.6 GB, Qwen3-ASR second-model verification ~1.5 GB -- are downloaded by FineSub the first time each is needed and saved to the models directory. They survive app updates, and a stage you never run never fetches its model.",
+      description: "Model weights -- speech recognition large-v3-turbo ~1.6 GB, BS-RoFormer vocal separation ~0.6 GB, Qwen3-ASR second-model verification ~1.5 GB -- are downloaded by Yanami Sub the first time each is needed and saved to the models directory. They survive app updates, and a stage you never run never fetches its model.",
     },
     sourceNote: {
       title: "Download and mirror strategy",
-      description: "FineSub scans local disks first and verifies matching resources by size and SHA-256. It downloads only missing or mismatched versions. Python dependencies on mainland China routes automatically use the Tsinghua TUNA mirror, with the official source as fallback.",
+      description: "Yanami Sub scans local disks first and verifies matching resources by size and SHA-256. It downloads only missing or mismatched versions. Python dependencies on mainland China routes automatically use the Tsinghua TUNA mirror, with the official source as fallback.",
     },
     confirm: {
       title: "Confirm Resource Setup",
-      message: "FineSub will search this PC for the same {name} version first; otherwise it may download up to {size}.",
+      message: "Yanami Sub will search this PC for the same {name} version first; otherwise it may download up to {size}.",
       warning: "A local file is reused only after its version and SHA-256 pass verification. Please ensure sufficient disk space.",
       cancel: "Cancel",
       startDownload: "Start Installation",
@@ -373,7 +373,7 @@ export const en: Translations = {
     title: "New Task",
     kicker: "NEW TASK",
     pageTitle: "Generate Clean Subtitles",
-    pageDescription: "Select a media file. FineSub will separate, recognize, and organize subtitles locally.",
+    pageDescription: "Select a media file. Yanami Sub will separate, recognize, and organize subtitles locally.",
     pageDescriptionCloud: "Separation and recognition run locally; correction and translation use Gemini.",
     privacyNote: "Media files are processed locally only",
     privacyNoteCloud: "Translation uploads only the required media clips to Gemini",
@@ -436,11 +436,11 @@ export const en: Translations = {
       // Advanced settings
       advanced: "Advanced Settings",
       advancedSpeech: "Advanced speech recognition",
-      advancedSpeechHint: "Blank values and Follow core settings use FineSub configuration and defaults.",
+      advancedSpeechHint: "Blank values and Follow core settings use upstream core configuration and defaults.",
       expertStage: "Expert output stage",
       expertCurrent: "Expert stage",
       advancedLlm: "Advanced correction and translation",
-      advancedLlmHint: "These options are passed directly to FineSub correction, translation, and knowledge stages.",
+      advancedLlmHint: "These options are passed directly to upstream core correction, translation, and knowledge stages.",
       modelOverrides: "Per-task model overrides",
       modelOverridesPlaceholder: "One per line: group/target, or correction-text=group/target",
       modelOverridesHint: "Core currently exposes {count} groups or targets; hover to see every ID.",
@@ -490,6 +490,7 @@ export const en: Translations = {
       continuityParallel: "Parallel",
       parallelWindows: "Parallel windows",
       fastMode: "Fast mode",
+      fastModeHint: "Fast mode uses the correction group for its fused first round; turn it off to use a research override.",
       outputScale: "Output length scale",
       postprocessProfile: "Subtitle post-processing",
       postprocessNone: "-1 · No processing",
@@ -682,7 +683,7 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
   },
   knowledge: {
     title: "Knowledge",
-    description: "Browse and maintain FineSub's local knowledge, task feedback, and community sharing.",
+    description: "Browse and maintain Yanami Sub's local knowledge, task feedback, and community sharing.",
     loading: "Reading the knowledge store…",
     refresh: "Refresh",
     openFolder: "Open folder",
@@ -841,7 +842,7 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     brand: "Yanami Sub",
     connectionError: "Cannot connect to desktop service",
     reconnect: "Reconnect",
-    loading: "Checking FineSub runtime status",
+    loading: "Checking Yanami Sub runtime status",
   },
   // Task Confirm Dialog
   startTaskConfirm: {

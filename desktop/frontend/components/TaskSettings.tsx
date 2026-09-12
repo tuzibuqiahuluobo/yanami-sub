@@ -57,6 +57,9 @@ export function TaskSettings({
   const translationSelected = ["translated-srt", "final-srt"].includes(
     request.stage,
   );
+  const hasResearchOverride = request.llm_model.some((value) =>
+    value.trimStart().startsWith("research="),
+  );
   // Surfaced on the tab itself: the note explaining the missing key lives
   // inside the LLM panel, which the user may not have open.
   const llmNeedsKey = translationSelected && !capabilities.translation;
@@ -626,6 +629,13 @@ export function TaskSettings({
                     { value: "off", label: t.newTask.settings.disabled },
                   ]}
                 />
+                {translationSelected &&
+                hasResearchOverride &&
+                request.llm_fast !== "off" ? (
+                  <small className="field-help">
+                    {t.newTask.settings.fastModeHint}
+                  </small>
+                ) : null}
               </div>
               <label className="field">
                 <span>{t.newTask.settings.outputScale}</span>

@@ -64,6 +64,7 @@ export interface AppState {
 
 export type AppAction =
   | { type: "bootstrapLoaded"; payload: BootstrapState }
+  | { type: "tasksLoaded"; tasks: JobSnapshot[] }
   | { type: "navigate"; route: Route }
   | { type: "fileSelected"; path: string }
   | { type: "reuseAsr"; snapshot: JobSnapshot }
@@ -76,6 +77,7 @@ export type AppAction =
   | { type: "taskRejected"; error: BridgeError }
   | { type: "workerEvent"; event: WorkerEvent }
   | { type: "resourceChanged"; resource: ResourceStatus }
+  | { type: "resourcesLoaded"; resources: ResourceStatus[] }
   | { type: "resourceInstallChanged"; install: ResourceInstallSnapshot }
   | { type: "resourceInstallsChanged"; installs: ResourceInstallSnapshot[] }
   | { type: "settingsChanged"; settings: PublicSettings }
@@ -348,6 +350,11 @@ export function reduceAppState(
         gpus: action.payload.gpus ?? state.gpus,
       };
     }
+    case "tasksLoaded":
+      return {
+        ...state,
+        history: mergeHistorySnapshots(state.history, action.tasks),
+      };
     case "sharedSettingsChanged":
       return {
         ...state,
@@ -551,6 +558,8 @@ export function reduceAppState(
             action.settings.api_keys.tavily === "configured",
         },
       };
+    case "resourcesLoaded":
+      return { ...state, resources: action.resources };
     case "routingChanged":
       return {
         ...state,
@@ -666,24 +675,23 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
     };
   }
   if (event.type === "failed") {
+    const message =
+      typeof payload.message === "string"
+        ? payload.message
+        : "字幕任务失败。";
     return {
       ...state,
       history: updateHistorySnapshot(state.history, event.task_id, {
         state: "failed",
-        error:
-          typeof payload.message === "string"
-            ? payload.message
-            : "字幕任务失败。",
+        error: message,
       }),
       task: {
         ...state.task,
         phase: "failed",
+        logs: [...state.task.logs, message].slice(-200),
         error: {
           code: "worker_failed",
-          message:
-            typeof payload.message === "string"
-              ? payload.message
-              : "字幕任务失败。",
+          message,
         },
       },
     };
@@ -711,5 +719,32 @@ function updateHistorySnapshot(
     (snapshot.task_id ?? snapshot.taskId) === taskId
       ? { ...snapshot, ...changes, updated_at: Date.now() / 1000 }
       : snapshot,
+  );
+}
+
+
+function mergeHistorySnapshots(
+  current: JobSnapshot[],
+  incoming: JobSnapshot[],
+): JobSnapshot[] {
+  const merged = new Map<string, JobSnapshot>();
+  for (const snapshot of incoming) {
+    const id = snapshot.task_id ?? snapshot.taskId;
+    if (id) merged.set(id, snapshot);
+  }
+  for (const snapshot of current) {
+    const id = snapshot.task_id ?? snapshot.taskId;
+    if (!id) continue;
+    const server = merged.get(id);
+    // Local worker events are more recent than a disk/history read that raced
+    // the worker's persistence. Keep them until the backend catches up.
+    if (!server || (snapshot.updated_at ?? 0) > (server.updated_at ?? 0)) {
+      merged.set(id, snapshot);
+    }
+  }
+  return [...merged.values()].sort(
+    (left, right) =>
+      (right.updated_at ?? right.created_at ?? 0) -
+      (left.updated_at ?? left.created_at ?? 0),
   );
 }

@@ -12,6 +12,7 @@ import type {
   Preferences,
   PublicSettings,
   ResourceInstallSnapshot,
+  ResourceStatus,
   RevealedApiKeys,
   TaskRequest,
   UpdateInstallSnapshot,
@@ -404,6 +405,9 @@ function previewApi(): DesktopApi {
     },
     async listResourceInstalls() {
       return structuredClone([...installs.values()]);
+    },
+    async getResourceStatuses() {
+      return structuredClone(previewBootstrap.resources);
     },
     async pauseResourceInstall(resourceId) {
       const current = installs.get(resourceId);
@@ -821,6 +825,7 @@ function nativeApi(): DesktopApi {
       call<ResourceInstallSnapshot | null>("get_resource_install", resourceId),
     listResourceInstalls: () =>
       call<ResourceInstallSnapshot[]>("list_resource_installs"),
+    getResourceStatuses: () => call<ResourceStatus[]>("get_resource_statuses"),
     pauseResourceInstall: (resourceId) =>
       call<ResourceInstallSnapshot>("pause_resource_install", resourceId),
     openResourceLocation: (resourceId, kind) =>

@@ -620,6 +620,7 @@ export interface DesktopApi {
   installResource(resourceId: string): Promise<ResourceInstallSnapshot>;
   getResourceInstall(resourceId: string): Promise<ResourceInstallSnapshot | null>;
   listResourceInstalls(): Promise<ResourceInstallSnapshot[]>;
+  getResourceStatuses(): Promise<ResourceStatus[]>;
   pauseResourceInstall(resourceId: string): Promise<ResourceInstallSnapshot>;
   openInstallLogs(): Promise<unknown>;
   rescanGpus(): Promise<unknown>;

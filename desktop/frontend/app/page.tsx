@@ -170,18 +170,59 @@ export default function Home() {
     };
   }, [state.task.phase, state.task.taskId]);
 
+  useEffect(() => {
+    if (!state.bootstrapped) {
+      return;
+    }
+    let stopped = false;
+    let inFlight = false;
+    const syncHistory = async () => {
+      if (inFlight) {
+        return;
+      }
+      inFlight = true;
+      try {
+        const tasks = await desktopApi.listTasks();
+        if (!stopped) {
+          dispatch({ type: "tasksLoaded", tasks });
+        }
+      } catch {
+        // History is durable on disk; a transient refresh failure should not
+        // clear the rows already visible in the interface.
+      } finally {
+        inFlight = false;
+      }
+    };
+    void syncHistory();
+    const timer = window.setInterval(
+      () => void syncHistory(),
+      document.hidden ? 5000 : 2000,
+    );
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [state.bootstrapped]);
+
   const hasActiveResourceInstall = hasActiveInstall(state.resourceInstalls);
 
   useEffect(() => {
-    if (!hasActiveResourceInstall) {
+    if (
+      !state.bootstrapped ||
+      (!hasActiveResourceInstall && state.route !== "resources")
+    ) {
       return;
     }
     let stopped = false;
     const poll = async () => {
       try {
-        const installs = await desktopApi.listResourceInstalls();
+        const [installs, resources] = await Promise.all([
+          desktopApi.listResourceInstalls(),
+          desktopApi.getResourceStatuses(),
+        ]);
         if (!stopped) {
           dispatch({ type: "resourceInstallsChanged", installs });
+          dispatch({ type: "resourcesLoaded", resources });
         }
       } catch {
         // Keep the last known progress during a transient bridge failure.
@@ -196,7 +237,7 @@ export default function Home() {
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [hasActiveResourceInstall]);
+  }, [hasActiveResourceInstall, state.bootstrapped, state.route]);
 
   const selectFile = async () => {
     try {
@@ -221,6 +262,8 @@ export default function Home() {
     try {
       const install = await desktopApi.installResource(resourceId);
       dispatch({ type: "resourceInstallChanged", install });
+      const resources = await desktopApi.getResourceStatuses();
+      dispatch({ type: "resourcesLoaded", resources });
     } catch (error) {
       dispatch({
         type: "resourceChanged",

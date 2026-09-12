@@ -11,7 +11,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 
-import { fileName } from "@/lib/formatters";
+import { fileName, summarizeTaskError } from "@/lib/formatters";
 import { preferredTaskOutput } from "@/lib/subtitleOutputs";
 import type { JobSnapshot } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
@@ -99,7 +99,9 @@ export function TaskHistory({
                     {taskTime(snapshot) ? ` · ${taskTime(snapshot)}` : ""}
                   </span>
                   {snapshot.error ? (
-                    <small title={snapshot.error}>{snapshot.error}</small>
+                    <small title={snapshot.error}>
+                      {summarizeTaskError(snapshot.error)}
+                    </small>
                   ) : null}
                 </div>
                 <div className="history-side">

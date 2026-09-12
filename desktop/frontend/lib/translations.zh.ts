@@ -108,7 +108,7 @@ export const zh = {
     },
     routing: {
       title: "模型路由与本地 Agent",
-      description: "直接使用 FineSub 核心的预设、策略和模型目录；桌面端只保存经过核心校验的标量设置。",
+      description: "直接使用上游核心的预设、策略和模型目录；桌面端只保存经过核心校验的标量设置。",
       agentRoute: "包含本地 Agent",
       apiRoute: "API 路由",
       preset: "路由预设",
@@ -245,7 +245,7 @@ export const zh = {
       passed: "检查通过",
       failed: "需要处理",
       desktopVersion: "桌面版",
-      coreVersion: "FineSub 核心",
+      coreVersion: "上游核心",
       freeSpace: "大文件目录剩余空间",
       taskState: "任务状态",
       taskRunning: "有任务运行中",
@@ -287,7 +287,7 @@ export const zh = {
     items: {
       uv: {
         title: "Python 运行环境",
-        detail: "负责安装并隔离 FineSub 的 Python 与 AI 依赖",
+        detail: "负责安装并隔离 Yanami Sub 的 Python 与 AI 依赖",
       },
       ffmpeg: {
         title: "FFmpeg 媒体组件",
@@ -311,7 +311,7 @@ export const zh = {
       },
       unknown: {
         title: "",
-        detail: "FineSub 运行资源",
+        detail: "Yanami Sub 运行资源",
       },
     },
     blockedBy: "需要先安装 {resource}",
@@ -346,11 +346,11 @@ export const zh = {
     },
     modelNote: {
       title: "模型如何管理？",
-      description: "Whisper 等模型的权重（语音识别 large-v3-turbo 约 1.6 GB、人声分离 BS-RoFormer 约 0.6 GB、第二模型校验 Qwen3-ASR 约 1.5 GB）由 FineSub 在首次用到时按需下载，统一写入 models 目录；更新应用时不会删除。用不到的阶段不会触发下载。",
+      description: "Whisper 等模型的权重（语音识别 large-v3-turbo 约 1.6 GB、人声分离 BS-RoFormer 约 0.6 GB、第二模型校验 Qwen3-ASR 约 1.5 GB）由 Yanami Sub 在首次用到时按需下载，统一写入 models 目录；更新应用时不会删除。用不到的阶段不会触发下载。",
     },
     sourceNote: {
       title: "下载与镜像策略",
-      description: "FineSub 会先扫描本机磁盘并按大小与 SHA-256 校验同版本资源；未命中或版本不符时才联网下载。中国大陆网络的 Python 依赖会自动使用清华大学 TUNA 镜像，镜像失败时回退到官方源。",
+      description: "Yanami Sub 会先扫描本机磁盘并按大小与 SHA-256 校验同版本资源；未命中或版本不符时才联网下载。中国大陆网络的 Python 依赖会自动使用清华大学 TUNA 镜像，镜像失败时回退到官方源。",
     },
     confirm: {
       title: "确认准备资源",
@@ -371,7 +371,7 @@ export const zh = {
     title: "新建任务",
     kicker: "NEW TASK",
     pageTitle: "生成一份干净的字幕",
-    pageDescription: "选择媒体文件，FineSub 会在本机完成分离、识别与字幕整理。",
+    pageDescription: "选择媒体文件，Yanami Sub 会在本机完成分离、识别与字幕整理。",
     pageDescriptionCloud: "分离与识别在本机完成；纠错翻译会调用 Gemini。",
     privacyNote: "媒体文件仅在本机处理",
     privacyNoteCloud: "翻译会向 Gemini 上传必要的媒体片段",
@@ -434,11 +434,11 @@ export const zh = {
       // 高级设置
       advanced: "高级设置",
       advancedSpeech: "语音识别高级选项",
-      advancedSpeechHint: "留空或选择“跟随核心设置”时，使用 FineSub 的配置与默认值。",
+      advancedSpeechHint: "留空或选择“跟随核心设置”时，使用上游核心的配置与默认值。",
       expertStage: "专家输出阶段",
       expertCurrent: "专家阶段",
       advancedLlm: "纠错翻译高级选项",
-      advancedLlmHint: "这些选项会直接传给 FineSub 的纠错、翻译与知识处理链路。",
+      advancedLlmHint: "这些选项会直接传给上游核心的纠错、翻译与知识处理链路。",
       modelOverrides: "本任务模型覆盖",
       modelOverridesPlaceholder: "每行一个：模型组/目标，或 correction-text=模型组/目标",
       modelOverridesHint: "核心当前提供 {count} 个可选模型组或目标；悬停查看完整 ID。",
@@ -488,6 +488,7 @@ export const zh = {
       continuityParallel: "并行",
       parallelWindows: "并行窗口数",
       fastMode: "快速模式",
+      fastModeHint: "快速模式的首轮使用纠错模型组；若要使用 research 覆盖，请关闭快速模式。",
       outputScale: "输出长度倍率",
       postprocessProfile: "字幕后处理",
       postprocessNone: "-1 · 不处理",
@@ -679,7 +680,7 @@ export const zh = {
   },
   knowledge: {
     title: "知识库",
-    description: "浏览和维护 FineSub 的本地知识，并处理任务反馈与社区共享。",
+    description: "浏览和维护 Yanami Sub 的本地知识，并处理任务反馈与社区共享。",
     loading: "正在读取知识库…",
     refresh: "刷新",
     openFolder: "打开目录",
@@ -838,7 +839,7 @@ export const zh = {
     brand: "Yanami Sub",
     connectionError: "无法连接桌面服务",
     reconnect: "重新连接",
-    loading: "正在检查 FineSub 运行状态",
+    loading: "正在检查 Yanami Sub 运行状态",
   },
   // 任务确认对话框
   startTaskConfirm: {

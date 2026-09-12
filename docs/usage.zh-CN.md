@@ -1,23 +1,23 @@
 # Yanami Sub 中文使用说明
 
-本文面向 `v0.1.0-rc.3`。字幕处理由固定版本的
+本文面向 `v0.1.0-rc.4`。字幕处理由固定版本的
 [FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1) 提供。
 
 ## 安装与迁移
 
 1. 在 [Yanami Sub Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases)
-   下载 `Yanami-Sub-0.1.0-rc.3-Setup.exe` 和对应的 `.sha256` 文件。
+   下载 `Yanami-Sub-0.1.0-rc.4-Setup.exe` 和对应的 `.sha256` 文件。
 2. 在 PowerShell 中运行以下命令校验安装包：
 
    ```powershell
-   Get-FileHash .\Yanami-Sub-0.1.0-rc.3-Setup.exe -Algorithm SHA256
+   Get-FileHash .\Yanami-Sub-0.1.0-rc.4-Setup.exe -Algorithm SHA256
    ```
 
 3. 将输出与 `.sha256` 文件中的值比较，完全一致后再运行安装器。
-4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC3 会沿用原安装记录、
+4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC4 会沿用原安装记录、
    覆盖旧版并清理旧名称的可执行文件与快捷方式。
 
-当前 RC3 没有受信任的 Authenticode 签名，Windows 可能显示 SmartScreen 提示。请只使用本仓库
+当前 RC4 没有受信任的 Authenticode 签名，Windows 可能显示 SmartScreen 提示。请只使用本仓库
 Release 的安装包，不要从第三方下载站获取。
 
 ## 首次启动
@@ -112,9 +112,9 @@ Yanami Sub 或 FineSub CLI 实例。
 
 ## 更新与卸载
 
-RC3 使用新的 Yanami Sub 更新清单名称，旧版 FineSub Desktop 不会把它误识别为可自动安装的
-更新。因此从旧名称迁移到 RC3 必须手动运行安装器。RC3 之后的 Yanami Sub 版本可继续使用
-应用内检查更新。
+RC3 起使用新的 Yanami Sub 更新清单名称，旧版 FineSub Desktop 不会把它误识别为可自动安装的
+更新。因此从旧名称迁移必须手动运行 Yanami Sub 安装器；已经安装 RC3 的用户可以直接在应用内
+检查并更新到 RC4。
 
 卸载程序会自动删除可重建的运行环境、模型和缓存；删除成品字幕与共享的 FineSub 个人数据前
 会分别询问。静默卸载不会代替用户确认删除这些不可重建内容。

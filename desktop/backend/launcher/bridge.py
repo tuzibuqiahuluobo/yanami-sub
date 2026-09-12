@@ -308,7 +308,7 @@ class DesktopBridge:
                     action=str(error.errors(include_url=False)),
                 )
             )
-        capability_error = self.settings.validate_stage(request.stage, request.llm_model)
+        capability_error = self.settings.validate_request(request)
         if capability_error is not None:
             return _failure(capability_error)
         if self.batches is not None and self.batches.is_running():
@@ -360,7 +360,7 @@ class DesktopBridge:
                 )
             )
         for item in request.items:
-            capability_error = self.settings.validate_stage(item.stage, item.llm_model)
+            capability_error = self.settings.validate_request(item)
             if capability_error is not None:
                 return _failure(capability_error)
         missing = self._missing_batch_resources(request)
@@ -410,7 +410,7 @@ class DesktopBridge:
         try:
             request = self.batches.request_for(batch_id)
             for item in request.items:
-                capability_error = self.settings.validate_stage(item.stage, item.llm_model)
+                capability_error = self.settings.validate_request(item)
                 if capability_error is not None:
                     return _failure(capability_error)
             missing = self._missing_batch_resources(request)
@@ -530,7 +530,7 @@ class DesktopBridge:
 
     def _validate_saved_task(self, task_id: str) -> BridgeError | None:
         request = self.jobs.request_for(task_id)
-        capability_error = self.settings.validate_stage(request.stage, request.llm_model)
+        capability_error = self.settings.validate_request(request)
         if capability_error is not None:
             return capability_error
         missing = self._missing_resources(request)
@@ -601,6 +601,11 @@ class DesktopBridge:
         if self.resource_installs is None:
             return _success([])
         return self._guard(self.resource_installs.list)
+
+    def get_resource_statuses(self) -> dict[str, Any]:
+        """Refresh the authoritative resource catalog after background work."""
+
+        return self._guard(self.resources.check_all)
 
     def pause_resource_install(self, resource_id: str) -> dict[str, Any]:
         if self.resource_installs is None:

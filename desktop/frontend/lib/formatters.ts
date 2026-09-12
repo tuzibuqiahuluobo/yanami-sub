@@ -137,3 +137,43 @@ export function formatUpdateSummary(update: UpdateCheck): string {
   const kind = update.kind === "full" ? "完整更新" : "轻量补丁";
   return `发现 ${update.version} · ${kind} · ${formatBytes(update.size)}`;
 }
+
+
+/** Keep history cards useful without throwing away the worker's full detail. */
+export function summarizeTaskError(error?: string | null): string {
+  if (!error) {
+    return "任务失败。";
+  }
+  if (
+    error.includes("CapabilityUnavailableError") ||
+    error.includes("retrieval=native")
+  ) {
+    return "当前模型不支持所选联网能力，请改用本地检索或更换模型。";
+  }
+  if (
+    error.includes("ModuleNotFoundError") ||
+    error.includes("Missing dependency")
+  ) {
+    return "运行环境缺少依赖，请打开资源页面安装并重试。";
+  }
+  const lines = error
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const exceptionLine = [...lines]
+    .reverse()
+    .find(
+      (line) =>
+        !line.startsWith("Traceback") &&
+        !line.startsWith("File ") &&
+        /(?:Error|Exception)(?::|\b)/.test(line),
+    );
+  const firstUsefulLine = lines.find(
+    (line) =>
+      !line.startsWith("Traceback") &&
+      !line.startsWith("File ") &&
+      !/^\^+$/.test(line),
+  );
+  const summary = exceptionLine || firstUsefulLine || "任务失败。";
+  return summary.length > 180 ? `${summary.slice(0, 177)}…` : summary;
+}

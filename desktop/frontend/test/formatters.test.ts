@@ -9,6 +9,7 @@ import {
   formatUpdateSummary,
   invalidOutputName,
   isUrlSource,
+  summarizeTaskError,
 } from "../lib/formatters";
 
 
@@ -78,4 +79,26 @@ test("output names are rejected exactly where the backend rejects them", () => {
   assert.equal(invalidOutputName("."), true);
   assert.equal(invalidOutputName(".."), true);
   assert.equal(invalidOutputName("  ..  "), true);
+});
+
+test("task errors are concise while preserving the raw detail for a tooltip", () => {
+  assert.equal(
+    summarizeTaskError(
+      "CapabilityUnavailableError: retrieval=native has no usable endpoint\n" +
+        "  - research R2 needs native_search",
+    ),
+    "当前模型不支持所选联网能力，请改用本地检索或更换模型。",
+  );
+  assert.equal(
+    summarizeTaskError("Traceback (most recent call last):\nModuleNotFoundError: x"),
+    "运行环境缺少依赖，请打开资源页面安装并重试。",
+  );
+  assert.equal(
+    summarizeTaskError(
+      "Traceback (most recent call last):\n" +
+        "  File \"worker.py\", line 4, in run\n" +
+        "RuntimeError: output worker stopped",
+    ),
+    "RuntimeError: output worker stopped",
+  );
 });

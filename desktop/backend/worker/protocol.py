@@ -18,6 +18,15 @@ EventType = Literal[
 ]
 
 
+def _is_nonfatal_library_noise(message: str) -> bool:
+    """Keep known accelerator fallbacks in the file log, not the drawer."""
+
+    lowered = message.lower()
+    if "aotinductorstreamhandle" in lowered:
+        return True
+    return "outofresources" in lowered and "shared memory" in lowered
+
+
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -200,7 +209,12 @@ class EventLogWriter(TextIO):
         line = self._buffer
         self._buffer = ""
         if line:
-            self.emit(WorkerEvent.log(self.task_id, line))
+            event = (
+                WorkerEvent.debug(self.task_id, line)
+                if _is_nonfatal_library_noise(line)
+                else WorkerEvent.log(self.task_id, line)
+            )
+            self.emit(event)
 
     def flush(self) -> None:
         self._emit_buffer()
