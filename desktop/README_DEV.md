@@ -581,19 +581,12 @@ request 都是旧代码。**v0.4.0 因此不带旧版 update-manifest.json/.sig*
 0.4.0，release notes 指引下载 Setup 覆盖安装（Inno 不动数据目录）。下一个版本恢复
 manifest：届时所有在野 0.4.0+ 安装都已带重试 updater、完整名单与并集地板。
 
-⚠️ **已知缺陷（0.4.2 演练实测，未修）：full 更新会吃掉 Inno 卸载器。**
-`unins000.exe` / `unins000.dat` 不在 `DEFAULT_PRESERVED` 里，所以一个用 Setup.exe
-装的安装在走过一次 full 更新之后：卸载器没了，而**注册表的卸载项还在**，仍然指着那个
-已经不存在的 exe，`DisplayVersion` 也还停在旧版本号。后果是「设置 → 应用」里卸不掉
-（用户仍可 `finesub uninstall` 或直接删目录），不丢数据、不影响运行。
-
-这条**不是 0.4.2 引入的**，是 full 通道自带的；但 0.4.2 起 `supportedFrom` 为空、
-所有人都走 full，于是从个例变成普遍。修法不止一种，各有取舍，需要拍板：
-(a) 把 `unins000.*` 加进保留名单——卸载项能用了，但 `unins000.dat` 记的是 Inno 当初
-装的那批文件，full 包换过之后它删不干净；(b) 让 updater 顺手改写/删掉注册表项——干净，
-但要给 updater 加注册表写权限，而它现在什么都不碰；(c) 维持现状并在文档里写明。
-另外注意：**修在 0.4.3 只对「从 0.4.2 往后更新」的人生效**，因为跑更新的是**已装的**
-updater。
+⚠️ **full 更新必须保留 Inno 卸载器。** `unins000.exe` / `unins000.dat` 已加入
+`DEFAULT_PRESERVED`，否则注册表卸载项会指向不存在的程序。此修复只对已经携带新版
+updater 的安装生效，因为执行更新的是**已安装版本**的 updater。首次带此保护的 RC5
+因此不向 RC4 发布在线更新清单；RC4 用户使用 RC5 Setup 覆盖安装一次，后续版本才可安全
+恢复应用内更新。保留的 `unins000.dat` 仍以最近一次 Setup 安装的文件清单为准，所以涉及
+安装器行为或根目录文件布局的版本也应优先用 Setup 覆盖安装。
 
 ⚠️ **「更新之后数据还在」测不出来。** 保留名单的内容有测试钉住
 （`updater_main.py` 的 `preserved`），但整条链路——下载签名 manifest、更新器原地

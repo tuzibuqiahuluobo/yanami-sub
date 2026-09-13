@@ -634,6 +634,21 @@ def test_maximize_button_toggles_between_maximized_and_normal(
     assert window.native.WindowState == "Normal"
 
 
+def test_restart_application_uses_the_configured_relauncher(tmp_path: Path) -> None:
+    calls: list[str] = []
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        relauncher=lambda: calls.append("restart"),
+    )
+
+    result = bridge.restart_application()
+
+    assert result["ok"] is True
+    assert calls == ["restart"]
+
+
 def test_the_missing_resource_is_named_rather_than_guessed(tmp_path: Path) -> None:
     # "请先安装 Python 运行环境和 FFmpeg" was the whole message regardless of what
     # was actually missing. With git and yt-dlp installed on demand, a user told
@@ -723,7 +738,39 @@ def test_bridge_routes_missing_knowledge_runtime_to_resources(tmp_path: Path) ->
     assert result["ok"] is False
     assert result["error"]["code"] == "runtime_required"
     assert result["error"]["action"] == "open_resources"
+    assert "请先安装 Python 运行环境" not in result["error"]["message"]
     assert knowledge.calls == []
+
+
+def test_bridge_does_not_tell_system_python_users_to_install_python(
+    tmp_path: Path,
+) -> None:
+    class SystemPythonResources(FakeResources):
+        def status(self, resource_id: str) -> ResourceStatus:
+            assert resource_id == "uv"
+            return ResourceStatus(
+                id="uv",
+                version="3.12",
+                state="missing",
+                reuses_system_python=True,
+            )
+
+    resources = SystemPythonResources()
+    resources.ready = False
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=resources,
+        settings=SettingsStore(tmp_path / "user-data"),
+        knowledge=FakeKnowledge(tmp_path / "knowledge"),
+    )
+
+    result = bridge.get_knowledge_snapshot()
+
+    assert result["ok"] is False
+    assert "请先安装 Python 运行环境" not in result["error"]["message"]
+    assert "已检测到系统 Python" in result["error"]["message"]
+    assert "AI 依赖" in result["error"]["message"]
+    assert result["error"]["action"] == "open_resources"
 
 
 def test_bridge_exports_keys_only_through_the_native_save_selector(

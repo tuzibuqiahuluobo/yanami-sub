@@ -162,6 +162,7 @@ export const zh = {
       downloading: "正在下载 {done} / {total}",
       restartRequired: "更新已就绪，重启 Yanami Sub 后生效",
       restartNow: "立即重启",
+      restartFailed: "无法自动重启，请手动重新打开 Yanami Sub。",
       exitRequired: "安装程序已启动，退出 Yanami Sub 后将自动完成更新",
       exitNow: "退出并完成更新",
       installFailed: "更新安装失败：{error}",

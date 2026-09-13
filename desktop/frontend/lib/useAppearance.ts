@@ -38,8 +38,8 @@ export const FONT_SCALE_LABELS: Record<FontScale, string> = {
   xl: "最大",
 };
 
-const DEFAULTS: AppearanceSettings = {
-  theme: "system",
+export const DEFAULT_APPEARANCE: AppearanceSettings = {
+  theme: "light",
   fontFamily: "",
   fontScale: "md",
   glassOpacity: 75,
@@ -64,7 +64,7 @@ export function fontSizeForScale(scale: FontScale): string {
 
 function loadSettings(): AppearanceSettings {
   if (typeof window === "undefined") {
-    return DEFAULTS;
+    return DEFAULT_APPEARANCE;
   }
   try {
     const parsed = uiValue<Partial<AppearanceSettings>>("appearance", {});
@@ -72,27 +72,27 @@ function loadSettings(): AppearanceSettings {
       theme:
         parsed.theme && THEME_MODES.has(parsed.theme)
           ? parsed.theme
-          : DEFAULTS.theme,
+          : DEFAULT_APPEARANCE.theme,
       fontFamily:
         typeof parsed.fontFamily === "string"
           ? parsed.fontFamily
-          : DEFAULTS.fontFamily,
+          : DEFAULT_APPEARANCE.fontFamily,
       fontScale:
         parsed.fontScale && FONT_SCALES.has(parsed.fontScale)
           ? parsed.fontScale
-          : DEFAULTS.fontScale,
+          : DEFAULT_APPEARANCE.fontScale,
       glassOpacity:
         typeof parsed.glassOpacity === "number" &&
         Number.isFinite(parsed.glassOpacity)
           ? Math.min(100, Math.max(40, parsed.glassOpacity))
-          : DEFAULTS.glassOpacity,
+          : DEFAULT_APPEARANCE.glassOpacity,
       animations:
         typeof parsed.animations === "boolean"
           ? parsed.animations
-          : DEFAULTS.animations,
+          : DEFAULT_APPEARANCE.animations,
     };
   } catch {
-    return DEFAULTS;
+    return DEFAULT_APPEARANCE;
   }
 }
 
@@ -152,7 +152,7 @@ function applyToDom(settings: AppearanceSettings) {
 
 
 export function useAppearance() {
-  const [settings, setSettings] = useState<AppearanceSettings>(DEFAULTS);
+  const [settings, setSettings] = useState<AppearanceSettings>(DEFAULT_APPEARANCE);
 
   useEffect(() => {
     const apply = () => {

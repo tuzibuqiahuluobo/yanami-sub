@@ -20,6 +20,7 @@ export interface UpdateSectionProps {
   ) => Promise<UpdateInstallSnapshot>;
   onGetUpdateInstall: () => Promise<UpdateInstallSnapshot | null>;
   onCloseWindow: () => Promise<unknown>;
+  onRestartApplication: () => Promise<unknown>;
   onOpenUpdatePage: () => Promise<unknown>;
 }
 
@@ -37,6 +38,7 @@ export function UpdateSection({
   onInstallUpdate,
   onGetUpdateInstall,
   onCloseWindow,
+  onRestartApplication,
   onOpenUpdatePage,
 }: UpdateSectionProps) {
   const { t } = useLanguage();
@@ -168,14 +170,27 @@ export function UpdateSection({
           <button
             type="button"
             className="button button-primary"
-            onClick={() => {
-              // Both paths end the process. An app delta is already staged on
-              // disk, so the next launch picks it up; a full update needs this
-              // one gone before the external updater can replace it.
-              void onCloseWindow();
+            disabled={updateBusy}
+            onClick={async () => {
+              setUpdateBusy(true);
+              setUpdateMessage("");
+              try {
+                if (install.exit_required) {
+                  await onCloseWindow();
+                } else {
+                  await onRestartApplication();
+                }
+              } catch (error) {
+                setUpdateMessage(
+                  error instanceof Error
+                    ? error.message
+                    : t.settings.updates.restartFailed,
+                );
+                setUpdateBusy(false);
+              }
             }}
           >
-            <RefreshCw size={14} />
+            <RefreshCw size={14} className={updateBusy ? "spin" : ""} />
             {install.exit_required
               ? t.settings.updates.exitNow
               : t.settings.updates.restartNow}

@@ -113,6 +113,7 @@ class DesktopBridge:
         url_opener: Callable[[str], Any] | None = None,
         window: Any | None = None,
         tray: Any | None = None,
+        relauncher: Callable[[], Any] | None = None,
         app_version: str = "development",
     ) -> None:
         self.jobs = jobs
@@ -137,6 +138,7 @@ class DesktopBridge:
         self.url_opener = url_opener or webbrowser.open
         self.window = window
         self.tray = tray
+        self.relauncher = relauncher
         self.app_version = app_version
 
     def get_bootstrap_state(self) -> dict[str, Any]:
@@ -1105,6 +1107,16 @@ class DesktopBridge:
     def close_window(self) -> dict[str, Any]:
         return self._window_action("destroy")
 
+    def restart_application(self) -> dict[str, Any]:
+        if self.relauncher is None:
+            return _failure(
+                BridgeError(
+                    code="restart_unavailable",
+                    message="当前构建无法自动重启，请手动重新打开 Yanami Sub。",
+                )
+            )
+        return self._guard(self.relauncher)
+
     def set_window_chrome(
         self,
         background: str,
@@ -1223,10 +1235,18 @@ class DesktopBridge:
         try:
             missing = self.resources.ensure(["uv"])
             if missing:
+                status = getattr(self.resources, "status", None)
+                runtime = status("uv") if callable(status) else None
+                message = (
+                    "已检测到系统 Python；请先在“资源”中补齐 FineSub AI 依赖，"
+                    "再使用知识库。"
+                    if getattr(runtime, "reuses_system_python", False)
+                    else "知识库运行环境尚未就绪，请先在“资源”中完成配置。"
+                )
                 return _failure(
                     BridgeError(
                         code="runtime_required",
-                        message="请先安装 Python 运行环境，再使用知识库。",
+                        message=message,
                         action="open_resources",
                     )
                 )

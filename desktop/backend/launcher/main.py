@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
 import sys
 from typing import Any
 
@@ -97,6 +98,7 @@ PUBLIC_BRIDGE_METHODS = (
     "minimize_to_tray",
     "maximize_window",
     "close_window",
+    "restart_application",
     "set_window_chrome",
 )
 
@@ -111,10 +113,9 @@ WINDOW_CONTROLS_WIDTH_DP = 138
 # which never shows does not hang the callback for the whole session.
 WINDOW_READY_TIMEOUT_SECONDS = 10
 # The web layer re-applies these from the active theme the moment it paints
-# (`useAppearance` -> `set_window_chrome`), so they only decide what the frame
-# looks like until then. Following the Windows setting means the default
-# "system" theme never flashes the opposite one. Keep in step with the
-# `--app-bg` / `--text` pairs in globals.css.
+# (`useAppearance` -> `set_window_chrome`), so both pairs only describe the
+# brief native frame before saved preferences or the light first-run default
+# take over. Keep them in step with the `--app-bg` / `--text` pairs in CSS.
 LIGHT_WINDOW_COLORS = ("#F2F3F5", "#1A1A1E")
 DARK_WINDOW_COLORS = ("#131316", "#E8E9EC")
 
@@ -123,6 +124,22 @@ def expose_bridge(window: Any, bridge: DesktopBridge) -> None:
     window.expose(
         *(getattr(bridge, method_name) for method_name in PUBLIC_BRIDGE_METHODS)
     )
+
+
+def relaunch_application(
+    window: Any,
+    *,
+    executable: Path | None = None,
+) -> None:
+    """Start the installed launcher, then let this instance close cleanly."""
+
+    target = (executable or Path(sys.executable)).resolve()
+    subprocess.Popen(
+        [str(target)],
+        cwd=str(target.parent),
+        close_fds=True,
+    )
+    window.destroy()
 
 
 def dropped_file_path(event: Any) -> str | None:
@@ -780,6 +797,7 @@ def create_application(
     )
     window = webview.create_window(PRODUCT_NAME, frontend_url, **window_options())
     bridge.window = window
+    bridge.relauncher = lambda: relaunch_application(window)
     tray_icon_path = (
         Path(getattr(sys, "_MEIPASS")) / "yanami-sub.png"
         if getattr(sys, "frozen", False)

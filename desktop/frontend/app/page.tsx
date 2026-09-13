@@ -535,6 +535,7 @@ export default function Home() {
         }
         onGetUpdateInstall={() => desktopApi.getUpdateInstall()}
         onCloseWindow={() => desktopApi.closeWindow()}
+        onRestartApplication={() => desktopApi.restartApplication()}
         onOpenUpdatePage={() => desktopApi.openUpdatePage()}
         onRescanGpus={() => desktopApi.rescanGpus()}
         onSaveSharedSettings={async (values) => {

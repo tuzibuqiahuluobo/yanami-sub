@@ -557,6 +557,17 @@
   to { transform: rotate(360deg); }
 }
 
+@media (max-width: 1200px) {
+  .knowledge-command-group {
+    grid-template-columns: repeat(3, max-content);
+    justify-content: start;
+  }
+
+  .knowledge-command-group > strong {
+    grid-column: 1 / -1;
+  }
+}
+
 @media (max-width: 980px) {
   .knowledge-library,
   .knowledge-maintenance-grid {

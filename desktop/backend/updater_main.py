@@ -46,6 +46,11 @@ DEFAULT_PRESERVED = (
     "tasks",
     "locations.json",
     "installed.marker",
+    # Inno Setup owns these files and the Windows uninstall registration points
+    # at the executable. A full update must not leave a registered installation
+    # without a working uninstaller.
+    "unins000.exe",
+    "unins000.dat",
 )
 
 

@@ -42,6 +42,7 @@ import type {
   SharedSettings,
 } from "@/lib/types";
 import {
+  DEFAULT_APPEARANCE,
   FONT_SCALE_LABELS,
   type AppearanceSettings,
   type FontScale,
@@ -99,7 +100,7 @@ export function Settings({
   // adds its own props to `UpdateSectionProps` and this page reads none of them.
   ...update
 }: SettingsProps) {
-  const appearance = appearanceProp ?? { theme: "system" as ThemeMode, fontFamily: "", fontScale: "md" as FontScale, glassOpacity: 75, animations: true };
+  const appearance = appearanceProp ?? DEFAULT_APPEARANCE;
   const [docsOpen, setDocsOpen] = useState(false);
   // Preferences are hydrated before this page can be reached, so the initial
   // read is already the durable one.

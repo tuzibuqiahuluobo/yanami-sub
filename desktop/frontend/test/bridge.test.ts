@@ -197,6 +197,40 @@ test("desktop API exposes a distinct minimize-to-tray action", async () => {
 });
 
 
+test("desktop API exposes a real native restart action", async () => {
+  const previousWindow = globalThis.window;
+  const calls: string[] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { search: "" },
+      pywebview: {
+        api: {
+          restart_application: async () => {
+            calls.push("restart_application");
+            return { ok: true, data: null };
+          },
+        },
+      },
+    },
+  });
+
+  try {
+    await createDesktopApi().restartApplication();
+    assert.deepEqual(calls, ["restart_application"]);
+  } finally {
+    if (previousWindow === undefined) {
+      Reflect.deleteProperty(globalThis, "window");
+    } else {
+      Object.defineProperty(globalThis, "window", {
+        configurable: true,
+        value: previousWindow,
+      });
+    }
+  }
+});
+
+
 test("installUpdate forwards kind and version to the native bridge", async () => {
   const previousWindow = globalThis.window;
   const calls: unknown[][] = [];

@@ -3,7 +3,7 @@
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-rc.4"
+  #define AppVersion "0.1.0-rc.5"
 #endif
 
 #ifndef OutputDir
@@ -79,6 +79,10 @@ Name: "{autodesktop}\Yanami Sub"; Filename: "{app}\{#AppExeName}"; WorkingDir: "
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,Yanami Sub}"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+; Stop Yanami Sub and its worker children before their installed files vanish.
+Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM ""{#AppExeName}"""; Flags: runhidden waituntilterminated; RunOnceId: "StopYanamiSub"
 
 [Code]
 { The marker separates an installed copy (personal data in

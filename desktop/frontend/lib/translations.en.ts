@@ -164,6 +164,7 @@ export const en: Translations = {
       downloading: "Downloading {done} / {total}",
       restartRequired: "Update ready. Restart Yanami Sub to apply it.",
       restartNow: "Restart Now",
+      restartFailed: "Automatic restart failed. Please reopen Yanami Sub manually.",
       exitRequired: "The installer is running. Quit Yanami Sub to let it finish.",
       exitNow: "Quit and Finish Update",
       installFailed: "Update install failed: {error}",

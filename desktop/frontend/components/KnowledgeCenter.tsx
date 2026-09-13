@@ -292,9 +292,11 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
           <p>{t.knowledge.description}</p>
         </div>
         <div className="knowledge-header-actions">
-          <span className="knowledge-revision">
-            {snapshot ? `rev ${snapshot.revision}` : t.knowledge.loading}
-          </span>
+          {loading ? (
+            <span className="knowledge-revision">{t.knowledge.loading}</span>
+          ) : snapshot ? (
+            <span className="knowledge-revision">{`rev ${snapshot.revision}`}</span>
+          ) : null}
           <button type="button" className="button button-secondary" disabled={busy} onClick={() => void loadSnapshot()}>
             <RefreshCw size={15} />
             {t.knowledge.refresh}

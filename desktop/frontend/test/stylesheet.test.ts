@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
 import { importedStylesheets } from "./stylesheet";
@@ -29,4 +29,27 @@ test("every file in app/styles is imported, and in one order", () => {
   assert.ok(dark >= 0 && appearance >= 0);
   assert.ok(dark > appearance);
   assert.equal(imported.at(-1), "./styles/fallbacks.css");
+});
+
+
+test("knowledge status and maintenance actions fit their real state", () => {
+  const source = readFileSync(
+    new URL("../components/KnowledgeCenter.tsx", import.meta.url),
+    "utf8",
+  );
+  const css = readFileSync(
+    new URL("../app/styles/knowledge.css", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(source, /loading \? \([\s\S]*?t\.knowledge\.loading/);
+  assert.match(source, /\) : snapshot \? \([\s\S]*?snapshot\.revision/);
+  assert.doesNotMatch(
+    source,
+    /snapshot \? `rev \$\{snapshot\.revision\}` : t\.knowledge\.loading/,
+  );
+  assert.match(
+    css,
+    /@media \(max-width: 1200px\)[\s\S]*?\.knowledge-command-group\s*\{[\s\S]*?grid-template-columns: repeat\(3, max-content\)/,
+  );
 });

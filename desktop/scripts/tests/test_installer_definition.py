@@ -38,6 +38,16 @@ def test_installer_creates_shortcuts_and_can_launch_application() -> None:
     assert "postinstall" in script
 
 
+def test_uninstaller_force_closes_the_app_and_worker_tree_first() -> None:
+    script = _installer_text()
+    uninstall_run = script.split("[UninstallRun]", 1)[1].split("[", 1)[0]
+
+    assert 'Filename: "{sys}\\taskkill.exe"' in uninstall_run
+    assert 'Parameters: "/F /T /IM ""{#AppExeName}"""' in uninstall_run
+    assert "Flags: runhidden waituntilterminated" in uninstall_run
+    assert 'RunOnceId: "StopYanamiSub"' in uninstall_run
+
+
 def test_installer_uses_branding_and_exact_output_name() -> None:
     script = _installer_text()
     assert '#define AppPublisher "tuzibuqiahuluobo"' in script

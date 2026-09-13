@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
+import { DEFAULT_APPEARANCE } from "../lib/useAppearance";
 import { readStylesheet } from "./stylesheet";
 
 const read = (path: string) =>
@@ -31,6 +32,10 @@ test("motion can be turned off, by the user and by the system", () => {
   assert.match(appearance, /data-motion/);
   assert.match(css, /\[data-motion="off"\]/);
   assert.match(css, /prefers-reduced-motion: reduce/);
+});
+
+test("a first run starts with the light theme", () => {
+  assert.equal(DEFAULT_APPEARANCE.theme, "light");
 });
 
 test("the animations stay native to the platform", () => {

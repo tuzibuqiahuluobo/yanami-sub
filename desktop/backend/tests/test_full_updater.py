@@ -49,6 +49,7 @@ def test_default_preserved_list_keeps_the_installed_marker(
     )
 
     assert "installed.marker" in request.preserved
+    assert {"unins000.exe", "unins000.dat"} <= set(request.preserved)
     assert {"app", "user-data", "models", "runtime", "cache"} <= set(
         request.preserved
     )
@@ -242,6 +243,8 @@ def test_an_old_services_shorter_preserved_list_cannot_eat_user_data(
     (target / "tasks").mkdir()
     (target / "tasks" / "finished.srt").write_text("subtitle", encoding="utf-8")
     (target / "locations.json").write_text("{}", encoding="utf-8")
+    (target / "unins000.exe").write_bytes(b"inno uninstaller")
+    (target / "unins000.dat").write_bytes(b"inno metadata")
     request = FullUpdateRequest(
         source=str(source),
         target=str(target),
@@ -263,6 +266,8 @@ def test_an_old_services_shorter_preserved_list_cannot_eat_user_data(
 
     assert (target / "tasks" / "finished.srt").read_text("utf-8") == "subtitle"
     assert (target / "locations.json").read_text("utf-8") == "{}"
+    assert (target / "unins000.exe").read_bytes() == b"inno uninstaller"
+    assert (target / "unins000.dat").read_bytes() == b"inno metadata"
     assert (target / "Yanami Sub.exe").read_bytes() == b"new"
 
 

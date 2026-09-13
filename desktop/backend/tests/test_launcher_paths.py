@@ -15,6 +15,7 @@ from desktop.backend.launcher.main import (
     dropped_file_path,
     expose_bridge,
     load_update_service,
+    relaunch_application,
     resolve_app_version,
     resolve_application_paths,
     resolve_application_source,
@@ -90,6 +91,33 @@ def test_development_url_takes_precedence(tmp_path: Path) -> None:
         resolve_frontend_url(paths, development_url="http://127.0.0.1:3000")
         == "http://127.0.0.1:3000"
     )
+
+
+def test_relaunch_starts_the_new_instance_before_closing_this_one(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    events: list[object] = []
+    executable = tmp_path / "Yanami Sub.exe"
+
+    class FakeWindow:
+        def destroy(self) -> None:
+            events.append("destroy")
+
+    def launch(command, **options):
+        events.append((command, options))
+
+    monkeypatch.setattr("desktop.backend.launcher.main.subprocess.Popen", launch)
+
+    relaunch_application(FakeWindow(), executable=executable)
+
+    assert events == [
+        (
+            [str(executable.resolve())],
+            {"cwd": str(tmp_path.resolve()), "close_fds": True},
+        ),
+        "destroy",
+    ]
 
 
 def test_app_version_follows_installed_current_pointer(tmp_path: Path) -> None:
@@ -204,6 +232,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "minimize_to_tray",
         "maximize_window",
         "close_window",
+        "restart_application",
         "set_window_chrome",
     ]
 
