@@ -22,10 +22,10 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 网络的 Python 依赖会优先使用
 [清华大学 TUNA 镜像](https://mirrors.tuna.tsinghua.edu.cn/)，失败时回退官方源。
 
-> `v0.1.0-rc.5.post2`（RC5.2）是预览版。RC4/RC5/RC5.1 用户需要手动运行
-> RC5.2 安装器覆盖升级；仍可直接迁移旧版 FineSub Desktop，并移除旧名称
-> 的可执行文件与快捷方式。请从本仓库 Release 下载并按页面提供的
-> SHA-256 校验。
+> `v0.1.0-rc.5.post2`（RC5.2）是预览版。旧版 FineSub Desktop 与 RC4 用户需要手动
+> 运行 RC5.2 安装器覆盖升级；RC5/RC5.1 可在“应用更新”中检查，或手动运行安装器。
+> 每个桌面 Release 均同时提供在线更新清单和签名。请从本仓库 Release 下载并按页面
+> 提供的 SHA-256 校验。
 
 ## 能做什么
 
