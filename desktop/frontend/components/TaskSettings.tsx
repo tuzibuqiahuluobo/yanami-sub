@@ -4,6 +4,7 @@ import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
 
 import { invalidOutputName } from "@/lib/formatters";
+import { runInterfaceTransition } from "@/lib/viewTransition";
 import type {
   CapabilityState,
   GpuTier,
@@ -54,6 +55,10 @@ export function TaskSettings({
   const [tab, setTab] = useState<SettingsTab>("speech");
   const [advanced, setAdvanced] = useState(false);
   const [nameError, setNameError] = useState("");
+  const selectTab = (next: SettingsTab) => {
+    if (next === tab) return;
+    runInterfaceTransition(() => setTab(next));
+  };
   const translationSelected = ["translated-srt", "final-srt"].includes(
     request.stage,
   );
@@ -107,7 +112,7 @@ export function TaskSettings({
           role="tab"
           aria-selected={tab === "speech"}
           className={`task-tab${tab === "speech" ? " is-active" : ""}`}
-          onClick={() => setTab("speech")}
+          onClick={() => selectTab("speech")}
         >
           {t.newTask.settings.tabSpeech}
         </button>
@@ -116,7 +121,7 @@ export function TaskSettings({
           role="tab"
           aria-selected={tab === "llm"}
           className={`task-tab${tab === "llm" ? " is-active" : ""}`}
-          onClick={() => setTab("llm")}
+          onClick={() => selectTab("llm")}
         >
           {t.newTask.settings.tabLlm}
           {llmNeedsKey ? <span className="tab-dot" aria-hidden="true" /> : null}

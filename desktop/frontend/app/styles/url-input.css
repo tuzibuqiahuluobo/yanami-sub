@@ -40,7 +40,7 @@
   height: 44px;
   padding: 0 14px;
   border: 1.5px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--text);
   background: var(--panel, #ffffff);
   font-size: 0.9333rem;

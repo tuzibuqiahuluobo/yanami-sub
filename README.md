@@ -12,7 +12,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 ## 快速开始
 
 1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.1.0-rc.5.post1-Setup.exe`。
+   `Yanami-Sub-0.1.0-rc.5.post2-Setup.exe`。
 2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
 3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
 4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
@@ -22,8 +22,8 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 网络的 Python 依赖会优先使用
 [清华大学 TUNA 镜像](https://mirrors.tuna.tsinghua.edu.cn/)，失败时回退官方源。
 
-> `v0.1.0-rc.5.post1`（RC5.1）是预览版。RC4/RC5 用户需要手动运行
-> RC5.1 安装器覆盖升级；仍可直接迁移旧版 FineSub Desktop，并移除旧名称
+> `v0.1.0-rc.5.post2`（RC5.2）是预览版。RC4/RC5/RC5.1 用户需要手动运行
+> RC5.2 安装器覆盖升级；仍可直接迁移旧版 FineSub Desktop，并移除旧名称
 > 的可执行文件与快捷方式。请从本仓库 Release 下载并按页面提供的
 > SHA-256 校验。
 

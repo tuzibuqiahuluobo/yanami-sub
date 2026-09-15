@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   BookOpen,
   CheckCircle2,
+  ChevronDown,
   CircleHelp,
   Download,
   ExternalLink,
@@ -21,7 +22,6 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { flushSync } from "react-dom";
 
 import {
   isStale,
@@ -48,6 +48,7 @@ import {
   type FontScale,
   type ThemeMode,
 } from "@/lib/useAppearance";
+import { runInterfaceTransition } from "@/lib/viewTransition";
 
 import { ApiKeyField } from "./ApiKeyField";
 import { CustomSelect } from "./CustomSelect";
@@ -76,11 +77,6 @@ interface SettingsProps extends UpdateSectionProps {
   onRescanGpus: () => Promise<unknown>;
 }
 
-type ViewTransitionDocument = Document & {
-  startViewTransition?: (update: () => void) => unknown;
-};
-
-
 export function Settings({
   state,
   appearance: appearanceProp,
@@ -102,6 +98,7 @@ export function Settings({
 }: SettingsProps) {
   const appearance = appearanceProp ?? DEFAULT_APPEARANCE;
   const [docsOpen, setDocsOpen] = useState(false);
+  const [routingCatalogOpen, setRoutingCatalogOpen] = useState(false);
   // Preferences are hydrated before this page can be reached, so the initial
   // read is already the durable one.
   const [closeWindowAction, setCloseWindowAction] = useState(
@@ -215,13 +212,7 @@ export function Settings({
 
   const selectTheme = (theme: ThemeMode) => {
     if (theme === appearance.theme) return;
-    const commit = () => onAppearanceChange({ theme });
-    const startViewTransition = (document as ViewTransitionDocument).startViewTransition;
-    if (!appearance.animations || !startViewTransition) {
-      commit();
-      return;
-    }
-    startViewTransition.call(document, () => flushSync(commit));
+    runInterfaceTransition(() => onAppearanceChange({ theme }));
   };
 
   const languageOptions = [
@@ -728,19 +719,37 @@ export function Settings({
             </div>
             {routingError ? <p className="routing-error" role="alert">{routingError}</p> : null}
 
-            <details className="routing-catalog">
-              <summary>{t.settings.routing.catalog.replace("{groups}", String(Object.keys(routing.model_groups).length)).replace("{targets}", String(routing.targets.length))}</summary>
-              <div className="routing-catalog-columns">
-                <div>
-                  <strong>{t.settings.routing.groups}</strong>
-                  <ul>{Object.entries(routing.model_groups).map(([group, targets]) => <li key={group}><code>{group}</code><span>{targets.length}</span></li>)}</ul>
-                </div>
-                <div>
-                  <strong>{t.settings.routing.targets}</strong>
-                  <ul>{routing.targets.map((target) => <li key={target.id}><code>{target.id}</code><span>{target.provider_tier}</span></li>)}</ul>
+            <div className={`routing-catalog${routingCatalogOpen ? " is-open" : ""}`}>
+              <button
+                type="button"
+                className="routing-catalog-toggle"
+                aria-expanded={routingCatalogOpen}
+                aria-controls="routing-catalog-content"
+                onClick={() => setRoutingCatalogOpen((open) => !open)}
+              >
+                <ChevronDown size={14} aria-hidden="true" />
+                <span>{t.settings.routing.catalog.replace("{groups}", String(Object.keys(routing.model_groups).length)).replace("{targets}", String(routing.targets.length))}</span>
+              </button>
+              <div
+                id="routing-catalog-content"
+                className="routing-catalog-reveal"
+                role="region"
+                aria-hidden={!routingCatalogOpen}
+              >
+                <div className="routing-catalog-reveal-inner">
+                  <div className="routing-catalog-columns">
+                    <div>
+                      <strong>{t.settings.routing.groups}</strong>
+                      <ul>{Object.entries(routing.model_groups).map(([group, targets]) => <li key={group}><code>{group}</code><span>{targets.length}</span></li>)}</ul>
+                    </div>
+                    <div>
+                      <strong>{t.settings.routing.targets}</strong>
+                      <ul>{routing.targets.map((target) => <li key={target.id}><code>{target.id}</code><span>{target.provider_tier}</span></li>)}</ul>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </details>
+            </div>
 
             <div className="agent-diagnostics">
               <div className="settings-section-heading compact">

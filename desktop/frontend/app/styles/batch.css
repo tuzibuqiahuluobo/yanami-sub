@@ -22,8 +22,35 @@
 }
 
 .batch-url-row textarea {
+  width: 100%;
   min-height: 64px;
+  padding: 10px 14px;
   resize: vertical;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-control);
+  outline: none;
+  color: var(--text);
+  background: var(--panel);
+  font: inherit;
+  line-height: 1.5;
+  transition:
+    border-color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    background var(--motion-fast) ease;
+}
+
+.batch-url-row textarea:hover:not(:disabled) {
+  border-color: var(--muted);
+}
+
+.batch-url-row textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.batch-url-row textarea:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .batch-source-list,

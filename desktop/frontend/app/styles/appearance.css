@@ -29,7 +29,7 @@
 .appearance-item .custom-select-trigger {
   height: 36px;
   padding: 0 12px;
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   font-size: 0.8667rem;
   font-weight: 500;
   border-color: var(--border);
@@ -160,19 +160,35 @@
   background: var(--app-bg);
 }
 
-::view-transition-group(active-theme-choice) {
+::view-transition-group(active-theme-choice),
+::view-transition-group(active-task-tab),
+::view-transition-group(active-knowledge-tab) {
   animation-duration: 460ms;
   animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 ::view-transition-old(active-theme-choice),
-::view-transition-new(active-theme-choice) {
+::view-transition-new(active-theme-choice),
+::view-transition-old(active-task-tab),
+::view-transition-new(active-task-tab),
+::view-transition-old(active-knowledge-tab),
+::view-transition-new(active-knowledge-tab) {
   height: 100%;
   animation-duration: 460ms;
   mix-blend-mode: normal;
 }
 
-[data-motion="off"] .theme-btn.is-active {
+[data-motion="off"] .theme-btn.is-active,
+[data-motion="off"] .task-tab.is-active,
+[data-motion="off"] .knowledge-tabs button.is-active {
   view-transition-name: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-btn.is-active,
+  .task-tab.is-active,
+  .knowledge-tabs button.is-active {
+    view-transition-name: none;
+  }
 }
 

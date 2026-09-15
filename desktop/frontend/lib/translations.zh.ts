@@ -58,7 +58,7 @@ export const zh = {
       glassOpacity: "背景不透明度",
       glassOpacityHint: "拖动调节面板背景透明度，数值越小越透明",
       animations: "界面动画",
-      animationsHint: "切换侧栏时显示平滑过渡；关闭后立即切换。",
+      animationsHint: "切换页面、选项或展开内容时显示平滑过渡；关闭后立即切换。",
     },
     theme: {
       light: "浅色",

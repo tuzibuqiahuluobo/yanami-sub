@@ -17,6 +17,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
+import { runInterfaceTransition } from "@/lib/viewTransition";
 import type {
   JobSnapshot,
   KnowledgeEntryDocument,
@@ -81,6 +82,10 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
   const [output, setOutput] = useState("");
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState("all");
+  const selectTab = (next: KnowledgeTab) => {
+    if (next === tab) return;
+    runInterfaceTransition(() => setTab(next));
+  };
 
   const [newEntry, setNewEntry] = useState({
     category: "common",
@@ -318,7 +323,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
               className={tab === item.id ? "is-active" : ""}
               role="tab"
               aria-selected={tab === item.id}
-              onClick={() => setTab(item.id)}
+              onClick={() => selectTab(item.id)}
             >
               <Icon size={15} />
               {item.label}

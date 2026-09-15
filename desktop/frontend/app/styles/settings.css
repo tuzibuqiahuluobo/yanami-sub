@@ -266,15 +266,59 @@
   margin-top: 14px;
   padding: 12px 14px;
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: var(--radius-control);
   background: var(--panel-subtle);
 }
 
-.routing-catalog summary {
+.routing-catalog-toggle {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 0;
+  border: 0;
   cursor: pointer;
   color: var(--muted-strong);
+  background: transparent;
+  font-family: inherit;
   font-size: 0.8rem;
   font-weight: 650;
+  text-align: left;
+}
+
+.routing-catalog-toggle svg {
+  flex: 0 0 auto;
+  transform: rotate(-90deg);
+  transition: transform var(--motion-normal) var(--motion-ease-out);
+}
+
+.routing-catalog-toggle:focus-visible {
+  border-radius: 6px;
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.routing-catalog.is-open .routing-catalog-toggle svg {
+  transform: rotate(0deg);
+}
+
+.routing-catalog-reveal {
+  display: grid;
+  opacity: 0;
+  grid-template-rows: 0fr;
+  transition:
+    grid-template-rows var(--motion-normal) var(--motion-ease-out),
+    opacity var(--motion-fast) ease;
+}
+
+.routing-catalog.is-open .routing-catalog-reveal {
+  opacity: 1;
+  grid-template-rows: 1fr;
+}
+
+.routing-catalog-reveal-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .routing-catalog-columns {

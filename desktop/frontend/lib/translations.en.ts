@@ -60,7 +60,7 @@ export const en: Translations = {
       glassOpacity: "Background Opacity",
       glassOpacityHint: "Drag to adjust panel opacity, lower values are more transparent",
       animations: "Interface Animation",
-      animationsHint: "Use smooth transitions when switching sections; turn off for instant navigation.",
+      animationsHint: "Use smooth transitions for pages, options, and expanding content; turn off for instant changes.",
     },
     theme: {
       light: "Light",

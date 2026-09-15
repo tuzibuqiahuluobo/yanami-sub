@@ -175,11 +175,20 @@
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
+  transition:
+    border-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    background var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion-ease-out);
 }
 
 .task-tab.is-active {
   border-color: var(--accent, #6b6bd6);
-  color: var(--accent, #6b6bd6);
+  color: var(--text);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 7%, transparent);
+  view-transition-name: active-task-tab;
 }
 
 /* Something in the other tab needs attention (e.g. a missing API key). */
@@ -245,7 +254,7 @@
   width: 100%;
   height: 44px;
   border: 1.5px solid #e2e4e8;
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--text);
   background: #ffffff;
   font-size: 0.9333rem;
@@ -346,7 +355,7 @@
   gap: 8px;
   padding: 0 14px;
   border: 1.5px solid var(--border);
-  border-radius: 12px;
+  border-radius: var(--radius-control);
   color: var(--text);
   background: var(--panel);
   font-size: 0.9333rem;
@@ -403,7 +412,7 @@
   padding: 5px;
   list-style: none;
   border: 1px solid var(--glass-border);
-  border-radius: 14px;
+  border-radius: calc(var(--radius-control) + 4px);
   background: var(--glass-bg);
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
@@ -426,7 +435,7 @@
 .custom-select-option {
   padding: 10px 12px 10px 12px;
   margin: 0 0 5px;
-  border-radius: 9px;
+  border-radius: calc(var(--radius-control) - 4px);
   color: #3a3c40;
   font-size: 0.9333rem;
   cursor: pointer;
