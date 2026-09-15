@@ -6,6 +6,7 @@ import pytest
 
 from finesub import config as app_config
 from finesub.llm.routing.model_routes import default_model_routes
+from finesub_bootstrap.http_client import NetworkConnectionError
 from finesub_bootstrap.models import ResourceStatus
 from desktop.backend.common.models import BatchRequest, TaskRequest
 from desktop.backend.jobs.launch import WorkerLaunchContext
@@ -553,6 +554,31 @@ def test_update_check_opens_release_page_without_installing(
     assert opened == [
         "https://github.com/tuzibuqiahuluobo/yanami-sub/releases/tag/v1.1.0"
     ]
+
+
+def test_update_network_failure_suggests_switching_network_and_is_logged(
+    tmp_path: Path,
+) -> None:
+    class OfflineUpdates:
+        def check(self):
+            raise NetworkConnectionError("所有连接方式均失败")
+
+    recorded: list[tuple[str, BaseException]] = []
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        updates=OfflineUpdates(),
+        error_reporter=lambda context, error: recorded.append((context, error)),
+    )
+
+    result = bridge.check_updates()
+
+    assert result["error"]["code"] == "network_error"
+    assert "切换网络" in result["error"]["message"]
+    assert "关闭代理" in result["error"]["message"]
+    assert recorded[0][0] == "bridge.check"
+    assert isinstance(recorded[0][1], NetworkConnectionError)
 
 
 def test_open_output_accepts_any_saved_task_but_rejects_other_paths(

@@ -4,10 +4,12 @@ from collections.abc import Callable
 import logging
 import os
 from pathlib import Path
+import sys
 import webbrowser
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, ValidationError
+from finesub_bootstrap.http_client import NetworkConnectionError
 
 from desktop.backend.batches.manager import BatchAlreadyRunning, BatchNotFound
 from desktop.backend.common.models import (
@@ -114,6 +116,7 @@ class DesktopBridge:
         window: Any | None = None,
         tray: Any | None = None,
         relauncher: Callable[[], Any] | None = None,
+        error_reporter: Callable[[str, BaseException], None] | None = None,
         app_version: str = "development",
     ) -> None:
         self.jobs = jobs
@@ -139,6 +142,7 @@ class DesktopBridge:
         self.window = window
         self.tray = tray
         self.relauncher = relauncher
+        self.error_reporter = error_reporter
         self.app_version = app_version
 
     def get_bootstrap_state(self) -> dict[str, Any]:
@@ -1224,6 +1228,17 @@ class DesktopBridge:
     def _guard(self, action: Callable[[], Any]) -> dict[str, Any]:
         try:
             return _success(action())
+        except NetworkConnectionError as error:
+            self._record_exception(action.__name__, error)
+            return _failure(
+                BridgeError(
+                    code="network_error",
+                    message=(
+                        "无法连接更新服务，请检查网络，或尝试切换网络、"
+                        "暂时关闭代理后重试。"
+                    ),
+                )
+            )
         except (ValueError, KeyError) as error:
             return _failure(
                 BridgeError(code="invalid_request", message=str(error))
@@ -1270,9 +1285,24 @@ class DesktopBridge:
             raise OSError("Explorer integration is only available on Windows")
         os.startfile(str(target))
 
-    @staticmethod
-    def _internal_error(operation: str) -> dict[str, Any]:
-        LOGGER.exception("Desktop bridge operation failed: %s", operation)
+    def _record_exception(self, operation: str, error: BaseException) -> None:
+        LOGGER.error(
+            "Desktop bridge operation failed: %s",
+            operation,
+            exc_info=(type(error), error, error.__traceback__),
+        )
+        if self.error_reporter is not None:
+            try:
+                self.error_reporter(f"bridge.{operation}", error)
+            except Exception:
+                LOGGER.exception("Could not write the bridge error to the session log")
+
+    def _internal_error(self, operation: str) -> dict[str, Any]:
+        error = sys.exception()
+        if error is not None:
+            self._record_exception(operation, error)
+        else:  # Defensive: every current caller is inside an except block.
+            LOGGER.error("Desktop bridge operation failed: %s", operation)
         return _failure(
             BridgeError(
                 code="internal_error",

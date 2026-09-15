@@ -76,9 +76,9 @@ API Key 的配置见上游
 Yanami Sub，由随包发布的 updater 完成）。个人数据、模型、缓存、任务产物都会保留。
 也可以到 Release 页手动下载。
 
-RC3 是首次改名迁移版。旧 FineSub Desktop 必须手动运行 Yanami Sub 安装器；RC4 用户也应
-手动运行当前 RC5 Setup 覆盖升级，以免 RC4 的完整更新器移除 Windows 卸载器。RC5 已保护
-卸载器文件，后续版本可恢复应用内更新。
+RC3 是首次改名迁移版。旧 FineSub Desktop 必须手动运行 Yanami Sub 安装器；RC4/RC5
+用户也应手动运行当前 RC5.1 Setup 覆盖升级，以免 RC4 的完整更新器移除 Windows
+卸载器。RC5 起已保护卸载器文件，供后续版本安全恢复应用内更新。
 
 ---
 

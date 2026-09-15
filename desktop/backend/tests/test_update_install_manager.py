@@ -6,6 +6,7 @@ from typing import Any
 
 import pytest
 
+from finesub_bootstrap.http_client import NetworkConnectionError
 from finesub_bootstrap.models import DownloadProgress
 from desktop.backend.updates.install_manager import (
     UpdateInstallInProgress,
@@ -148,6 +149,25 @@ def test_a_failed_install_surfaces_the_reason_and_can_be_retried() -> None:
     updates.release.set()
     _settled(manager)
     assert len(updates.calls) == 2
+
+
+def test_a_network_failure_suggests_switching_network_and_is_logged() -> None:
+    error = NetworkConnectionError("所有连接方式均失败")
+    updates = FakeUpdates(error=error)
+    recorded: list[tuple[str, BaseException]] = []
+    manager = UpdateInstallManager(
+        updates,
+        error_reporter=lambda context, failure: recorded.append((context, failure)),
+    )
+    manager.start("app", "0.3.2")
+    updates.entered.wait(timeout=5)
+    updates.release.set()
+
+    settled = _settled(manager)
+
+    assert "切换网络" in settled.error
+    assert "关闭代理" in settled.error
+    assert recorded == [("update.install", error)]
 
 
 def test_get_is_none_before_anything_starts() -> None:

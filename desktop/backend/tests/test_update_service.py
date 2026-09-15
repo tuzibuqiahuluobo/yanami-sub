@@ -6,11 +6,14 @@ import json
 from pathlib import Path
 from zipfile import ZipFile
 
+import httpx
 import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
+from finesub_bootstrap.http_client import NetworkRoute
 from finesub_bootstrap.paths import AppPaths
+from desktop.backend.updates import service as update_service
 from desktop.backend.tests.test_update_installer import app_files
 from desktop.backend.updates.service import (
     GitHubUpdateService,
@@ -338,3 +341,42 @@ def test_the_newest_signed_desktop_release_wins_over_newer_other_lines() -> None
     chosen = next(item for item in feed if is_desktop_release(item, "stable"))
 
     assert chosen["tag_name"] == "v0.3.1"
+
+
+def test_release_check_falls_back_from_limited_and_unusable_proxies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    routes = [
+        NetworkRoute("代理已限流", "http://127.0.0.1:7897"),
+        NetworkRoute("SOCKS 不可用", "socks5://127.0.0.1:7897"),
+        NetworkRoute("直连", None),
+    ]
+    calls: list[str] = []
+
+    def client(route, **_options):
+        calls.append(route.label)
+        if route.label == "SOCKS 不可用":
+            raise ImportError("socksio is not installed")
+
+        def respond(request: httpx.Request) -> httpx.Response:
+            if route.proxy:
+                return httpx.Response(
+                    403,
+                    headers={"x-ratelimit-remaining": "0"},
+                    request=request,
+                )
+            return httpx.Response(
+                200,
+                json=[_release("v0.3.2", assets=SIGNED, prerelease=True)],
+                request=request,
+            )
+
+        return httpx.Client(transport=httpx.MockTransport(respond))
+
+    monkeypatch.setattr(update_service, "network_routes", lambda: routes)
+    monkeypatch.setattr(update_service, "create_client", client)
+
+    release = update_service._fetch_release("owner/project", "beta")
+
+    assert release["tag_name"] == "v0.3.2"
+    assert calls == ["代理已限流", "SOCKS 不可用", "直连"]

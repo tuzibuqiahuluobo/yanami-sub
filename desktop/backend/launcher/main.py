@@ -787,8 +787,11 @@ def create_application(
         settings=settings,
         updates=updates,
         update_installs=(
-            UpdateInstallManager(updates) if updates is not None else None
+            UpdateInstallManager(updates, error_reporter=session.exception)
+            if updates is not None
+            else None
         ),
+        error_reporter=session.exception,
         app_version=resolve_app_version(paths),
     )
     session.write(

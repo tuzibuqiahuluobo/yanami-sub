@@ -368,7 +368,7 @@ def _fetch_release(
                     f"{channel} channel"
                 )
         except Exception as error:
-            if not is_connection_failure(error):
+            if not _route_failed(error):
                 raise
             attempts.append((route.label, error))
     raise connection_error(attempts)
@@ -393,10 +393,21 @@ def _fetch_bytes(url: str, limit: int) -> bytes:
                     response.raise_for_status()
                     return _read_limited_body(response, limit)
         except Exception as error:
-            if not is_connection_failure(error):
+            if not _route_failed(error):
                 raise
             attempts.append((route.label, error))
     raise connection_error(attempts)
+
+
+def _route_failed(error: BaseException) -> bool:
+    """Whether trying the next proxy/direct route can reasonably recover."""
+
+    if is_connection_failure(error) or isinstance(error, ImportError):
+        return True
+    if not isinstance(error, httpx.HTTPStatusError):
+        return False
+    status = error.response.status_code
+    return status in {403, 407, 408, 429} or status >= 500
 
 
 def _launch_process(command: list[str]) -> subprocess.Popen[bytes]:

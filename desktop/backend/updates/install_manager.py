@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any, Literal
 import threading
 import time
 
+from finesub_bootstrap.http_client import NetworkConnectionError
 from finesub_bootstrap.models import DownloadProgress
 
 from desktop.backend.common.models import UpdateInstallSnapshot
@@ -22,8 +24,13 @@ class UpdateInstallManager:
     same shape ResourceInstallManager uses for runtime downloads.
     """
 
-    def __init__(self, updates: Any) -> None:
+    def __init__(
+        self,
+        updates: Any,
+        error_reporter: Callable[[str, BaseException], None] | None = None,
+    ) -> None:
         self.updates = updates
+        self.error_reporter = error_reporter
         self._lock = threading.RLock()
         self._snapshot: UpdateInstallSnapshot | None = None
 
@@ -92,10 +99,17 @@ class UpdateInstallManager:
         try:
             result = self.updates.install(kind, progress, stage)
         except Exception as error:
+            if self.error_reporter is not None:
+                self.error_reporter("update.install", error)
             self._update(
                 state="failed",
                 message="更新安装失败",
-                error=str(error) or type(error).__name__,
+                error=(
+                    "无法连接更新服务，请检查网络，或尝试切换网络、"
+                    "暂时关闭代理后重试。"
+                    if isinstance(error, NetworkConnectionError)
+                    else str(error) or type(error).__name__
+                ),
                 bytes_per_second=0,
             )
             return
