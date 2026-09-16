@@ -193,6 +193,34 @@
   white-space: nowrap;
 }
 
+/* Which CPython the runtime is built from. It gets its own actions because
+   this is the one line that explains a failed Python install: the row above
+   in the drawer reports the state, this one reports the candidates. */
+.diagnostics-interpreter {
+  padding-top: 8px;
+  border-top: 1px solid var(--border-subtle, rgb(0 0 0 / 8%));
+}
+
+.diagnostics-interpreter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.diagnostics-interpreter-detail {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.73rem;
+  line-height: 1.5;
+  white-space: pre-line;
+}
+
+.diagnostics-paths .is-failed {
+  color: var(--danger, #c0392b);
+  font-size: 0.78rem;
+}
+
 @media (max-width: 900px) {
   .diagnostics-meta {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -282,6 +310,15 @@
 .resource-label.is-failed {
   color: #a43e35;
   background: #fbecea;
+}
+
+/* Missing, but not on any task's critical path: yt-dlp only matters for URL
+   input and the tokeniser falls back to the online counter. Amber and an
+   information glyph, because painting these like a blocker is what sent users
+   off to install tools they had no use for. */
+.resource-label.is-advisory {
+  color: #80643c;
+  background: #faf2e5;
 }
 
 .resource-card p,

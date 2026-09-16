@@ -25,6 +25,7 @@ from desktop.backend.common.models import (
 from desktop.backend.knowledge import KnowledgeOperationError, KnowledgeService
 from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobAlreadyRunning, JobNotFound
+from desktop.backend.resources import python_interpreter
 from desktop.backend.settings.preferences import PreferencesStore
 from desktop.backend.settings.store import SettingsStore
 
@@ -110,6 +111,7 @@ class DesktopBridge:
         batch_manifest_export_selector: Callable[[], str | None] | None = None,
         directory_selector: Callable[[], str | None] | None = None,
         key_export_selector: Callable[[], str | None] | None = None,
+        python_selector: Callable[[], str | None] | None = None,
         knowledge: Any | None = None,
         output_opener: Callable[[Path], None] | None = None,
         url_opener: Callable[[str], Any] | None = None,
@@ -133,6 +135,7 @@ class DesktopBridge:
         self.batch_manifest_export_selector = batch_manifest_export_selector
         self.directory_selector = directory_selector
         self.key_export_selector = key_export_selector
+        self.python_selector = python_selector
         self.knowledge = knowledge or KnowledgeService(
             settings.user_data / "knowledge",
             lambda: self.jobs.worker_context,
@@ -643,6 +646,82 @@ class DesktopBridge:
 
         return self._guard(open_location)
 
+    def get_python_interpreter(self) -> dict[str, Any]:
+        """Which CPython the runtime will be built from.
+
+        The answer is a snapshot of the discovery and its rejections, not a
+        live probe of the managed environment -- the "uv" resource row already
+        reports that, and it must stay a filesystem check.
+        """
+
+        return self._guard(self.resources.interpreter_choice)
+
+    def select_python_interpreter(self) -> dict[str, Any]:
+        """Native file picker for a Python interpreter, validated on the spot."""
+
+        if self.python_selector is None:
+            return _failure(
+                BridgeError(
+                    code="dialog_unavailable",
+                    message="当前窗口无法打开文件选择器。",
+                )
+            )
+
+        def choose() -> dict[str, Any]:
+            selected = self.python_selector()
+            if not selected:
+                return {"cancelled": True}
+            outcome = python_interpreter.probe_interpreter(Path(selected))
+            if not outcome.ok:
+                raise ValueError(outcome.reason)
+            chosen = outcome.path
+            python_interpreter.save_configured_interpreter(
+                self.resources.runtime.paths.user_data, chosen
+            )
+            return {
+                "cancelled": False,
+                "path": str(chosen),
+                "version": outcome.version,
+                "restart_required": True,
+            }
+
+        return self._guard(choose)
+
+    def set_python_interpreter(self, path: str) -> dict[str, Any]:
+        """Validate and store an interpreter path typed by the user.
+
+        Refused rather than stored when it cannot be used: a saved path is read
+        at the next start-up, and failing the install there would leave the
+        user with no idea which of their choices was the bad one.
+        """
+
+        def store() -> dict[str, Any]:
+            outcome = python_interpreter.probe_interpreter(Path(path))
+            if not outcome.ok:
+                raise ValueError(outcome.reason)
+            selected_path = outcome.path
+            python_interpreter.save_configured_interpreter(
+                self.resources.runtime.paths.user_data, selected_path
+            )
+            return {
+                "path": str(selected_path),
+                "version": outcome.version,
+                "restart_required": True,
+            }
+
+        return self._guard(store)
+
+    def clear_python_interpreter(self) -> dict[str, Any]:
+        """Forget the stored choice and go back to automatic discovery."""
+
+        def clear() -> dict[str, Any]:
+            python_interpreter.save_configured_interpreter(
+                self.resources.runtime.paths.user_data, None
+            )
+            return {"restart_required": True}
+
+        return self._guard(clear)
+
     def relocate_data(self, reset: bool = False) -> dict[str, Any]:
         """Choose and move the core big-data store; paths never come from JS."""
 
@@ -757,6 +836,31 @@ class DesktopBridge:
             )
         except Exception:
             return self._internal_error("save_shared_settings")
+
+    def reload_settings(self) -> dict[str, Any]:
+        """Re-read `.env` and `config.toml` from disk, then re-arm the workers.
+
+        Every read in this class already goes to the file, so what goes stale is
+        everything the launcher *snapshotted*: the bootstrap payload the front
+        end renders, and the worker environment built at start-up. A key copied
+        in from another machine -- or written by the CLI sharing the same data
+        root, which this product deliberately supports -- therefore did not
+        appear until the application was restarted.
+
+        Deliberately not a watcher: no filesystem handle is held open on a
+        user's config file, and nothing polls. The front end asks when the
+        window regains focus and when the LLM settings are opened, which is
+        exactly when the answer starts to matter.
+        """
+
+        def reload() -> dict[str, Any]:
+            self._refresh_worker_environment()
+            return {
+                "settings": self.settings.public_settings(),
+                "capabilities": self.settings.get_capabilities(),
+            }
+
+        return self._guard(reload)
 
     def save_api_keys(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:

@@ -330,18 +330,33 @@
 
 .workspace-view {
   min-height: 100%;
-  animation: workspace-view-in 220ms var(--motion-ease-out) both;
+  opacity: 1;
+  transition: opacity 220ms var(--motion-ease-out);
 }
 
-@keyframes workspace-view-in {
-  from {
+/* The entry effect is a transition, not a keyframe animation, and it is
+   **opacity only**.
+ *
+ * A keyframe animation with `fill-mode: both` leaves its `to` declarations
+ * applied for good, so an animated `transform` here made this element a
+ * containing block -- and every `position: fixed` descendant was then
+ * positioned against it instead of the viewport. The confirmation dialog is a
+ * child of this element, which is how it ended up rendered outside the visible
+ * area on a scrolled page, looking like a frozen UI.
+ *
+ * No offset property may live here at all, including `translate`:
+ * `@starting-style { translate: 10px }` was tried and it stays applied, which
+ * captures the overlay exactly the same way. The slide is not worth that
+ * coupling -- the dialog is not the only fixed overlay that will ever be added
+ * under this pane. `test/acceptance-findings.test.ts` measures the overlay
+ * against the viewport so a future "nicer" entrance fails loudly instead. */
+@starting-style {
+  .workspace-view {
     opacity: 0;
-    transform: translate3d(10px, 0, 0);
   }
+}
 
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
+[data-motion="off"] .workspace-view {
+  transition: none;
 }
 

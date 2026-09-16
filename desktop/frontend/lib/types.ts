@@ -477,6 +477,19 @@ export interface RefinedKnowledgeUpdateReport {
   [key: string]: unknown;
 }
 
+/** Which CPython the managed runtime is built from.
+ *
+ *  `configured` is the user's explicit choice (or the development interpreter);
+ *  `found` is what discovery settled on. `detail` explains an empty `found` and
+ *  is the only place a rejected interpreter is named. */
+export interface PythonInterpreterChoice {
+  configured: string | null;
+  found: string | null;
+  version: string;
+  detail: string;
+  rejected: { path: string; reason: string }[];
+}
+
 export interface DiagnosticsReport {
   healthy: boolean;
   app_version: string;
@@ -484,6 +497,10 @@ export interface DiagnosticsReport {
   resources: ResourceStatus[];
   blocking_resources: string[];
   python_executable: string;
+  /** Absent from older payloads, so optional rather than required. */
+  python_interpreter?: PythonInterpreterChoice;
+  /** Where the weights are, when that is not `paths.models`. */
+  model_locations?: { managed: string; hf_home: string; separator: string };
   disk_free_bytes: number | null;
   paths: Record<string, string>;
   capabilities: CapabilityState;
@@ -624,6 +641,19 @@ export interface DesktopApi {
   pauseResourceInstall(resourceId: string): Promise<ResourceInstallSnapshot>;
   openInstallLogs(): Promise<unknown>;
   rescanGpus(): Promise<unknown>;
+  getPythonInterpreter(): Promise<PythonInterpreterChoice>;
+  selectPythonInterpreter(): Promise<{
+    cancelled?: boolean;
+    path?: string;
+    version?: string;
+    restart_required?: boolean;
+  }>;
+  setPythonInterpreter(path: string): Promise<{
+    path: string;
+    version: string;
+    restart_required: boolean;
+  }>;
+  clearPythonInterpreter(): Promise<{ restart_required: boolean }>;
   openResourceLocation(
     resourceId: string,
     kind: "cache" | "install",
@@ -634,6 +664,10 @@ export interface DesktopApi {
     exa?: string | null;
     tavily?: string | null;
   }): Promise<PublicSettings>;
+  reloadSettings(): Promise<{
+    settings: PublicSettings;
+    capabilities: CapabilityState;
+  }>;
   deleteApiKey(provider: ApiProvider): Promise<PublicSettings>;
   revealApiKeys(): Promise<RevealedApiKeys>;
   exportApiKeys(): Promise<KeyExportResult>;

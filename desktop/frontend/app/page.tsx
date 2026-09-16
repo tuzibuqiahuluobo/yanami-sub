@@ -23,7 +23,7 @@ import {
   readProcessingDevice,
   requestDeviceFields,
 } from "@/lib/processingDevice";
-import { blockingResources, hasActiveInstall } from "@/lib/resources";
+import { blockingResources, hasActiveInstall, pipelineModelsReady } from "@/lib/resources";
 import {
   REMEMBERED_TASK_FIELDS,
   initialState,
@@ -129,6 +129,27 @@ export default function Home() {
   useEffect(() => {
     void loadBootstrap();
   }, [loadBootstrap]);
+
+  // `%LOCALAPPDATA%\FineSub\user-data` is shared with the CLI on purpose, so a
+  // key can appear from outside this application -- a CLI run, another front
+  // end, or a `.env` the user copied in. Every read backend-side goes to the
+  // file, but the payload this window renders was snapshotted at start-up, so
+  // the answer used to need a restart. Re-reading when the window regains focus
+  // is the moment such a change becomes real for the user.
+  useEffect(() => {
+    const onFocus = () => {
+      void (async () => {
+        try {
+          const refreshed = await desktopApi.reloadSettings();
+          dispatch({ type: "settingsChanged", settings: refreshed.settings });
+        } catch {
+          // A refresh nobody asked for must not raise an error banner.
+        }
+      })();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, []);
 
   useEffect(() => {
     if (state.task.phase !== "running" || !state.task.taskId) {
@@ -483,6 +504,8 @@ export default function Home() {
         }
         onOpenLogs={() => void desktopApi.openInstallLogs()}
         onRunDiagnostics={() => desktopApi.getDiagnostics()}
+        onSelectPythonInterpreter={() => desktopApi.selectPythonInterpreter()}
+        onClearPythonInterpreter={() => desktopApi.clearPythonInterpreter()}
         storage={state.storage}
         onRelocateData={async (reset) => {
           const result = await desktopApi.relocateData(reset);
@@ -562,11 +585,14 @@ export default function Home() {
         firstRun={
           !state.history.some((snapshot) => snapshot.state === "completed")
         }
+        modelsReady={pipelineModelsReady(state.resources)}
         onCancel={() => void cancelTask()}
         onRetry={() => void startTask()}
       />
     );
-  } else if (state.task.phase === "completed") {
+  } else if (
+    state.task.phase === "completed" && state.route === "new-task"
+  ) {
     content = (
       <CompletedView
         task={state.task}
@@ -579,6 +605,7 @@ export default function Home() {
       <NewTask
         state={state}
         busy={busy}
+        modelsReady={pipelineModelsReady(state.resources)}
         onSelectFile={() => void selectFile()}
         onDropPath={(path) => dispatch({ type: "fileSelected", path })}
         onRequestChange={(changes: Partial<Omit<TaskRequest, "input">>) => {

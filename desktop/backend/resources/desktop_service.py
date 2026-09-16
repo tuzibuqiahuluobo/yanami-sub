@@ -17,11 +17,15 @@ from finesub_bootstrap.environment import (
 from finesub_bootstrap.capabilities import required_capabilities
 from finesub_bootstrap.model_caches import (
     PIPELINE_MODEL_IDS,
+    SEPARATOR_CHECKPOINT,
+    existing_hf_home,
+    existing_separator_dir,
     managed_model_dirs,
     missing_pipeline_models,
 )
 from finesub_bootstrap.downloader import DownloadPaused
 from finesub_bootstrap.models import DownloadProgress, ResourceStatus
+from desktop.backend.resources import python_interpreter
 from desktop.backend.resources.model_prefetch import run_model_prefetch
 from desktop.backend.resources.local_reuse import LocalResourceReuse
 from finesub_bootstrap.system_tools import (
@@ -153,6 +157,44 @@ class DesktopResourceService:
                 detail=f"使用系统已安装的版本：{found.path}",
             )
         return self.bootstrap.status(resource_id)
+
+    def interpreter_choice(self) -> dict[str, object]:
+        """Which Python the runtime will be built from, and which were refused.
+
+        Deliberately not part of ``status("uv")``: that answer has to stay a
+        pure filesystem check because the bridge polls it. This one spawns
+        subprocesses, so it belongs with ``diagnostics()`` -- asked for
+        explicitly, by a user who is already looking at a failure.
+
+        Never raises: the probes swallow their own errors, and a machine with
+        no Python at all is an answer, not a fault.
+        """
+
+        rejected: list[python_interpreter.RejectedCandidate] = []
+        outcome = python_interpreter.locate_interpreter(
+            preferred=self.runtime.development_python
+            or python_interpreter.load_configured_interpreter(self.runtime.paths.user_data),
+            python_version=self.runtime.python_version,
+            rejected=rejected,
+        )
+        return {
+            "configured": (
+                str(self.runtime.development_python)
+                if self.runtime.development_python is not None
+                else None
+            ),
+            "found": str(outcome.path) if outcome.path is not None else None,
+            "version": outcome.version,
+            "detail": (
+                ""
+                if outcome.ok
+                else python_interpreter.describe_failure(rejected)
+            ),
+            "rejected": [
+                {"path": str(item.path), "reason": item.reason}
+                for item in rejected
+            ],
+        }
 
     def _models_status(
         self, *, runtime_status: ResourceStatus | None = None
@@ -422,6 +464,19 @@ class DesktopResourceService:
             "resources": resources,
             "blocking_resources": blocking,
             "python_executable": self.runtime.python_executable,
+            # Which CPython the runtime will be built from. Carried here rather
+            # than in `status("uv")`, which has to stay a filesystem check: this
+            # one probes interpreters, and a user looking at a failed Python
+            # install is exactly who needs the answer.
+            "python_interpreter": self.interpreter_choice(),
+            # Where the weights actually are, which is not always `paths.models`.
+            # Both halves fall back to the conventional per-user cache when it
+            # already holds the files (`existing_hf_home` /
+            # `existing_separator_dir`), and the rule lives in the pipeline, so
+            # it is asked rather than reimplemented. Publishing only the managed
+            # path made "relocate big data" and "purge rebuildable data" look
+            # like they covered several GB that were never there.
+            "model_locations": self._model_locations(),
             "disk_free_bytes": disk_free_bytes,
             "paths": {
                 "install": paths.root,
@@ -432,6 +487,28 @@ class DesktopResourceService:
                 "tasks": paths.tasks,
                 "logs": paths.logs,
             },
+        }
+
+    def _model_locations(self) -> dict[str, object]:
+        """The managed model directories, and the ones actually in use.
+
+        The two differ whenever the conventional per-user cache already holds
+        the weights: the pipeline prefers that copy, so the install's own
+        `models/` stays empty and every byte lives under `~/.cache`. Asking the
+        pipeline's own helpers keeps this honest -- reimplementing the rule
+        here is how the two would drift apart.
+        """
+
+        managed_hf, _ = managed_model_dirs(self.runtime.paths.models)
+        return {
+            "managed": str(managed_hf),
+            "hf_home": str(existing_hf_home(managed_hf)),
+            "separator": str(
+                existing_separator_dir(
+                    self.runtime.paths.models / "audio-separator",
+                    SEPARATOR_CHECKPOINT,
+                )
+            ),
         }
 
     def storage_state(self) -> dict[str, object]:

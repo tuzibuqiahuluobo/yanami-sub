@@ -11,6 +11,7 @@ from finesub_bootstrap.paths import AppPaths
 from finesub_bootstrap.models import ResourceStatus
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.resources.model_prefetch import ModelPrefetchFailed
+from desktop.backend.resources import python_interpreter
 from desktop.backend.resources.desktop_service import (
     DesktopResourceService,
     capability_requirements,
@@ -79,6 +80,11 @@ class FakeRuntime:
         self.ready = False
         self.installs = 0
         self.force_probes: list[bool] = []
+        # Mirrors RuntimeEnvironment: the interpreter choice is read from these
+        # two, so a fake without them would make `interpreter_choice` raise
+        # instead of reporting "nothing chosen, discover one".
+        self.development_python: Path | None = None
+        self.python_version = "3.12"
 
     @property
     def python_executable(self) -> Path:
@@ -367,6 +373,72 @@ def test_diagnostics_forces_runtime_probe_and_reports_only_real_blockers(
     assert report["healthy"] is False
     assert report["blocking_resources"] == ["uv", "ffmpeg"]
     assert report["paths"]["tasks"] == service.runtime.paths.tasks
+    # Carried here rather than in `status("uv")`: that answer is polled by the
+    # bridge and has to stay a filesystem check, while this one probes.
+    assert "python_interpreter" in report
+    # The managed `models/` directory is not necessarily where the weights are.
+    assert report["model_locations"]["managed"] == str(
+        service.runtime.paths.models / "huggingface"
+    )
+    assert report["model_locations"]["hf_home"]
+    assert report["model_locations"]["separator"]
+
+
+def test_the_model_locations_name_the_cache_the_pipeline_will_use(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """When the conventional cache already holds a repo, the pipeline reads
+    from there and leaves the managed directory empty. Reporting only the
+    managed path made "relocate big data" and "purge rebuildable data" look
+    like they covered gigabytes that were never in it."""
+
+    service = _service(tmp_path)
+    conventional = tmp_path / "home" / ".cache" / "huggingface"
+    (conventional / "hub" / model_caches.HF_REPO_DIRS[0]).mkdir(parents=True)
+    monkeypatch.setattr(model_caches, "default_hf_home", lambda: conventional)
+
+    locations = service._model_locations()
+
+    assert locations["hf_home"] == str(conventional)
+    assert locations["managed"] != str(conventional)
+
+
+def test_the_model_locations_stay_managed_when_the_cache_is_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    service = _service(tmp_path)
+    monkeypatch.setattr(
+        model_caches, "default_hf_home", lambda: tmp_path / "home" / ".cache" / "huggingface"
+    )
+
+    locations = service._model_locations()
+
+    assert locations["hf_home"] == locations["managed"]
+
+
+def test_the_interpreter_choice_reports_a_configured_path(
+    tmp_path: Path,
+) -> None:
+    interpreter = tmp_path / "python-interpreter"
+    interpreter.write_bytes(b"MZ")
+    service = _service(tmp_path)
+    service.runtime.development_python = interpreter
+    # Answer the probe for the chosen path without running anything.
+    real_probe = python_interpreter.probe_interpreter
+    python_interpreter.probe_interpreter = lambda path, **kwargs: (
+        python_interpreter.ProbeOutcome(True, path=path, version="3.12.6")
+        if path == interpreter
+        else real_probe(path, **kwargs)
+    )
+    try:
+        choice = service.interpreter_choice()
+    finally:
+        python_interpreter.probe_interpreter = real_probe
+
+    assert choice["configured"] == str(interpreter)
+    assert choice["found"] == str(interpreter)
+    assert choice["version"] == "3.12.6"
+    assert choice["detail"] == ""
 
 
 def test_the_shared_capability_rule_still_names_what_a_request_needs() -> None:

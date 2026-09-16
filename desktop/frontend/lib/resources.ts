@@ -56,6 +56,21 @@ export function isEnvironmentReady(resources: ResourceStatus[]): boolean {
   return blockingResources(resources).length === 0;
 }
 
+/**
+ * Whether the pipeline weights are already on this machine.
+ *
+ * Not `false` when the row is absent: the models row is a *guess* about
+ * somebody else's cache (`existing_hf_home` / `existing_separator_dir`), and a
+ * payload that has not been resolved yet must not read as "you will download
+ * 3.4 GB". Claiming that download on a machine which already has the weights is
+ * the exact complaint this answers -- the task page said "about 3.4 GB" while
+ * the resources page said "ready".
+ */
+export function pipelineModelsReady(resources: ResourceStatus[]): boolean {
+  const models = resources.find((resource) => resource.id === "models");
+  return models !== undefined && isUsable(models);
+}
+
 /** An install that is under way, so the UI should keep polling it. */
 export function isInstallActive(install: ResourceInstallSnapshot): boolean {
   return install.state === "queued" || install.state === "running";

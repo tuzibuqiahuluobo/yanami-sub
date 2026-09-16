@@ -35,6 +35,8 @@ interface ProcessingViewProps {
   task: TaskState;
   /** Nothing has finished on this machine yet: weights and warm-up come first. */
   firstRun?: boolean;
+  /** The weights are already cached, so the notice must not promise a download. */
+  modelsReady?: boolean;
   onCancel: () => void;
   onRetry: () => void;
 }
@@ -43,6 +45,7 @@ interface ProcessingViewProps {
 export function ProcessingView({
   task,
   firstRun,
+  modelsReady,
   onCancel,
   onRetry,
 }: ProcessingViewProps) {
@@ -129,7 +132,9 @@ export function ProcessingView({
 
         {firstRun && task.phase !== "failed" ? (
           <div className="inline-note" role="note">
-            {t.newTask.firstRunNotice}
+            {modelsReady
+              ? t.newTask.firstRunNoticeWarm
+              : t.newTask.firstRunNotice}
           </div>
         ) : null}
 

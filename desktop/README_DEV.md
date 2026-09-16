@@ -36,6 +36,19 @@ DesktopBridge
 `test/stylesheet.test.ts` 断言目录里的文件与清单一一对应——**新加一个 `.css` 忘了写
 `@import`，是「组件悄悄没样式」而不是任何人看得见的报错**。
 
+⚠ **`.workspace-view` 上不得出现任何会创建 containing block 的属性**
+（`transform`/`translate`/`rotate`/`scale`/`filter`/`backdrop-filter`/`perspective`/
+`will-change`/`contain`）。确认弹窗是它的后代，一旦它成为 containing block，
+`position: fixed` 的遮罩就按**滚动面板**而不是视口定位。RC5.2 的
+`animation: workspace-view-in … both` 正是这样：`fill-mode: both` 让
+`to { transform: translate3d(0,0,0) }` **永久生效**，于是页面滚到底部时点「开始生成」，
+弹窗渲染在视口上方——屏幕上只有一个被 blur、点不动的页面，看起来就是应用卡死。
+换成 `@starting-style { translate: 10px }` **同样不行**：那个值会一直留着，一样捕获 fixed
+后代。现在这里只有 `opacity` 过渡；入场滑动不值得这个耦合，因为这个面板下面以后还会有
+别的 fixed 浮层。`test/acceptance-findings.test.ts` 用真实 Edge **量遮罩的尺寸与视口**
+（面板比视口窄，两种情形可区分），并且先断言面板确实比视口窄——否则测试会在什么都不证明
+的情况下通过。
+
 **界面文案一种语言一个文件**：`lib/translations.zh.ts`（加新键的地方，定义结构）+
 `lib/translations.en.ts`，`lib/translations.ts` 只做类型与组装。英文那份标注为
 `Translations`（由中文那份推导、把字面量放宽成 `string`），所以**漏一个英文键是编译错误**，
@@ -343,6 +356,71 @@ faster-whisper / huggingface_hub 拉取，所以和 `uv` 一样在 `DesktopResou
 缺必需组件时，新建任务页不再显示「开始生成」，而是「请先下载资源」并跳转资源页。
 判据是 `blockingResources()`（只看非 optional），所以**模型缺失不拦任务** —— 它自己
 会下，这也是模型行与 git/yt-dlp 的分界：能自动获取的不拦，不能的拦。
+
+### 运行环境用哪个 Python：`resources/python_interpreter.py`
+
+`RuntimeEnvironment` 在两个分支之间选：**找到一个现成的 CPython 3.12** 就
+`uv venv --python <绝对路径>` 从它建环境（只下 AI 依赖）；**一个都没有**就
+`uv python install`，让 `uv` 自己下一份私有的（2.8 GB）。
+
+第二条分支在部分 Windows 机器上会硬失败：`uv` 用「次版本号目录」（
+`cpython-3.12-windows-x86_64-none`）指向具体补丁版本，Windows 上那是
+**junction**；某些用户配置目录不允许遍历装入点，于是
+`Failed to create Python minor version link directory … (os error 448)`
+（`ERROR_UNTRUSTED_MOUNT_POINT`）。用户点重试会走同一条路，所以它看起来像卡死。
+
+桌面侧因此自己提供 `system_python_prober`（`RuntimeEnvironment` 已有的关键字参数，
+**不需要改上游**）来把第一条分支变得可达。相对上游的 `_find_system_python` 修两处：
+
+- **版本判据**。上游拿 `expected=(3, 12)` 去比
+  `tuple(int(p) for p in stdout.split())`——比的是**完整**版本。裸 `python` 下恰好成立，
+  但 stdout 多一个 token（包装脚本、启动钩子）就变成三元组，解释器被**静默**丢弃。这里取
+  输出里的 `\d+\.\d+\.\d+` 再比 major.minor，并且**记录**拒绝理由而不是吞掉。
+  ⚠ 同一个陷阱在本模块第一版里也踩过一次：当时只看最后一行，于是
+  `3.12.6 (main, Nov 2025)` 判成「无法识别版本号」。
+- **搜索面**。上游只试 `shutil.which` 的 `py`/`python3.12`/`python`。用官方安装器装但**没勾
+  Add to PATH** 的解释器只登记在 PEP 514、对 `shutil.which` 不可见，于是永远找不到、
+  直接掉进 junction 那条分支。这里补上 `py -0p` 与常见安装位置。
+
+选择存在 `user-data/python.json`（`interpreter` 键，空串=自动）。它是
+**启动期决策**——基底解释器在任何窗口存在之前就定了，所以 bridge 改了它只提示重启，不假装
+立即生效。`interpreter_choice()` 是**会起子进程**的，因此挂在 `diagnostics()` 上，
+**不**进 `status("uv")`：后者被 bridge 每轮轮询，必须保持纯文件系统检查。
+
+⚠ 解析 `py -0p` 不能按空白切分：路径可以带空格
+（`E:\FineSub Desktop\runtime\…`），截断后指向不存在的目录，会报成「不是解释器」而不是真因。
+`test_launcher_row_keeps_a_path_containing_spaces` 钉着这条。
+
+### 一次 RC5.2 便携版验收带出的前端修复
+
+七条都只动桌面侧，记录在这里是因为其中两条的成因不属于它们看起来的地方：
+
+- **确认弹窗跑到视口外**——真因在 `shell.css` 的 `.workspace-view`，不在 `dialog.css`
+  （见上方 ⚠）。同一个弹窗还**没有锁背景滚动**，而 `.workspace` 才是滚动容器
+  （`.app-shell` 是 `overflow: hidden` 的固定网格），所以 `ConfirmDialog` 锁的是
+  `.workspace` 而不是 `body`。
+- **诊断 chip 把可选项标成阻断项**——后端 `diagnostics()` 早就在发
+  `blocking_resources`（`not optional and not usable`）与每行的 `optional`，是前端
+  chip 只按 `isUsable` 二分。现在三态：可用 / 阻断（红）/ 可选（琥珀）。
+- **「模型权重按需下载（约 3.4 GB）」是写死文案**，而资源页同时说「已就绪」——同一台
+  机器两个答案。改由 `pipelineModelsReady()` 读后端 `models` 行驱动；**行不存在时判 false**，
+  因为该行本身只是对别人缓存的猜测，把未解析读成「已就绪」会吞掉用户真要面对的下载。
+- **诊断里的「模型目录」不是实际读写位置**——HF 与分离器都会在通用缓存已有文件时改用
+  `~/.cache/…`（`existing_hf_home` / `existing_separator_dir`），此时安装目录下的
+  `models/` 根本不存在。`diagnostics()` 新增 `model_locations`（**问上游的判定函数，
+  不重写规则**），UI 只在与托管路径不一致时并列显示。
+- **外拷 `.env` 要重启才认**——后端每次读都落到文件，`_read_keys()` **没有任何缓存**；
+  过期的是 launcher 在启动时**快照**的两样：前端渲染的 bootstrap 载荷、以及冻结进 worker
+  的 `build_worker_env()`。新增 bridge `reload_settings`（重新取键 + `_refresh_worker_environment`），
+  前端在窗口 `focus` 时调用。**刻意不做 watcher**：不在用户的配置文件上持有句柄，也不轮询。
+- **「输出结果」只给了两档**——`translated-srt` 是 LLM 那一趟但**不做**后处理重排，
+  上游一直在支持（`DELIVERABLE_SUFFIX_BY_STAGE` 有 `-translated.srt`，`NewTask` 早就把它
+  算进「需要翻译」），只是下拉框没暴露，顺带把用户被要求手工去找的副产物藏起来了。
+- **完成后点侧栏「新建任务」没反应**——完成卡片和 `ProcessingView` 一样被钉在路由之外；
+  给 `completed` 分支补 `&& state.route === "new-task"`（失败的 `failed` 分支早有此判断）。
+
+回归在 `desktop/frontend/test/acceptance-findings.test.ts`（9 条），覆盖上述每一条，
+并系统性地区分「跨文件契约」——失败形态是两半互相不一致，而任一半单独看不出来。
 
 ## 应用日志
 

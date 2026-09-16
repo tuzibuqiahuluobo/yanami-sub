@@ -799,6 +799,37 @@ def test_bridge_does_not_tell_system_python_users_to_install_python(
     assert result["error"]["action"] == "open_resources"
 
 
+def test_bridge_picks_up_a_key_written_from_outside_the_application(
+    tmp_path: Path,
+) -> None:
+    """The data root is shared with the CLI on purpose, so a key can appear
+    while the application is running. Every backend read already goes to the
+    file; what went stale was the worker environment the launcher built at
+    start-up, which is what `reload_settings` re-arms."""
+
+    user_data = tmp_path / "user-data"
+    settings = SettingsStore(user_data)
+    jobs = FakeJobs()
+    bridge = DesktopBridge(
+        jobs=jobs,
+        resources=FakeResources(),
+        settings=settings,
+    )
+    assert bridge.reload_settings()["data"]["settings"]["api_keys"][
+        "gemini_free"
+    ] == "missing"
+
+    # As if the CLI, or the user, wrote it.
+    user_data.mkdir(parents=True, exist_ok=True)
+    (user_data / ".env").write_text("GEMINI_FREE=from-elsewhere\n", encoding="utf-8")
+
+    result = bridge.reload_settings()
+
+    assert result["ok"] is True
+    assert result["data"]["settings"]["api_keys"]["gemini_free"] == "configured"
+    assert result["data"]["capabilities"]["translation"] is True
+
+
 def test_bridge_exports_keys_only_through_the_native_save_selector(
     tmp_path: Path,
 ) -> None:

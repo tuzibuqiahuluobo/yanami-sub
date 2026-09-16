@@ -23,7 +23,7 @@ from desktop.backend.jobs.manager import JobManager
 from desktop.backend.launcher.bridge import DesktopBridge
 from desktop.backend.launcher.session_log import SessionLog
 from desktop.backend.launcher.tray import TrayController
-from desktop.backend.resources import gpus, install_log
+from desktop.backend.resources import gpus, install_log, python_interpreter
 from desktop.backend.resources.desktop_service import DesktopResourceService
 from desktop.backend.resources.install_manager import ResourceInstallManager
 from desktop.backend.settings.store import SettingsStore
@@ -62,10 +62,15 @@ PUBLIC_BRIDGE_METHODS = (
     "get_resource_statuses",
     "pause_resource_install",
     "open_resource_location",
+    "get_python_interpreter",
+    "select_python_interpreter",
+    "set_python_interpreter",
+    "clear_python_interpreter",
     "rescan_gpus",
     "get_preferences",
     "save_preferences",
     "save_shared_settings",
+    "reload_settings",
     "save_api_keys",
     "delete_api_key",
     "reveal_api_keys",
@@ -657,6 +662,22 @@ def create_backend_services(
             raise FileNotFoundError("uv must be installed before Python setup")
         return executable
 
+    # Which CPython the managed runtime is built from. Left alone, upstream
+    # probes for one itself and -- finding none -- has `uv` download and install
+    # a private copy. That download is what fails on some Windows machines, at
+    # the junction `uv` uses for patch-level upgrades (`os error 448`,
+    # ERROR_UNTRUSTED_MOUNT_POINT). Building from an interpreter that is already
+    # on the machine never touches a junction, so the desktop supplies its own
+    # prober -- a `system_python_prober` seam that already exists upstream, and
+    # therefore needs no change to the pinned `finesub_bootstrap`. See
+    # `resources/python_interpreter.py` for what ours does differently.
+    system_python_prober = python_interpreter.make_prober(
+        preferred=python_interpreter.locate_preferred(
+            development_python=development_python,
+            user_data=paths.user_data,
+        )
+    )
+
     runtime = RuntimeEnvironment(
         paths=paths,
         app_source=app_source,
@@ -665,6 +686,7 @@ def create_backend_services(
         ),
         uv_executable=active_uv,
         development_python=development_python,
+        system_python_prober=system_python_prober,
     )
     resources = DesktopResourceService(
         bootstrap=bootstrap,
@@ -921,6 +943,18 @@ def create_application(
         return str(selected)
 
     bridge.key_export_selector = select_key_export
+
+    def select_python_interpreter() -> str | None:
+        result = window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            file_types=(
+                "Python 解释器 (python.exe)",
+                "所有文件 (*.*)",
+            ),
+        )
+        return str(result[0]) if result else None
+
+    bridge.python_selector = select_python_interpreter
     return window, bridge, development
 
 

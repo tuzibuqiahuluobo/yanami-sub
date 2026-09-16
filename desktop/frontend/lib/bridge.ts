@@ -3,6 +3,7 @@ import type {
   BatchRequest,
   BatchSnapshot,
   BootstrapState,
+  CapabilityState,
   DiagnosticsReport,
   DesktopApi,
   JobSnapshot,
@@ -11,6 +12,7 @@ import type {
   KnowledgeSnapshot,
   Preferences,
   PublicSettings,
+  PythonInterpreterChoice,
   ResourceInstallSnapshot,
   ResourceStatus,
   RevealedApiKeys,
@@ -433,6 +435,24 @@ function previewApi(): DesktopApi {
     async openInstallLogs() {
       return { path: "C:\\Users\\me\\AppData\\Local\\FineSub\\user-data\\logs" };
     },
+    async getPythonInterpreter() {
+      return {
+        configured: null,
+        found: "C:\\Python312\\python.exe",
+        version: "3.12.6",
+        detail: "",
+        rejected: [],
+      };
+    },
+    async selectPythonInterpreter() {
+      return { cancelled: true };
+    },
+    async setPythonInterpreter(path: string) {
+      return { path, version: "3.12.6", restart_required: true };
+    },
+    async clearPythonInterpreter() {
+      return { restart_required: true };
+    },
     async rescanGpus() {
       return { state: "ready", devices: [] };
     },
@@ -484,6 +504,14 @@ function previewApi(): DesktopApi {
         },
       };
       return structuredClone(settings);
+    },
+    async reloadSettings() {
+      // The preview has no file behind it, so "re-read from disk" is the state
+      // it already holds.
+      return {
+        settings: structuredClone(settings),
+        capabilities: structuredClone(previewBootstrap.capabilities),
+      };
     },
     async deleteApiKey(provider) {
       settings = {
@@ -833,7 +861,27 @@ function nativeApi(): DesktopApi {
       call<{ path: string }>("open_resource_location", resourceId, kind),
     openInstallLogs: () => call<{ path: string }>("open_install_logs"),
     rescanGpus: () => call("rescan_gpus"),
+    getPythonInterpreter: () =>
+      call<PythonInterpreterChoice>("get_python_interpreter"),
+    selectPythonInterpreter: () =>
+      call<{
+        cancelled?: boolean;
+        path?: string;
+        version?: string;
+        restart_required?: boolean;
+      }>("select_python_interpreter"),
+    setPythonInterpreter: (path) =>
+      call<{ path: string; version: string; restart_required: boolean }>(
+        "set_python_interpreter",
+        path,
+      ),
+    clearPythonInterpreter: () =>
+      call<{ restart_required: boolean }>("clear_python_interpreter"),
     saveApiKeys: (keys) => call<PublicSettings>("save_api_keys", keys),
+    reloadSettings: () =>
+      call<{ settings: PublicSettings; capabilities: CapabilityState }>(
+        "reload_settings",
+      ),
     deleteApiKey: (provider) =>
       call<PublicSettings>("delete_api_key", provider),
     revealApiKeys: () => call<RevealedApiKeys>("reveal_api_keys"),

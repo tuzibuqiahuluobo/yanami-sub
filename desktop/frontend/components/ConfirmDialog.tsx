@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { saveUi, uiValue } from "@/lib/preferences";
 import { useLanguage } from "./LanguageProvider";
@@ -53,6 +53,27 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const [remember, setRemember] = useState(false);
+
+  // A modal has to own the scroll wheel. Without this the form underneath kept
+  // scrolling while the dialog was up, so the page could move out from behind
+  // a question the user had not answered yet.
+  //
+  // The scroller is `.workspace`, not `body`: the shell is a fixed grid with
+  // `overflow: hidden` and the workspace pane is the thing that actually
+  // scrolls, so locking `body` alone would do nothing here.
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const scroller = document.querySelector<HTMLElement>(".workspace");
+    if (!scroller) {
+      return;
+    }
+    scroller.style.overflowY = "hidden";
+    return () => {
+      scroller.style.overflowY = "";
+    };
+  }, [open]);
 
   const handleConfirm = useCallback(() => {
     if (remember && !isConfirmRemembered(config.id)) {

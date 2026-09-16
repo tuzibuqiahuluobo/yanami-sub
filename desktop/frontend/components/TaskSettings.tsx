@@ -80,6 +80,12 @@ export function TaskSettings({
     onChange({ stage, ...(stage !== "raw-srt" ? { word: false } : {}) });
   const commonOutputOptions = [
     { value: "raw-srt", label: t.newTask.settings.outputRaw },
+    // The LLM pass and the post-processing pass are two stages upstream, and
+    // stopping between them is a real request: `translated-srt` is the
+    // corrected/translated text before it is re-wrapped to the length
+    // preference. Only exposing the two ends also hid the byproduct the user
+    // was told to look for by hand.
+    { value: "translated-srt", label: t.newTask.settings.outputTranslated },
     { value: "final-srt", label: t.newTask.settings.outputFinal },
   ];
   if (request.stage !== "raw-srt" && request.stage !== "final-srt") {

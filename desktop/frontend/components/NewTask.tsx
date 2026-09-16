@@ -17,6 +17,8 @@ import { useLanguage } from "./LanguageProvider";
 interface NewTaskProps {
   state: AppState;
   busy: boolean;
+  /** The weights are already cached, so the notice must not promise a download. */
+  modelsReady?: boolean;
   onSelectFile: () => void;
   onDropPath: (path: string) => void;
   onRequestChange: (
@@ -32,6 +34,7 @@ interface NewTaskProps {
 export function NewTask({
   state,
   busy,
+  modelsReady,
   onSelectFile,
   onDropPath,
   onRequestChange,
@@ -164,7 +167,9 @@ export function NewTask({
 
           {firstRun && hasFile ? (
             <div className="inline-note" role="note">
-              {t.newTask.firstRunNotice}
+              {modelsReady
+                ? t.newTask.firstRunNoticeWarm
+                : t.newTask.firstRunNotice}
             </div>
           ) : null}
 

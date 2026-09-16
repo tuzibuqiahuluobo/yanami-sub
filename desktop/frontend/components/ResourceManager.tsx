@@ -8,6 +8,7 @@ import {
   Download,
   FolderOpen,
   HardDrive,
+  Info,
   LoaderCircle,
   Pause,
   Play,
@@ -59,6 +60,12 @@ interface ResourceManagerProps {
   ) => void;
   onOpenLogs: () => void;
   onRunDiagnostics: () => Promise<DiagnosticsReport>;
+  onSelectPythonInterpreter: () => Promise<{
+    cancelled?: boolean;
+    path?: string;
+    version?: string;
+  }>;
+  onClearPythonInterpreter: () => Promise<unknown>;
   storage: StorageState;
   onRelocateData: (reset: boolean) => Promise<StorageMaintenanceResult>;
   onPurgeRebuildableData: () => Promise<StorageMaintenanceResult>;
@@ -73,6 +80,8 @@ export function ResourceManager({
   onOpenLocation,
   onOpenLogs,
   onRunDiagnostics,
+  onSelectPythonInterpreter,
+  onClearPythonInterpreter,
   storage,
   onRelocateData,
   onPurgeRebuildableData,
@@ -83,6 +92,8 @@ export function ResourceManager({
   const [diagnosing, setDiagnosing] = useState(false);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsReport | null>(null);
   const [diagnosticError, setDiagnosticError] = useState("");
+  const [pythonBusy, setPythonBusy] = useState<"" | "choose" | "clear">("");
+  const [pythonNotice, setPythonNotice] = useState("");
   const [maintenanceBusy, setMaintenanceBusy] = useState<"move" | "reset" | "purge" | "">("");
   const [maintenanceError, setMaintenanceError] = useState("");
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
@@ -143,6 +154,34 @@ export function ResourceManager({
     }
   };
 
+  // Choosing an interpreter is a start-up decision: the runtime is built from
+  // it before any window exists, so this saves the choice and asks for a
+  // restart rather than pretending it applies now.
+  const runPythonAction = async (kind: "choose" | "clear") => {
+    setPythonBusy(kind);
+    setPythonNotice("");
+    try {
+      if (kind === "clear") {
+        await onClearPythonInterpreter();
+        setPythonNotice(t.resources.diagnostics.pythonCleared);
+      } else {
+        const result = await onSelectPythonInterpreter();
+        if (!result?.cancelled) {
+          setPythonNotice(t.resources.diagnostics.pythonRestart);
+        }
+      }
+      if (diagnostics) {
+        setDiagnostics(await onRunDiagnostics());
+      }
+    } catch (error) {
+      setPythonNotice(
+        error instanceof Error ? error.message : t.resources.diagnostics.failed,
+      );
+    } finally {
+      setPythonBusy("");
+    }
+  };
+
   const runStorageMaintenance = async (
     kind: "move" | "reset" | "purge",
   ) => {
@@ -174,6 +213,13 @@ export function ResourceManager({
 
   const pendingResourceSize = pendingResourceId ? RESOURCE_SIZES[pendingResourceId] || 0 : 0;
   const pendingResourceInfo = pendingResourceId ? getResourceInfo(pendingResourceId, t) : null;
+  const interpreter = diagnostics?.python_interpreter;
+  // Only worth stating when it disagrees with the managed path the row above
+  // already shows.
+  const modelsElsewhere = Boolean(
+    diagnostics?.model_locations &&
+      diagnostics.paths.models !== diagnostics.model_locations.hf_home,
+  );
 
   return (
     <div className="page">
@@ -285,16 +331,40 @@ export function ResourceManager({
               </span>
             </div>
             <div className="diagnostics-resources">
-              {diagnostics.resources.map((resource) => (
-                <span
-                  className={`resource-label ${isUsable(resource) ? "is-ready" : "is-failed"}`}
-                  key={resource.id}
-                  title={resource.detail}
-                >
-                  {isUsable(resource) ? <Check size={12} /> : <AlertCircle size={12} />}
-                  {getResourceInfo(resource.id, t).title}
-                </span>
-              ))}
+              {diagnostics.resources.map((resource) => {
+                // Three states, not two. The backend already separates the
+                // resources that actually block a task (`blocking_resources`
+                // is built from `not optional and not usable`); painting every
+                // unusable row red sent users off to install yt-dlp they had
+                // no use for, and the tokeniser they do not need at all.
+                const blocking = diagnostics.blocking_resources.includes(
+                  resource.id,
+                );
+                const missing = !isUsable(resource);
+                const state = !missing
+                  ? "is-ready"
+                  : blocking
+                    ? "is-failed"
+                    : "is-advisory";
+                return (
+                  <span
+                    className={`resource-label ${state}`}
+                    key={resource.id}
+                    title={resource.detail}
+                  >
+                    {missing ? (
+                      blocking ? (
+                        <AlertCircle size={12} />
+                      ) : (
+                        <Info size={12} />
+                      )
+                    ) : (
+                      <Check size={12} />
+                    )}
+                    {getResourceInfo(resource.id, t).title}
+                  </span>
+                );
+              })}
             </div>
             <details className="diagnostics-paths">
               <summary>{t.resources.diagnostics.showPaths}</summary>
@@ -313,7 +383,71 @@ export function ResourceManager({
                     {diagnostics.python_executable}
                   </code>
                 </span>
+                {/* The managed models directory is what the UI can move and
+                    purge, but it is not where the weights are when the
+                    conventional cache already had them. Showing only the
+                    managed path made those two actions look like they covered
+                    several GB that were never in it. */}
+                {modelsElsewhere ? (
+                  <>
+                    <span>
+                      <small>{t.resources.diagnostics.modelsInUse}</small>
+                      <code title={diagnostics.model_locations?.hf_home}>
+                        {diagnostics.model_locations?.hf_home}
+                      </code>
+                    </span>
+                    <span>
+                      <small>{t.resources.diagnostics.separatorInUse}</small>
+                      <code title={diagnostics.model_locations?.separator}>
+                        {diagnostics.model_locations?.separator}
+                      </code>
+                    </span>
+                  </>
+                ) : null}
+                <span className="diagnostics-interpreter">
+                  <small>
+                    {interpreter?.configured
+                      ? t.resources.diagnostics.pythonConfigured
+                      : t.resources.diagnostics.pythonAuto}
+                  </small>
+                  {interpreter?.found ? (
+                    <code title={interpreter.found}>
+                      {interpreter.found}
+                      {interpreter.version ? ` · ${interpreter.version}` : ""}
+                    </code>
+                  ) : (
+                    <strong className="is-failed">
+                      {t.resources.diagnostics.pythonMissing}
+                    </strong>
+                  )}
+                  <span className="diagnostics-interpreter-actions">
+                    <button
+                      type="button"
+                      className="button button-secondary button-compact"
+                      disabled={pythonBusy !== ""}
+                      onClick={() => runPythonAction("choose")}
+                    >
+                      {t.resources.diagnostics.pythonChoose}
+                    </button>
+                    {interpreter?.configured ? (
+                      <button
+                        type="button"
+                        className="button button-secondary button-compact"
+                        disabled={pythonBusy !== ""}
+                        onClick={() => runPythonAction("clear")}
+                      >
+                        {t.resources.diagnostics.pythonClear}
+                      </button>
+                    ) : null}
+                  </span>
+                </span>
               </div>
+              {interpreter?.detail ? (
+                <p className="diagnostics-interpreter-detail">{interpreter.detail}</p>
+              ) : null}
+              {pythonNotice ? (
+                <p className="diagnostics-interpreter-detail">{pythonNotice}</p>
+              ) : null}
             </details>
           </div>
         ) : null}
