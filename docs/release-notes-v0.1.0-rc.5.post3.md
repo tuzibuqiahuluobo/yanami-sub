@@ -1,11 +1,15 @@
 # Yanami Sub 0.1.0 RC5.3
 
 RC5.3 是 RC5 系列的缺陷修复版，处理核心仍固定为
-[FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1)。版本串为 `0.1.0-rc.6`，
+[FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1)。版本串为 `0.1.0-rc.5.post3`，
 公开版本名为 RC5.3。
 
-RC5、RC5.1 与 RC5.2 的版本串都落在 `rc.5` 上（`rc.5` / `rc.5.post1` / `rc.5.post2`），
-本次起进入 `rc.6`。`rc.5.3` 不是合法的 Python 版本串，无法用于安装包与在线更新比较。
+RC5 系列至今共用同一个 Python 版本号 `rc.5`，用 `.postN` 后缀区分各次发布：
+`rc.5`、`rc.5.post1`（RC5.1）、`rc.5.post2`（RC5.2）、`rc.5.post3`（本版）。
+等 RC5 系列结束、进入下一轮功能版本时再改为 `rc.6`。
+
+⚠ `rc.5.3`（不带 `.post`）**不是合法的 Python 版本串**，安装包与在线更新比较都无法使用它；
+同一段序号必须写成 `rc.5.post3`。
 
 ## 本版更新
 
@@ -72,7 +76,7 @@ Hugging Face 与分离器在通用缓存（`~\.cache\huggingface`、`~\.cache\au
 ## 安装与更新
 
 - 已安装 RC5.2：可在“应用更新”中检查并安装 RC5.3，也可以手动运行安装器；
-- 已安装 RC5 / RC5.1：可手动运行 `Yanami-Sub-0.1.0-rc.6-Setup.exe` 覆盖安装；
+- 已安装 RC5 / RC5.1：可手动运行 `Yanami-Sub-0.1.0-rc.5.post3-Setup.exe` 覆盖安装；
 - 已安装 RC4 或更早的 FineSub Desktop：必须先手动运行上述安装器覆盖安装一次；
 - 新安装：同时下载安装器及其 `.sha256` 文件，校验一致后运行。
 
