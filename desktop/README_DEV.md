@@ -624,6 +624,23 @@ CLI 与桌面**共用一个版本号、一个 tag、一个 Release**，由
 `v{manifest.version}` 解析 release，版本号分叉会指向不存在或没有桌面资产的 tag。
 （`v0.3.0` 是这条契约成立之前发的 CLI-only release，所以联合发布线从 0.3.1 起。）
 
+⚠️ **版本串必须先是合法的 PEP 440，再谈单调递增。** 它被 `packaging.version` 解析，
+用于安装器元数据与在线更新比较，所以一个不合法的串会让整条发布链失效——`0.1.0-rc.5.3`
+就是这样：`Version()` 抛 `InvalidVersion`，只有 `0.1.0-rc.5.post3` 可用。**RC 序号一律
+写成 `rc.<N>.post<M>`**，不要写成用点分开的 `rc.<N>.<M>`。
+
+⚠️ **tag 与清单里的 `version` 是一对，改一个就得重建另一个。** `build_release.py`
+把 `version` 写进**签名**清单，客户端又要求 release 的 `tag_name` 恰好等于
+`v{manifest.version}`（`GitHubUpdateService.check`）。所以 "tag 写错了，改一下 tag 就好"
+**不成立**：单独挪 tag 会让签名清单的 `version` 指向一个不存在的 release，客户端静默
+看不到更新，而 Release 页面看上去一切正常。正确做法是改 `VERSION` 重新构建并重发
+（资产文件名由版本串派生，不重建就会与 tag 不一致）。实测代价：RC5.3 就是这样从
+`v0.1.0-rc.6` 纠正为 `v0.1.0-rc.5.post3` 的。
+
+⚠️ **发布前先确认没人下载过。** 撤销一个已有下载的 release 是在收走用户手里的东西；
+`gh release view --json assets` 的 `downloadCount` 是这个判断的依据。RC5.3 那次八个
+资产全是 0，所以重发没有代价。
+
 ⚠️ **校验新载荷的是旧版的代码。** app 安装校验、full 的两道预检、首启
 `confirm_health`、以及每次启动的 `resolve_application_source`，跑的都是**用户手里
 那个冻结 exe** 里的名单与路径——0.4.0 把包改名 `finesub` 后，0.3.x 的这些检查仍然
