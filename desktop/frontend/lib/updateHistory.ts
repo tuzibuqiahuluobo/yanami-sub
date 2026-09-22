@@ -17,6 +17,38 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post1",
+    title: { zh: "RC6.1 · 更新恢复与模型可用性", en: "RC6.1 · Update recovery and model availability" },
+    notes: {
+      zh: [
+        "完整更新增加进度标记、完整性核验、自动回退和可靠的失败回滚。",
+        "增强本地 Agent 检测，并让检测结果真正进入单任务、批处理和知识库流程。",
+        "补充 API 密钥获取教程，保存后立即刷新模型可用状态。",
+      ],
+      en: [
+        "Added update markers, integrity checks, automatic fallback, and reliable rollback.",
+        "Expanded local Agent discovery and connected detected commands to every task flow.",
+        "Added API-key guides and immediate model-availability refresh after saving credentials.",
+      ],
+    },
+  },
+  {
+    version: "0.1.0-rc.6",
+    title: { zh: "RC6 · 界面反馈与更新进度", en: "RC6 · Interface feedback and update progress" },
+    notes: {
+      zh: [
+        "统一主题色焦点样式，并为完成操作增加右下角成功提示。",
+        "把应用更新下载改为跨页面保留的圆形进度提示。",
+        "让页签文字平滑淡入淡出，并统一受界面动画设置控制。",
+      ],
+      en: [
+        "Unified themed focus styles and added bottom-right success notifications.",
+        "Moved update downloads into a circular progress indicator that survives page changes.",
+        "Smoothed tab-label transitions under the shared interface-motion preference.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.5.post4",
     title: { zh: "RC5.4 · Python 准备与更新公告", en: "RC5.4 · Python setup and update announcements" },
     notes: {

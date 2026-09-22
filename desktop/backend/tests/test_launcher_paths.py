@@ -194,6 +194,8 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "get_resource_install",
         "list_resource_installs",
         "get_resource_statuses",
+        "get_download_route",
+        "set_download_route",
         "pause_resource_install",
         "open_resource_location",
         "get_python_interpreter",

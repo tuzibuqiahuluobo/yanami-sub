@@ -1,17 +1,20 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
 
 from finesub import config as app_config
 from finesub.llm.routing.model_routes import default_model_routes
+from finesub_bootstrap import download_routes
+from finesub_bootstrap.environment import WorkerContext
 from finesub_bootstrap.http_client import NetworkConnectionError
 from finesub_bootstrap.models import ResourceStatus
+
 from desktop.backend.common.models import BatchRequest, TaskRequest
 from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.launcher.bridge import DesktopBridge
-from finesub_bootstrap.environment import WorkerContext
 from desktop.backend.settings.store import SettingsStore
 
 
@@ -276,6 +279,40 @@ def test_bridge_refreshes_python_discovery_for_an_explicit_check(
     assert result["ok"] is True
     assert result["data"]["found"].endswith("python.exe")
     assert resources.interpreter_refreshes == [True]
+
+
+def test_download_route_choice_is_persisted_and_auto_reprobes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(download_routes.REGION_ENVIRONMENT, raising=False)
+    bridge, _ = _bridge(tmp_path)
+
+    mainland = bridge.set_download_route("cn")
+
+    assert mainland["ok"] is True
+    assert mainland["data"]["mode"] == "cn"
+    assert mainland["data"]["actual_region"] == "cn"
+    assert os.environ[download_routes.REGION_ENVIRONMENT] == "cn"
+    assert bridge.preferences.load().ui["downloadRegion"] == "cn"
+
+    monkeypatch.setattr(
+        download_routes,
+        "probe_region",
+        lambda: download_routes.RouteDecision(
+            region="cn", source="probe", endpoint="test"
+        ),
+    )
+    automatic = bridge.set_download_route("auto")
+
+    assert automatic["ok"] is True
+    assert automatic["data"] == {
+        "mode": "auto",
+        "actual_region": "cn",
+        "source": "cached",
+        "endpoint": "test",
+    }
+    assert download_routes.REGION_ENVIRONMENT not in os.environ
 
 
 def test_bridge_rejects_unknown_task_fields(tmp_path: Path) -> None:

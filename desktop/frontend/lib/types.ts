@@ -164,6 +164,15 @@ export interface ResourceInstallSnapshot {
   updated_at: number;
 }
 
+export type DownloadRouteMode = "auto" | "cn" | "global";
+
+export interface DownloadRouteState {
+  mode: DownloadRouteMode;
+  actual_region: "cn" | "global";
+  source: "forced" | "cached" | "probe" | "default" | "fallback";
+  endpoint: string;
+}
+
 export interface WorkerEvent {
   type: "started" | "stage" | "log" | "completed" | "failed" | "cancelled";
   task_id: string;
@@ -639,6 +648,8 @@ export interface DesktopApi {
   getResourceInstall(resourceId: string): Promise<ResourceInstallSnapshot | null>;
   listResourceInstalls(): Promise<ResourceInstallSnapshot[]>;
   getResourceStatuses(): Promise<ResourceStatus[]>;
+  getDownloadRoute(): Promise<DownloadRouteState>;
+  setDownloadRoute(mode: DownloadRouteMode): Promise<DownloadRouteState>;
   pauseResourceInstall(resourceId: string): Promise<ResourceInstallSnapshot>;
   openInstallLogs(): Promise<unknown>;
   rescanGpus(): Promise<unknown>;

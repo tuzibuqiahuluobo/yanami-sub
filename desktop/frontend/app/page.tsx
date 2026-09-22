@@ -618,6 +618,8 @@ function HomeContent() {
         installs={state.resourceInstalls}
         onInstall={(resourceId) => void installResource(resourceId)}
         onPause={(resourceId) => void pauseResource(resourceId)}
+        onGetDownloadRoute={desktopApi.getDownloadRoute}
+        onSetDownloadRoute={desktopApi.setDownloadRoute}
         onOpenLocation={(resourceId, kind) =>
           void desktopApi.openResourceLocation(resourceId, kind)
         }

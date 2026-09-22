@@ -22,6 +22,78 @@
   background: var(--panel-subtle);
 }
 
+.download-route-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 230px);
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+  padding: 16px 17px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--panel-subtle);
+}
+
+.download-route-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.download-route-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.download-route-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.download-route-title strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.download-route-copy p,
+.download-route-copy small,
+.download-route-error {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.download-route-copy small {
+  color: #80643c;
+}
+
+.download-route-choice {
+  display: grid;
+  gap: 6px;
+}
+
+.download-route-choice > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+}
+
+.download-route-error {
+  grid-column: 1 / -1;
+  color: var(--danger);
+}
+
+@media (max-width: 720px) {
+  .download-route-card {
+    grid-template-columns: 1fr;
+  }
+}
+
 .storage-card {
   display: grid;
   gap: 13px;

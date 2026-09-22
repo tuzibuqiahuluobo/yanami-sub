@@ -64,6 +64,8 @@ PUBLIC_BRIDGE_METHODS = (
     "get_resource_install",
     "list_resource_installs",
     "get_resource_statuses",
+    "get_download_route",
+    "set_download_route",
     "pause_resource_install",
     "open_resource_location",
     "get_python_interpreter",

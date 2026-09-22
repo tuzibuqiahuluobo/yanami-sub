@@ -5,6 +5,8 @@ import type {
   BootstrapState,
   CapabilityState,
   DiagnosticsReport,
+  DownloadRouteMode,
+  DownloadRouteState,
   DesktopApi,
   JobSnapshot,
   KnowledgeEntryDocument,
@@ -206,6 +208,12 @@ function previewApi(): DesktopApi {
   let preferences = structuredClone(previewBootstrap.preferences);
   let shared = structuredClone(previewBootstrap.shared_settings);
   let storage = structuredClone(previewBootstrap.storage!);
+  let downloadRoute: DownloadRouteState = {
+    mode: "auto",
+    actual_region: "cn",
+    source: "probe",
+    endpoint: "preview",
+  };
   const installs = new Map<string, ResourceInstallSnapshot>();
   let batch: BatchSnapshot | null = null;
   const previewCapabilities = (): CapabilityState => ({
@@ -449,6 +457,18 @@ function previewApi(): DesktopApi {
     },
     async getResourceStatuses() {
       return structuredClone(previewBootstrap.resources);
+    },
+    async getDownloadRoute() {
+      return structuredClone(downloadRoute);
+    },
+    async setDownloadRoute(mode: DownloadRouteMode) {
+      downloadRoute = {
+        mode,
+        actual_region: mode === "global" ? "global" : "cn",
+        source: mode === "auto" ? "probe" : "forced",
+        endpoint: mode === "auto" ? "preview" : "",
+      };
+      return structuredClone(downloadRoute);
     },
     async pauseResourceInstall(resourceId) {
       const current = installs.get(resourceId);
@@ -910,6 +930,9 @@ function nativeApi(): DesktopApi {
     listResourceInstalls: () =>
       call<ResourceInstallSnapshot[]>("list_resource_installs"),
     getResourceStatuses: () => call<ResourceStatus[]>("get_resource_statuses"),
+    getDownloadRoute: () => call<DownloadRouteState>("get_download_route"),
+    setDownloadRoute: (mode) =>
+      call<DownloadRouteState>("set_download_route", mode),
     pauseResourceInstall: (resourceId) =>
       call<ResourceInstallSnapshot>("pause_resource_install", resourceId),
     openResourceLocation: (resourceId, kind) =>

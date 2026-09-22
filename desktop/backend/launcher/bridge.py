@@ -8,8 +8,9 @@ import sys
 import webbrowser
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, ValidationError
+from finesub_bootstrap import download_routes
 from finesub_bootstrap.http_client import NetworkConnectionError
+from pydantic import BaseModel, ConfigDict, ValidationError
 
 from desktop.backend.batches.manager import BatchAlreadyRunning, BatchNotFound
 from desktop.backend.common.models import (
@@ -95,6 +96,9 @@ API_KEY_HELP_URLS = frozenset(
     }
 )
 
+DOWNLOAD_ROUTE_PREFERENCE = "downloadRegion"
+DOWNLOAD_ROUTE_MODES = frozenset({"auto", "cn", "global"})
+
 
 def _missing_resource_error(missing: list[str], verb: str) -> BridgeError:
     names = "、".join(RESOURCE_LABELS.get(item, item) for item in missing)
@@ -159,6 +163,9 @@ class DesktopBridge:
         self.relauncher = relauncher
         self.error_reporter = error_reporter
         self.app_version = app_version
+        saved_route = self._stored_download_route()
+        if saved_route is not None:
+            self._apply_download_route(saved_route)
 
     def get_bootstrap_state(self) -> dict[str, Any]:
         return self._guard(
@@ -606,12 +613,50 @@ class DesktopBridge:
     def install_resource(self, resource_id: str) -> dict[str, Any]:
         if self.resource_installs is None:
             def install_legacy() -> Any:
+                if resource_id == "uv":
+                    self._prepare_download_route()
                 result = self.resources.install(resource_id, lambda event: None)
                 self._refresh_worker_environment()
                 return result
 
             return self._guard(install_legacy)
-        return self._guard(lambda: self.resource_installs.start(resource_id))
+
+        def start() -> Any:
+            if resource_id == "uv":
+                self._prepare_download_route()
+            return self.resource_installs.start(resource_id)
+
+        return self._guard(start)
+
+    def get_download_route(self) -> dict[str, Any]:
+        return self._guard(self._download_route_snapshot)
+
+    def set_download_route(self, mode: str) -> dict[str, Any]:
+        def save() -> dict[str, str]:
+            if mode not in DOWNLOAD_ROUTE_MODES:
+                raise ValueError("未知的下载线路。")
+            active = (
+                self.resource_installs.get("uv")
+                if self.resource_installs is not None
+                else None
+            )
+            if active is not None and active.state in {"queued", "running"}:
+                raise ValueError("请先暂停 Python 运行环境下载，再切换线路。")
+
+            self.preferences.save(ui={DOWNLOAD_ROUTE_PREFERENCE: mode})
+            self._apply_download_route(mode)
+            if mode == "auto":
+                decision = download_routes.probe_region() or download_routes.RouteDecision(
+                    region="global", source="default"
+                )
+                download_routes.remember_region(self.settings.user_data.parent, decision)
+            elif mode == "cn":
+                # An explicit choice also re-enables a mirror disabled after
+                # transient failures; the next attempt can judge it afresh.
+                download_routes.record_success(self.settings.user_data.parent, "pypi")
+            return self._download_route_snapshot()
+
+        return self._guard(save)
 
     def get_resource_install(self, resource_id: str) -> dict[str, Any]:
         if self.resource_installs is None:
@@ -637,6 +682,49 @@ class DesktopBridge:
                 )
             )
         return self._guard(lambda: self.resource_installs.pause(resource_id))
+
+    def _saved_download_route(self) -> str:
+        return self._stored_download_route() or "auto"
+
+    def _stored_download_route(self) -> str | None:
+        value = self.preferences.load().ui.get(DOWNLOAD_ROUTE_PREFERENCE)
+        return (
+            value
+            if isinstance(value, str) and value in DOWNLOAD_ROUTE_MODES
+            else None
+        )
+
+    @staticmethod
+    def _apply_download_route(mode: str) -> None:
+        if mode == "auto":
+            os.environ.pop(download_routes.REGION_ENVIRONMENT, None)
+        else:
+            os.environ[download_routes.REGION_ENVIRONMENT] = mode
+
+    def _prepare_download_route(self) -> None:
+        stored = self._stored_download_route()
+        mode = stored or "auto"
+        if stored is not None:
+            self._apply_download_route(stored)
+        if mode == "cn":
+            download_routes.record_success(self.settings.user_data.parent, "pypi")
+
+    def _download_route_snapshot(self) -> dict[str, str]:
+        mode = self._saved_download_route()
+        decision = download_routes.resolve_region(self.settings.user_data.parent)
+        degraded = download_routes.is_degraded(
+            self.settings.user_data.parent, "pypi"
+        )
+        actual_region = (
+            "global" if decision.region == "cn" and degraded and mode == "auto"
+            else decision.region
+        )
+        return {
+            "mode": mode,
+            "actual_region": actual_region,
+            "source": "fallback" if actual_region != decision.region else decision.source,
+            "endpoint": decision.endpoint,
+        }
 
     def open_resource_location(
         self,

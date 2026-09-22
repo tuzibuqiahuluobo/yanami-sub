@@ -7,6 +7,7 @@ import {
   Check,
   Download,
   FolderOpen,
+  Globe2,
   HardDrive,
   Info,
   LoaderCircle,
@@ -15,19 +16,22 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { DownloadProgress } from "@/components/DownloadProgress";
 import { RESOURCE_SIZES } from "@/lib/resourceCatalog";
 import { isUsable, unresolvedDependency } from "@/lib/resources";
 import type {
   DiagnosticsReport,
+  DownloadRouteMode,
+  DownloadRouteState,
   PythonInterpreterChoice,
   ResourceInstallSnapshot,
   ResourceStatus,
   StorageMaintenanceResult,
   StorageState,
 } from "@/lib/types";
+import { CustomSelect } from "./CustomSelect";
 import { useLanguage } from "./LanguageProvider";
 import { useToast } from "./ToastProvider";
 
@@ -56,6 +60,8 @@ interface ResourceManagerProps {
   installs: ResourceInstallSnapshot[];
   onInstall: (resourceId: string) => void;
   onPause: (resourceId: string) => void;
+  onGetDownloadRoute: () => Promise<DownloadRouteState>;
+  onSetDownloadRoute: (mode: DownloadRouteMode) => Promise<DownloadRouteState>;
   onOpenLocation: (
     resourceId: string,
     kind: "cache" | "install",
@@ -80,6 +86,8 @@ export function ResourceManager({
   installs,
   onInstall,
   onPause,
+  onGetDownloadRoute,
+  onSetDownloadRoute,
   onOpenLocation,
   onOpenLogs,
   onRunDiagnostics,
@@ -107,6 +115,28 @@ export function ResourceManager({
   const [maintenanceError, setMaintenanceError] = useState("");
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
   const [purgeConfirmOpen, setPurgeConfirmOpen] = useState(false);
+  const [downloadRoute, setDownloadRoute] =
+    useState<DownloadRouteState | null>(null);
+  const [downloadRouteBusy, setDownloadRouteBusy] = useState(false);
+  const [downloadRouteError, setDownloadRouteError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void onGetDownloadRoute()
+      .then((route) => {
+        if (active) setDownloadRoute(route);
+      })
+      .catch((error) => {
+        if (active) {
+          setDownloadRouteError(
+            error instanceof Error ? error.message : t.resources.downloadRoute.failed,
+          );
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [onGetDownloadRoute, t.resources.downloadRoute.failed]);
 
   // 计算未安装资源的总大小
   // Only what a task actually waits on counts toward "space required"; the
@@ -279,11 +309,34 @@ export function ResourceManager({
     }
   };
 
+  const changeDownloadRoute = async (value: string) => {
+    setDownloadRouteBusy(true);
+    setDownloadRouteError("");
+    try {
+      setDownloadRoute(await onSetDownloadRoute(value as DownloadRouteMode));
+      showSuccess(t.resources.downloadRoute.changed, "download-route-changed");
+    } catch (error) {
+      setDownloadRouteError(
+        error instanceof Error ? error.message : t.resources.downloadRoute.failed,
+      );
+    } finally {
+      setDownloadRouteBusy(false);
+    }
+  };
+
   const pendingResourceSize = pendingResourceId ? RESOURCE_SIZES[pendingResourceId] || 0 : 0;
   const pendingResourceInfo = pendingResourceId ? getResourceInfo(pendingResourceId, t) : null;
   const pythonConfirm = pendingResourceId === "uv";
   const pythonFound = pythonPreflight?.found ?? null;
   const interpreter = diagnostics?.python_interpreter;
+  const pythonInstall = installs.find((install) => install.resource_id === "uv");
+  const downloadRouteLocked =
+    pythonInstall?.state === "queued" || pythonInstall?.state === "running";
+  const downloadRouteOptions = [
+    { value: "auto", label: t.resources.downloadRoute.auto },
+    { value: "cn", label: t.resources.downloadRoute.cn },
+    { value: "global", label: t.resources.downloadRoute.global },
+  ];
   // Only worth stating when it disagrees with the managed path the row above
   // already shows.
   const modelsElsewhere = Boolean(
@@ -341,6 +394,43 @@ export function ResourceManager({
           </div>
         </div>
       )}
+
+      <section className="download-route-card">
+        <div className="download-route-main">
+          <span className="resource-large-icon">
+            <Globe2 size={20} />
+          </span>
+          <div className="download-route-copy">
+            <div className="download-route-title">
+              <strong>{t.resources.downloadRoute.title}</strong>
+              <span className="resource-label is-ready">
+                {downloadRouteBusy || !downloadRoute
+                  ? t.resources.downloadRoute.loading
+                  : downloadRoute.actual_region === "cn"
+                    ? t.resources.downloadRoute.actualCn
+                    : t.resources.downloadRoute.actualGlobal}
+              </span>
+            </div>
+            <p>{t.resources.downloadRoute.description}</p>
+            {downloadRouteLocked ? (
+              <small>{t.resources.downloadRoute.busy}</small>
+            ) : null}
+          </div>
+        </div>
+        <div className="download-route-choice">
+          <span>{t.resources.downloadRoute.preference}</span>
+          <CustomSelect
+            ariaLabel={t.resources.downloadRoute.title}
+            disabled={downloadRouteBusy || downloadRouteLocked || !downloadRoute}
+            options={downloadRouteOptions}
+            value={downloadRoute?.mode ?? "auto"}
+            onChange={(value) => void changeDownloadRoute(value)}
+          />
+        </div>
+        {downloadRouteError ? (
+          <p className="download-route-error">{downloadRouteError}</p>
+        ) : null}
+      </section>
 
       <section className="diagnostics-card">
         <div className="diagnostics-heading">
