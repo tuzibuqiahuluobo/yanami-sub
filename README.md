@@ -12,7 +12,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 ## 快速开始
 
 1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.1.0-rc.5.post3-Setup.exe`。
+   `Yanami-Sub-0.1.0-rc.5.post4-Setup.exe`。
 2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
 3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
 4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
@@ -21,9 +21,11 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 5 GB。下载器会先扫描本机可用资源并核对大小与 SHA-256；缺失资源可并行下载。中国大陆
 网络的 Python 依赖会优先使用
 [清华大学 TUNA 镜像](https://mirrors.tuna.tsinghua.edu.cn/)，失败时回退官方源。
+准备 Python 前会在后台检查本机可复用的 64 位 Python 3.12（最长约 12 秒），并明确提供
+“使用本机 Python”“指定解释器”或“下载私有 Python”三种选择。
 
-> `v0.1.0-rc.5.post3`（RC5.3）是预览版。RC5.2 及更早的 Yanami Sub 版本可在“应用更新”中
-> 检查并升级；旧版 FineSub Desktop 与 RC4 用户需要手动运行 RC5.3 安装器覆盖升级。
+> `v0.1.0-rc.5.post4`（RC5.4）是预览版。RC5、RC5.1、RC5.2、RC5.3 可在“应用更新”中
+> 检查并升级；旧版 FineSub Desktop 与 RC4 用户需要手动运行 RC5.4 安装器覆盖升级。
 > 每个桌面 Release 均同时提供在线更新清单和签名。请从本仓库 Release 下载并按页面
 > 提供的 SHA-256 校验。
 
@@ -35,6 +37,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 - 知识库：浏览、修订、任务反馈、材料蒸馏、冲突处理、共享与维护者审核。
 - 资源管理：依赖诊断、多资源并行下载、本地复用、日志查看和大文件目录迁移。
 - 输出管理：本地媒体只把可交付的 `.srt` 字幕发布到源文件旁，内部产物留在受管任务目录。
+- 应用更新：启动公告优先提供应用内下载，历史版本按需展开，GitHub 完整安装器作为备用入口。
 
 各页面的实际操作、数据位置和常见问题见
 [中文使用说明](docs/usage.zh-CN.md)。桌面与核心的功能边界见

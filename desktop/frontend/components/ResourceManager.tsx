@@ -15,13 +15,14 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { DownloadProgress } from "@/components/DownloadProgress";
 import { RESOURCE_SIZES } from "@/lib/resourceCatalog";
 import { isUsable, unresolvedDependency } from "@/lib/resources";
 import type {
   DiagnosticsReport,
+  PythonInterpreterChoice,
   ResourceInstallSnapshot,
   ResourceStatus,
   StorageMaintenanceResult,
@@ -60,6 +61,7 @@ interface ResourceManagerProps {
   ) => void;
   onOpenLogs: () => void;
   onRunDiagnostics: () => Promise<DiagnosticsReport>;
+  onCheckPythonInterpreter: () => Promise<PythonInterpreterChoice>;
   onSelectPythonInterpreter: () => Promise<{
     cancelled?: boolean;
     path?: string;
@@ -80,6 +82,7 @@ export function ResourceManager({
   onOpenLocation,
   onOpenLogs,
   onRunDiagnostics,
+  onCheckPythonInterpreter,
   onSelectPythonInterpreter,
   onClearPythonInterpreter,
   storage,
@@ -89,6 +92,10 @@ export function ResourceManager({
   const { t } = useLanguage();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
+  const [pythonPreflight, setPythonPreflight] = useState<PythonInterpreterChoice | null>(null);
+  const [pythonPreflightBusy, setPythonPreflightBusy] = useState(false);
+  const [pythonPreflightError, setPythonPreflightError] = useState("");
+  const pythonPreflightRequest = useRef(0);
   const [diagnosing, setDiagnosing] = useState(false);
   const [diagnostics, setDiagnostics] = useState<DiagnosticsReport | null>(null);
   const [diagnosticError, setDiagnosticError] = useState("");
@@ -115,6 +122,40 @@ export function ResourceManager({
     0
   );
 
+  const closeInstallConfirm = () => {
+    pythonPreflightRequest.current += 1;
+    setConfirmOpen(false);
+    setPendingResourceId(null);
+    setPythonPreflightBusy(false);
+  };
+
+  const startPythonPreflight = () => {
+    const requestId = ++pythonPreflightRequest.current;
+    setPythonPreflight(null);
+    setPythonPreflightError("");
+    setPythonPreflightBusy(true);
+    void onCheckPythonInterpreter()
+      .then((result) => {
+        if (pythonPreflightRequest.current === requestId) {
+          setPythonPreflight(result);
+        }
+      })
+      .catch((error) => {
+        if (pythonPreflightRequest.current === requestId) {
+          setPythonPreflightError(
+            error instanceof Error
+              ? error.message
+              : t.resources.confirm.python.checkFailed,
+          );
+        }
+      })
+      .finally(() => {
+        if (pythonPreflightRequest.current === requestId) {
+          setPythonPreflightBusy(false);
+        }
+      });
+  };
+
   const handleInstallClick = (resourceId: string) => {
     const resource = resources.find((r) => r.id === resourceId);
     const install = installs.find((i) => i.resource_id === resourceId);
@@ -129,6 +170,11 @@ export function ResourceManager({
       // 下载前显示确认对话框
       setPendingResourceId(resourceId);
       setConfirmOpen(true);
+      setPythonPreflight(null);
+      setPythonPreflightError("");
+      if (resourceId === "uv") {
+        startPythonPreflight();
+      }
     }
   };
 
@@ -136,8 +182,7 @@ export function ResourceManager({
     if (pendingResourceId) {
       onInstall(pendingResourceId);
     }
-    setConfirmOpen(false);
-    setPendingResourceId(null);
+    closeInstallConfirm();
   };
 
   const runDiagnostics = async () => {
@@ -154,10 +199,12 @@ export function ResourceManager({
     }
   };
 
-  // Choosing an interpreter is a start-up decision: the runtime is built from
-  // it before any window exists, so this saves the choice and asks for a
-  // restart rather than pretending it applies now.
   const runPythonAction = async (kind: "choose" | "clear") => {
+    let selected: {
+      cancelled?: boolean;
+      path?: string;
+      version?: string;
+    } | null = null;
     setPythonBusy(kind);
     setPythonNotice("");
     try {
@@ -168,6 +215,7 @@ export function ResourceManager({
         const result = await onSelectPythonInterpreter();
         if (!result?.cancelled) {
           setPythonNotice(t.resources.diagnostics.pythonRestart);
+          selected = result;
         }
       }
       if (diagnostics) {
@@ -179,6 +227,21 @@ export function ResourceManager({
       );
     } finally {
       setPythonBusy("");
+    }
+    return selected;
+  };
+
+  const choosePythonForInstall = async () => {
+    setPythonPreflightError("");
+    const result = await runPythonAction("choose");
+    if (result?.path) {
+      setPythonPreflight({
+        configured: result.path,
+        found: result.path,
+        version: result.version ?? "3.12",
+        detail: "",
+        rejected: [],
+      });
     }
   };
 
@@ -213,6 +276,8 @@ export function ResourceManager({
 
   const pendingResourceSize = pendingResourceId ? RESOURCE_SIZES[pendingResourceId] || 0 : 0;
   const pendingResourceInfo = pendingResourceId ? getResourceInfo(pendingResourceId, t) : null;
+  const pythonConfirm = pendingResourceId === "uv";
+  const pythonFound = pythonPreflight?.found ?? null;
   const interpreter = diagnostics?.python_interpreter;
   // Only worth stating when it disagrees with the managed path the row above
   // already shows.
@@ -583,6 +648,8 @@ export function ResourceManager({
                           t.resources.status.failed
                         ) : systemPythonAvailable ? (
                           t.resources.status.systemPythonAvailable
+                        ) : resource.id === "uv" ? (
+                          t.resources.status.needsSetup
                         ) : (
                           t.resources.status.needDownload
                         )}
@@ -644,6 +711,8 @@ export function ResourceManager({
                             ? t.resources.actions.continueDownload
                             : systemPythonAvailable
                               ? t.resources.actions.installAIDeps
+                              : resource.id === "uv"
+                                ? t.resources.actions.checkAndInstall
                               : t.resources.actions.downloadAndInstall}
                   </button>
                 </div>
@@ -702,7 +771,9 @@ export function ResourceManager({
                     </div>
                   </div>
                 ) : resource.detail ? (
-                  <p className="resource-error">{resource.detail}</p>
+                  <p className={failed ? "resource-error" : "resource-detail"}>
+                    {resource.detail}
+                  </p>
                 ) : null}
               </div>
             </article>
@@ -724,43 +795,143 @@ export function ResourceManager({
 
       {/* 下载确认对话框 */}
       {confirmOpen && pendingResourceInfo && (
-        <div className="dialog-overlay" onClick={() => {
-          setConfirmOpen(false);
-          setPendingResourceId(null);
-        }}>
-          <div className="dialog-card resource-confirm-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="resource-confirm-icon">
-              <AlertTriangle size={24} />
-            </div>
-            <h3>{t.resources.confirm.title}</h3>
-            <p>
-              {t.resources.confirm.message
-                .replace("{name}", pendingResourceInfo.title)
-                .replace("{size}", formatBytes(pendingResourceSize))}
-            </p>
-            <p className="confirm-warning-text">
-              {t.resources.confirm.warning}
-            </p>
-            <div className="dialog-actions">
-              <button
-                type="button"
-                className="button button-secondary"
-                onClick={() => {
-                  setConfirmOpen(false);
-                  setPendingResourceId(null);
-                }}
-              >
-                {t.resources.confirm.cancel}
-              </button>
-              <button
-                type="button"
-                className="button button-primary"
-                onClick={handleConfirmInstall}
-              >
-                <Download size={14} />
-                {t.resources.confirm.startDownload}
-              </button>
-            </div>
+        <div className="dialog-overlay" onClick={closeInstallConfirm}>
+          <div
+            aria-busy={pythonConfirm && pythonPreflightBusy}
+            aria-labelledby="resource-confirm-title"
+            aria-modal="true"
+            className={`dialog-card resource-confirm-dialog${pythonConfirm ? " is-python" : ""}`}
+            role="dialog"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {pythonConfirm ? (
+              <>
+                <div className="resource-confirm-icon">
+                  {pythonPreflightBusy ? (
+                    <LoaderCircle size={24} className="spin" />
+                  ) : pythonFound ? (
+                    <Check size={24} />
+                  ) : (
+                    <AlertTriangle size={24} />
+                  )}
+                </div>
+                <h3 id="resource-confirm-title">
+                  {pythonPreflightBusy
+                    ? t.resources.confirm.python.checkingTitle
+                    : pythonFound
+                      ? t.resources.confirm.python.foundTitle
+                      : pythonPreflightError
+                        ? t.resources.confirm.python.checkFailedTitle
+                        : t.resources.confirm.python.missingTitle}
+                </h3>
+                <div
+                  aria-live="polite"
+                  className="python-preflight-status"
+                  role="status"
+                >
+                  {pythonPreflightBusy ? (
+                    <p>{t.resources.confirm.python.checking}</p>
+                  ) : pythonFound ? (
+                    <>
+                      <p>
+                        {t.resources.confirm.python.found.replace(
+                          "{version}",
+                          pythonPreflight?.version || "3.12",
+                        )}
+                      </p>
+                      <code className="python-preflight-path" title={pythonFound}>
+                        {pythonFound}
+                      </code>
+                    </>
+                  ) : (
+                    <p className="python-preflight-detail">
+                      {pythonPreflightError ||
+                        pythonPreflight?.detail ||
+                        t.resources.confirm.python.missing}
+                    </p>
+                  )}
+                </div>
+                <div className="dialog-actions python-preflight-actions">
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={closeInstallConfirm}
+                  >
+                    {t.resources.confirm.cancel}
+                  </button>
+                  {!pythonPreflightBusy ? (
+                    <button
+                      type="button"
+                      className="button button-secondary"
+                      disabled={pythonBusy !== ""}
+                      onClick={() => void choosePythonForInstall()}
+                    >
+                      {pythonBusy === "choose" ? (
+                        <LoaderCircle size={14} className="spin" />
+                      ) : (
+                        <FolderOpen size={14} />
+                      )}
+                      {t.resources.confirm.python.choose}
+                    </button>
+                  ) : null}
+                  {pythonPreflightBusy ? null : pythonPreflightError ? (
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      disabled={pythonBusy !== ""}
+                      onClick={startPythonPreflight}
+                    >
+                      <RotateCcw size={14} />
+                      {t.resources.confirm.python.retry}
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="button button-primary"
+                      disabled={pythonBusy !== ""}
+                      onClick={handleConfirmInstall}
+                    >
+                      <Download size={14} />
+                      {pythonFound
+                        ? t.resources.confirm.python.useLocal
+                        : t.resources.confirm.python.download}
+                    </button>
+                  )}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="resource-confirm-icon">
+                  <AlertTriangle size={24} />
+                </div>
+                <h3 id="resource-confirm-title">{t.resources.confirm.title}</h3>
+                <p>
+                  {t.resources.confirm.message
+                    .replace("{name}", pendingResourceInfo.title)
+                    .replace("{size}", formatBytes(pendingResourceSize))}
+                </p>
+                <p className="confirm-warning-text">
+                  {t.resources.confirm.warning}
+                </p>
+                <div className="dialog-actions">
+                  <button
+                    type="button"
+                    className="button button-secondary"
+                    onClick={closeInstallConfirm}
+                  >
+                    {t.resources.confirm.cancel}
+                  </button>
+                  <button
+                    type="button"
+                    className="button button-primary"
+                    onClick={handleConfirmInstall}
+                  >
+                    <Download size={14} />
+                    {t.resources.confirm.startDownload}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

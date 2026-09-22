@@ -418,6 +418,14 @@
   line-height: 1.55;
 }
 
+.resource-detail {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
 .resource-install-log {
   grid-column: 1 / -1;
   max-height: 76px;
@@ -515,6 +523,10 @@
   max-width: 400px;
 }
 
+.resource-confirm-dialog.is-python {
+  max-width: 520px;
+}
+
 .resource-confirm-icon {
   display: flex;
   justify-content: center;
@@ -544,4 +556,38 @@
   border-radius: 8px;
   background: var(--panel-subtle);
   font-size: 0.8rem;
+}
+
+.python-preflight-status {
+  min-height: 88px;
+  margin: 16px 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--panel-subtle);
+  text-align: left;
+}
+
+.python-preflight-status p {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.python-preflight-path {
+  display: block;
+  overflow: hidden;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.python-preflight-detail {
+  max-height: 150px;
+  overflow: auto;
+}
+
+.python-preflight-actions {
+  flex-wrap: wrap;
 }

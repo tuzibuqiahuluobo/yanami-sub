@@ -79,6 +79,8 @@ class FakeResources:
     def __init__(self) -> None:
         self.ready = True
         self.ensured: list[tuple[str, ...]] = []
+        self.interpreter_refreshes: list[bool] = []
+        self.configured_interpreters: list[Path | None] = []
 
     def check_all(self):
         return [
@@ -119,6 +121,20 @@ class FakeResources:
             working_directory=Path("C:/FineSub/app/current"),
             environment={**extra_env, "FINESUB_MODEL_DIR": "C:/FineSub/models"},
         )
+
+    def interpreter_choice(self, *, refresh=False):
+        self.interpreter_refreshes.append(refresh)
+        return {
+            "configured": None,
+            "found": "C:/Python312/python.exe",
+            "version": "3.12.6",
+            "detail": "",
+            "rejected": [],
+        }
+
+    def configure_interpreter(self, path):
+        self.configured_interpreters.append(path)
+        return path
 
 
 class FakeUpdates:
@@ -243,6 +259,23 @@ def test_bridge_exposes_a_structured_diagnostic_report(tmp_path: Path) -> None:
     assert result["data"]["core_version"] == "0.5.1"
     assert result["data"]["python_executable"].endswith("python.exe")
     assert result["data"]["gpu"] == {"state": "unavailable", "devices": []}
+
+
+def test_bridge_refreshes_python_discovery_for_an_explicit_check(
+    tmp_path: Path,
+) -> None:
+    resources = FakeResources()
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=resources,
+        settings=SettingsStore(tmp_path / "user-data"),
+    )
+
+    result = bridge.get_python_interpreter()
+
+    assert result["ok"] is True
+    assert result["data"]["found"].endswith("python.exe")
+    assert resources.interpreter_refreshes == [True]
 
 
 def test_bridge_rejects_unknown_task_fields(tmp_path: Path) -> None:

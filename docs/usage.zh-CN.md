@@ -1,20 +1,20 @@
 # Yanami Sub 中文使用说明
 
-本文面向 `v0.1.0-rc.5.post3`（RC5.3）。字幕处理由固定版本的
+本文面向 `v0.1.0-rc.5.post4`（RC5.4）。字幕处理由固定版本的
 [FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1) 提供。
 
 ## 安装与迁移
 
 1. 在 [Yanami Sub Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases)
-   下载 `Yanami-Sub-0.1.0-rc.5.post3-Setup.exe` 和对应的 `.sha256` 文件。
+   下载 `Yanami-Sub-0.1.0-rc.5.post4-Setup.exe` 和对应的 `.sha256` 文件。
 2. 在 PowerShell 中运行以下命令校验安装包：
 
    ```powershell
-   Get-FileHash .\Yanami-Sub-0.1.0-rc.5.post3-Setup.exe -Algorithm SHA256
+   Get-FileHash .\Yanami-Sub-0.1.0-rc.5.post4-Setup.exe -Algorithm SHA256
    ```
 
 3. 将输出与 `.sha256` 文件中的值比较，完全一致后再运行安装器。
-4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC5.3 会沿用原安装记录、
+4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC5.4 会沿用原安装记录、
    覆盖旧版并清理旧名称的可执行文件与快捷方式。
 
 Windows 可能显示 SmartScreen 提示。请只使用本仓库 Release 的安装包，
@@ -31,6 +31,10 @@ Yanami Sub 本身是轻量桌面壳。首次使用某项能力时，它会按需
 
 资源页会显示整体进度和最新日志。多个互不依赖的资源可以同时下载；开始下载前，程序会扫描
 本机磁盘并用文件大小与 SHA-256 判断能否安全复用。名称相同但版本或哈希不符的文件不会被使用。
+
+准备 Python 时会先在后台检查本机已有的 64 位 Python 3.12，完整检查最长约 12 秒。检查
+期间界面仍可操作；完成后可以直接复用检测到的解释器、手动指定 `python.exe`，或下载一份
+由 Yanami Sub 单独管理的 Python。其他版本（例如 3.11 或 3.13）不会被误用。
 
 ## 创建字幕任务
 
@@ -114,9 +118,14 @@ Yanami Sub 或 FineSub CLI 实例。
 
 RC3 起使用新的 Yanami Sub 更新清单名称，旧版 FineSub Desktop 不会把它误识别为可自动安装的
 更新。因此从旧名称迁移必须手动运行 Yanami Sub 安装器。RC4 的完整更新器不会保留 Windows
-卸载器，所以 RC4 仍需要手动运行 RC5.3 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
-起每个桌面 Release 都会发布在线更新清单和签名，RC5.2 及更早的 Yanami Sub 版本可通过
+卸载器，所以 RC4 仍需要手动运行 RC5.4 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
+起每个桌面 Release 都会发布在线更新清单和签名，RC5、RC5.1、RC5.2、RC5.3 可通过
 “应用更新”检查新版本。
+
+启用“自动检查更新”时，应用每次启动只查询一次；发现新版本会显示更新公告，可直接在应用内
+下载。公告可暂时关闭；“不再自动显示”会同时关闭该自动检查开关。历史更新默认收起，点击
+“加载历史更新”后才在公告内显示。若应用内更新因网络或文件占用无法完成，可使用公告中的
+GitHub 备用入口下载完整安装器覆盖安装。
 
 卸载程序会自动删除可重建的运行环境、模型和缓存；删除成品字幕与共享的 FineSub 个人数据前
 会分别询问。静默卸载不会代替用户确认删除这些不可重建内容。

@@ -653,6 +653,11 @@ def create_backend_services(
     # is logged and retried at the next start.
     apply_pending(paths)
     ensure_store(paths)
+    # uv's roaming data path can cross the OneDrive Files On-Demand filter
+    # even when the managed interpreter itself is local. Keep uv's private
+    # state beside Yanami Sub's fixed runtime unless explicitly
+    # overridden; this is Astral's workaround for Windows os error 448.
+    os.environ.setdefault("UV_DATA_DIR", str(paths.runtime / "uv-data"))
     settings = SettingsStore(paths.user_data)
     bootstrap = _load_resources(paths, app_source)
 
@@ -691,6 +696,7 @@ def create_backend_services(
     resources = DesktopResourceService(
         bootstrap=bootstrap,
         runtime=runtime,
+        interpreter_prober=system_python_prober,
     )
     context = resources.worker_context(settings.build_worker_env())
     gpu_probe = gpus.GpuProbe()

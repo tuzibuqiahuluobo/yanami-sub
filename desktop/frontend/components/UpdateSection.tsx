@@ -4,7 +4,6 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/formatters";
-import { saveUi, uiValue } from "@/lib/preferences";
 import type { UpdateCheck, UpdateInstallSnapshot } from "@/lib/types";
 
 import { useLanguage } from "./LanguageProvider";
@@ -22,6 +21,8 @@ export interface UpdateSectionProps {
   onCloseWindow: () => Promise<unknown>;
   onRestartApplication: () => Promise<unknown>;
   onOpenUpdatePage: () => Promise<unknown>;
+  autoCheck: boolean;
+  onAutoCheckChange: (enabled: boolean) => void;
 }
 
 /**
@@ -40,6 +41,8 @@ export function UpdateSection({
   onCloseWindow,
   onRestartApplication,
   onOpenUpdatePage,
+  autoCheck,
+  onAutoCheckChange,
 }: UpdateSectionProps) {
   const { t } = useLanguage();
   const [updateMessage, setUpdateMessage] = useState("");
@@ -56,12 +59,6 @@ export function UpdateSection({
     }
   }, [startupUpdate]);
   const [updateBusy, setUpdateBusy] = useState(false);
-  // Same shape as the close-window choice on the page around this: preferences
-  // are hydrated before this page can be reached, so the initial read is
-  // already the durable one.
-  const [autoCheck, setAutoCheck] = useState(
-    () => uiValue<boolean>("autoUpdateCheck", true),
-  );
   const [install, setInstall] = useState<UpdateInstallSnapshot | null>(null);
   // A download runs in a backend thread, so the page owns no progress of its
   // own -- it polls the snapshot until the install reaches a terminal state.
@@ -299,10 +296,7 @@ export function UpdateSection({
         <input
           type="checkbox"
           checked={autoCheck}
-          onChange={(event) => {
-            setAutoCheck(event.target.checked);
-            saveUi({ autoUpdateCheck: event.target.checked });
-          }}
+          onChange={(event) => onAutoCheckChange(event.target.checked)}
         />
         <span>
           <strong>{t.settings.updates.autoCheck}</strong>

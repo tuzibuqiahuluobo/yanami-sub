@@ -649,12 +649,13 @@ class DesktopBridge:
     def get_python_interpreter(self) -> dict[str, Any]:
         """Which CPython the runtime will be built from.
 
-        The answer is a snapshot of the discovery and its rejections, not a
-        live probe of the managed environment -- the "uv" resource row already
-        reports that, and it must stay a filesystem check.
+        This is an explicit user action, so it refreshes discovery. The "uv"
+        resource row remains a fast filesystem-only snapshot.
         """
 
-        return self._guard(self.resources.interpreter_choice)
+        return self._guard(
+            lambda: self.resources.interpreter_choice(refresh=True)
+        )
 
     def select_python_interpreter(self) -> dict[str, Any]:
         """Native file picker for a Python interpreter, validated on the spot."""
@@ -675,14 +676,12 @@ class DesktopBridge:
             if not outcome.ok:
                 raise ValueError(outcome.reason)
             chosen = outcome.path
-            python_interpreter.save_configured_interpreter(
-                self.resources.runtime.paths.user_data, chosen
-            )
+            self.resources.configure_interpreter(chosen)
             return {
                 "cancelled": False,
                 "path": str(chosen),
                 "version": outcome.version,
-                "restart_required": True,
+                "restart_required": False,
             }
 
         return self._guard(choose)
@@ -700,13 +699,11 @@ class DesktopBridge:
             if not outcome.ok:
                 raise ValueError(outcome.reason)
             selected_path = outcome.path
-            python_interpreter.save_configured_interpreter(
-                self.resources.runtime.paths.user_data, selected_path
-            )
+            self.resources.configure_interpreter(selected_path)
             return {
                 "path": str(selected_path),
                 "version": outcome.version,
-                "restart_required": True,
+                "restart_required": False,
             }
 
         return self._guard(store)
@@ -715,10 +712,8 @@ class DesktopBridge:
         """Forget the stored choice and go back to automatic discovery."""
 
         def clear() -> dict[str, Any]:
-            python_interpreter.save_configured_interpreter(
-                self.resources.runtime.paths.user_data, None
-            )
-            return {"restart_required": True}
+            self.resources.configure_interpreter(None)
+            return {"restart_required": False}
 
         return self._guard(clear)
 

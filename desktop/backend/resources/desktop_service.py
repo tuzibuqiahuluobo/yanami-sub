@@ -97,9 +97,11 @@ class DesktopResourceService:
         | None = None,
         model_prefetch: Callable[..., None] | None = None,
         local_reuse: LocalResourceReuse | None = None,
+        interpreter_prober: python_interpreter.InterpreterProbe | None = None,
     ) -> None:
         self.bootstrap = bootstrap
         self.runtime = runtime
+        self.interpreter_prober = interpreter_prober
         # Injectable for the same reason as the tool finders: otherwise testing
         # the `models` branch means spawning an interpreter and downloading
         # gigabytes.
@@ -143,7 +145,7 @@ class DesktopResourceService:
 
     def status(self, resource_id: str) -> ResourceStatus:
         if resource_id == "uv":
-            return self.runtime.status()
+            return self._runtime_status()
         if resource_id == MODELS_RESOURCE:
             return self._models_status()
         if resource_id not in BOOTSTRAP_RESOURCES:
@@ -158,7 +160,37 @@ class DesktopResourceService:
             )
         return self.bootstrap.status(resource_id)
 
-    def interpreter_choice(self) -> dict[str, object]:
+    def _runtime_status(self, *, force_probe: bool = False) -> ResourceStatus:
+        """Read managed-runtime state without starting discovery during polling."""
+
+        prober = self.interpreter_prober
+        if force_probe and prober is not None:
+            self._reset_interpreter_probe(
+                self.runtime.development_python
+                or python_interpreter.load_configured_interpreter(
+                    self.runtime.paths.user_data
+                )
+            )
+        if prober is None or force_probe or prober.done:
+            return self.runtime.status(force_probe=force_probe)
+        marker = getattr(self.runtime, "marker_path", None)
+        if self.runtime.development_python is not None or (
+            self.runtime.python_executable.is_file()
+            and isinstance(marker, Path)
+            and marker.is_file()
+        ):
+            return self.runtime.status(force_probe=force_probe)
+        return ResourceStatus(
+            id="uv",
+            version=f"Python {self.runtime.python_version}",
+            state="missing",
+            detail=(
+                f"尚未检查本机 Python {self.runtime.python_version}；"
+                "开始安装后会在后台检查，最长约 12 秒。"
+            ),
+        )
+
+    def interpreter_choice(self, *, refresh: bool = False) -> dict[str, object]:
         """Which Python the runtime will be built from, and which were refused.
 
         Deliberately not part of ``status("uv")``: that answer has to stay a
@@ -170,31 +202,56 @@ class DesktopResourceService:
         no Python at all is an answer, not a fault.
         """
 
-        rejected: list[python_interpreter.RejectedCandidate] = []
-        outcome = python_interpreter.locate_interpreter(
-            preferred=self.runtime.development_python
-            or python_interpreter.load_configured_interpreter(self.runtime.paths.user_data),
-            python_version=self.runtime.python_version,
-            rejected=rejected,
+        configured = self.runtime.development_python or (
+            python_interpreter.load_configured_interpreter(
+                self.runtime.paths.user_data
+            )
         )
+        if refresh:
+            self._reset_interpreter_probe(configured)
+        if self.interpreter_prober is None:
+            rejected: list[python_interpreter.RejectedCandidate] = []
+            outcome = python_interpreter.locate_interpreter(
+                preferred=configured,
+                python_version=self.runtime.python_version,
+                rejected=rejected,
+            )
+        else:
+            outcome, rejected = self.interpreter_prober.report()
         return {
-            "configured": (
-                str(self.runtime.development_python)
-                if self.runtime.development_python is not None
-                else None
-            ),
+            "configured": str(configured) if configured is not None else None,
             "found": str(outcome.path) if outcome.path is not None else None,
             "version": outcome.version,
             "detail": (
                 ""
                 if outcome.ok
-                else python_interpreter.describe_failure(rejected)
+                else outcome.reason
+                or python_interpreter.describe_failure(rejected)
             ),
             "rejected": [
                 {"path": str(item.path), "reason": item.reason}
                 for item in rejected
             ],
         }
+
+    def configure_interpreter(self, interpreter: Path | None) -> Path | None:
+        """Persist a choice and make it effective for the next install now."""
+
+        chosen = python_interpreter.save_configured_interpreter(
+            self.runtime.paths.user_data, interpreter
+        )
+        self._reset_interpreter_probe(chosen)
+        return chosen
+
+    def _reset_interpreter_probe(self, preferred: Path | None) -> None:
+        """Forget both caches so an explicit check sees current installations."""
+
+        if self.interpreter_prober is not None:
+            self.interpreter_prober.reset(preferred)
+        # FineSub 0.5.1 memoises the injected prober but has no public reset.
+        if hasattr(self.runtime, "_system_python_checked"):
+            self.runtime._system_python_checked = False
+            self.runtime._system_python = None
 
     def _models_status(
         self, *, runtime_status: ResourceStatus | None = None
@@ -208,7 +265,7 @@ class DesktopResourceService:
                 state="ready",
                 detail="模型权重已就绪",
             )
-        if not (runtime_status or self.runtime.status()).usable:
+        if not (runtime_status or self._runtime_status()).usable:
             # There is no interpreter to fetch them with yet, and a button that
             # fails on click is worse than one that says why it cannot run.
             return ResourceStatus(
@@ -291,7 +348,7 @@ class DesktopResourceService:
         missing = missing_pipeline_models(self.runtime.paths.models)
         if not missing:
             return self._models_status()
-        if not self.runtime.status().usable:
+        if not self._runtime_status().usable:
             raise RuntimeError("需要先安装 Python 运行环境，再下载模型权重。")
         # One process per model, and one endpoint decision per process. The
         # endpoint is read at import time by huggingface_hub, so falling back
@@ -332,6 +389,22 @@ class DesktopResourceService:
             for callback in (stage, log, should_pause)
         )
         if resource_id == "uv":
+            if self.interpreter_prober is not None and not self.interpreter_prober.done:
+                if stage is not None:
+                    stage(
+                        "discovering_python",
+                        f"正在检查本机 Python {self.runtime.python_version}（最长约 12 秒）",
+                    )
+
+                def announce(candidate: Path) -> None:
+                    if should_pause is not None and should_pause():
+                        raise DownloadPaused("Python interpreter discovery paused")
+                    if log is not None:
+                        log(f"Checking Python candidate: {candidate}")
+
+                self.interpreter_prober.report(on_candidate=announce)
+                if should_pause is not None and should_pause():
+                    raise DownloadPaused("Python interpreter discovery paused")
             self._prepare_local_archive(
                 resource_id,
                 stage=stage,
@@ -430,7 +503,7 @@ class DesktopResourceService:
         # A manual diagnostic means "look again", including system tools that
         # were installed after launch.
         self._system_tools.clear()
-        forced_runtime = self.runtime.status(force_probe=True)
+        forced_runtime = self._runtime_status(force_probe=True)
         resources = [
             forced_runtime if resource_id == "uv" else self.status(resource_id)
             for resource_id in ALWAYS_REQUIRED

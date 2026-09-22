@@ -407,3 +407,78 @@ def test_prober_reports_its_finding_to_the_caller(
     outcome, rejected = seen[0]
     assert not outcome.ok
     assert isinstance(rejected, list)
+
+
+def test_discovery_has_one_global_deadline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Several hung candidates must not multiply the wait indefinitely."""
+
+    candidates = [tmp_path / f"python-{index}" for index in range(3)]
+    for candidate in candidates:
+        candidate.write_bytes(b"MZ")
+    monkeypatch.setattr(
+        pi,
+        "candidate_interpreters",
+        lambda **_kwargs: candidates,
+    )
+    now = [0.0]
+    monkeypatch.setattr(pi.time, "monotonic", lambda: now[0])
+
+    class SlowRunner:
+        def __init__(self) -> None:
+            self.calls: list[list[str]] = []
+
+        def __call__(self, command, **kwargs):
+            self.calls.append(list(command))
+            now[0] += kwargs["timeout"]
+            return subprocess.CompletedProcess(
+                args=list(command), returncode=2, stdout="", stderr=""
+            )
+
+    runner = SlowRunner()
+    outcome = pi.locate_interpreter(runner=runner, timeout_seconds=4)
+
+    assert not outcome.ok
+    assert "4 秒" in outcome.reason
+    assert now[0] == pytest.approx(4)
+    assert len(runner.calls) == 2
+
+
+def test_shared_probe_caches_details_and_can_be_reset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rejected_python = tmp_path / "python-311"
+    accepted_python = tmp_path / "python-312"
+    replacement_python = tmp_path / "python-312-new"
+    for candidate in (rejected_python, accepted_python, replacement_python):
+        candidate.write_bytes(b"MZ")
+    runner = FakeRunner(
+        {
+            str(rejected_python.resolve()): (0, "3.11.9\n"),
+            str(accepted_python.resolve()): (0, "3.12.6\n"),
+            str(replacement_python.resolve()): (0, "3.12.7\n"),
+        }
+    )
+    monkeypatch.setattr(
+        pi,
+        "candidate_interpreters",
+        lambda **_kwargs: [accepted_python],
+    )
+    prober = pi.make_prober(preferred=rejected_python, runner=runner)
+
+    first, rejected = prober.report()
+    again, rejected_again = prober.report()
+
+    assert prober.done
+    assert first.path == accepted_python.resolve()
+    assert again == first
+    assert rejected_again == rejected
+    assert [item.path.name for item in rejected] == ["python-311"]
+    assert len(runner.calls) == 2
+
+    prober.reset(replacement_python)
+    replacement, _ = prober.report()
+
+    assert replacement.path == replacement_python.resolve()
+    assert len(runner.calls) == 3

@@ -14,11 +14,17 @@ import { ProcessingView } from "@/components/ProcessingView";
 import { ResourceManager } from "@/components/ResourceManager";
 import { Settings } from "@/components/Settings";
 import { TaskHistory } from "@/components/TaskHistory";
+import { UpdateAnnouncement } from "@/components/UpdateAnnouncement";
 import {
   BridgeCallError,
   desktopApi,
 } from "@/lib/bridge";
-import { hydratePreferences, saveTaskDefaults, uiValue } from "@/lib/preferences";
+import {
+  hydratePreferences,
+  saveTaskDefaults,
+  saveUi,
+  uiValue,
+} from "@/lib/preferences";
 import {
   readProcessingDevice,
   requestDeviceFields,
@@ -84,6 +90,36 @@ export default function Home() {
   // Which task the cleanup dialog is asking about; null when it is closed.
   const [cleanupTaskId, setCleanupTaskId] = useState<string | null>(null);
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheck | null>(null);
+  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState("");
+  const [autoUpdateCheck, setAutoUpdateCheck] = useState(
+    () => uiValue<boolean>("autoUpdateCheck", true),
+  );
+
+  const changeAutoUpdateCheck = useCallback((enabled: boolean) => {
+    setAutoUpdateCheck(enabled);
+    saveUi({ autoUpdateCheck: enabled });
+  }, []);
+
+  const dismissUpdateAnnouncement = useCallback(() => {
+    if (startupUpdate) setDismissedUpdateVersion(startupUpdate.version);
+  }, [startupUpdate]);
+
+  const disableUpdateAnnouncements = useCallback(() => {
+    changeAutoUpdateCheck(false);
+    if (startupUpdate) setDismissedUpdateVersion(startupUpdate.version);
+  }, [changeAutoUpdateCheck, startupUpdate]);
+
+  const installAnnouncedUpdate = useCallback(async () => {
+    if (!startupUpdate?.kind) return;
+    await desktopApi.installUpdate(startupUpdate.kind, startupUpdate.version);
+    setDismissedUpdateVersion(startupUpdate.version);
+    dispatch({ type: "navigate", route: "settings" });
+  }, [startupUpdate]);
+
+  const openAnnouncedUpdatePage = useCallback(
+    () => desktopApi.openUpdatePage(),
+    [],
+  );
 
   // One release-feed query per launch, when the user leaves it on. Held here
   // rather than in the settings page so the sidebar can point at it: a check
@@ -119,6 +155,7 @@ export default function Home() {
       // Before the dispatch: the theme and language readers are synchronous
       // and would otherwise render one frame from the mirror.
       hydratePreferences(payload.preferences);
+      setAutoUpdateCheck(uiValue<boolean>("autoUpdateCheck", true));
       dispatch({ type: "bootstrapLoaded", payload });
       maybeCheckForUpdates();
     } catch (error) {
@@ -504,6 +541,7 @@ export default function Home() {
         }
         onOpenLogs={() => void desktopApi.openInstallLogs()}
         onRunDiagnostics={() => desktopApi.getDiagnostics()}
+        onCheckPythonInterpreter={() => desktopApi.getPythonInterpreter()}
         onSelectPythonInterpreter={() => desktopApi.selectPythonInterpreter()}
         onClearPythonInterpreter={() => desktopApi.clearPythonInterpreter()}
         storage={state.storage}
@@ -560,6 +598,8 @@ export default function Home() {
         onCloseWindow={() => desktopApi.closeWindow()}
         onRestartApplication={() => desktopApi.restartApplication()}
         onOpenUpdatePage={() => desktopApi.openUpdatePage()}
+        autoCheck={autoUpdateCheck}
+        onAutoCheckChange={changeAutoUpdateCheck}
         onRescanGpus={() => desktopApi.rescanGpus()}
         onSaveSharedSettings={async (values) => {
           const result = await desktopApi.saveSharedSettings(values);
@@ -650,6 +690,17 @@ export default function Home() {
               }
             }}
             onCancel={() => setCleanupTaskId(null)}
+          />
+          <UpdateAnnouncement
+            open={
+              startupUpdate?.available === true &&
+              dismissedUpdateVersion !== startupUpdate.version
+            }
+            update={startupUpdate}
+            onClose={dismissUpdateAnnouncement}
+            onDisableAnnouncements={disableUpdateAnnouncements}
+            onInstall={installAnnouncedUpdate}
+            onOpenUpdatePage={openAnnouncedUpdatePage}
           />
         </AppShell>
       )}

@@ -52,6 +52,8 @@ from pathlib import Path
 import re
 import shutil
 import subprocess
+import threading
+import time
 from typing import Callable, Iterable, Sequence
 
 from finesub_bootstrap.fsops import write_atomic
@@ -70,7 +72,8 @@ SCHEMA_VERSION = 1
 
 #: A chosen path, not a document.
 _MAX_BYTES = 8 * 1024
-_PROBE_TIMEOUT_SECONDS = 15.0
+_PROBE_TIMEOUT_SECONDS = 3.0
+DISCOVERY_TIMEOUT_SECONDS = 12.0
 
 
 def _write_config(path: Path, payload: dict[str, object]) -> None:
@@ -155,6 +158,7 @@ def _run(
     command: Sequence[str],
     *,
     runner: CommandRunner | None,
+    timeout_seconds: float = _PROBE_TIMEOUT_SECONDS,
 ) -> subprocess.CompletedProcess[str] | None:
     """One probe subprocess, with every failure turned into ``None``.
 
@@ -172,7 +176,7 @@ def _run(
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=_PROBE_TIMEOUT_SECONDS,
+            timeout=max(0.1, timeout_seconds),
             creationflags=(
                 getattr(subprocess, "CREATE_NO_WINDOW", 0)
                 if os.name == "nt"
@@ -195,6 +199,7 @@ def probe_interpreter(
     *,
     python_version: str = PYTHON_VERSION,
     runner: CommandRunner | None = None,
+    timeout_seconds: float = _PROBE_TIMEOUT_SECONDS,
 ) -> ProbeOutcome:
     """Whether ``path`` is a usable CPython of the version the lock needs.
 
@@ -211,7 +216,11 @@ def probe_interpreter(
     if not resolved.is_file():
         return ProbeOutcome(False, reason=f"找不到可执行文件：{resolved}")
 
-    result = _run([str(resolved), "-I", "-c", _VERSION_SOURCE], runner=runner)
+    result = _run(
+        [str(resolved), "-I", "-c", _VERSION_SOURCE],
+        runner=runner,
+        timeout_seconds=timeout_seconds,
+    )
     if result is None:
         return ProbeOutcome(
             False, reason=f"无法运行该程序，可能不是 Python 解释器：{resolved}"
@@ -247,6 +256,7 @@ def _py_launcher_candidates(
     *,
     runner: CommandRunner | None,
     rejected: list[RejectedCandidate],
+    timeout_seconds: float = _PROBE_TIMEOUT_SECONDS,
 ) -> list[Path]:
     """Interpreters the ``py`` launcher knows about, PATH or not.
 
@@ -258,7 +268,11 @@ def _py_launcher_candidates(
     launcher = shutil.which("py")
     if not launcher:
         return []
-    result = _run([launcher, "-0p"], runner=runner)
+    result = _run(
+        [launcher, "-0p"],
+        runner=runner,
+        timeout_seconds=timeout_seconds,
+    )
     if result is None or result.returncode != 0:
         return []
 
@@ -352,6 +366,7 @@ def candidate_interpreters(
     runner: CommandRunner | None = None,
     environ: dict[str, str] | None = None,
     rejected: list[RejectedCandidate] | None = None,
+    launcher_timeout_seconds: float = _PROBE_TIMEOUT_SECONDS,
 ) -> list[Path]:
     """Every path worth probing, most-likely first, de-duplicated."""
 
@@ -364,7 +379,11 @@ def candidate_interpreters(
         if executable:
             ordered.append(Path(executable))
     ordered.extend(
-        _py_launcher_candidates(runner=runner, rejected=bucket)
+        _py_launcher_candidates(
+            runner=runner,
+            rejected=bucket,
+            timeout_seconds=launcher_timeout_seconds,
+        )
     )
     ordered.extend(common_install_locations(env))
 
@@ -389,6 +408,8 @@ def locate_interpreter(
     runner: CommandRunner | None = None,
     environ: dict[str, str] | None = None,
     rejected: list[RejectedCandidate] | None = None,
+    timeout_seconds: float = DISCOVERY_TIMEOUT_SECONDS,
+    on_candidate: Callable[[Path], None] | None = None,
 ) -> ProbeOutcome:
     """The best interpreter for the managed runtime, or why there is none.
 
@@ -401,27 +422,56 @@ def locate_interpreter(
     """
 
     bucket = rejected if rejected is not None else []
+    deadline = time.monotonic() + max(0.1, timeout_seconds)
+
+    def try_candidate(candidate: Path) -> ProbeOutcome | None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        if on_candidate is not None:
+            on_candidate(candidate)
+        outcome = probe_interpreter(
+            candidate,
+            python_version=python_version,
+            runner=runner,
+            timeout_seconds=min(_PROBE_TIMEOUT_SECONDS, remaining),
+        )
+        if not outcome.ok:
+            bucket.append(RejectedCandidate(candidate.expanduser(), outcome.reason))
+        return outcome
 
     if preferred is not None:
-        outcome = probe_interpreter(
-            preferred, python_version=python_version, runner=runner
-        )
-        if outcome.ok:
+        outcome = try_candidate(preferred)
+        if outcome is not None and outcome.ok:
             return outcome
-        bucket.append(RejectedCandidate(preferred.expanduser(), outcome.reason))
 
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        return ProbeOutcome(
+            False,
+            reason=(
+                f"检查本机 Python 超过 {timeout_seconds:g} 秒，已停止；"
+                "可手动指定 python.exe，或下载私有 Python 3.12。"
+            ),
+        )
     for candidate in candidate_interpreters(
         python_version=python_version,
         runner=runner,
         environ=environ,
         rejected=bucket,
+        launcher_timeout_seconds=min(_PROBE_TIMEOUT_SECONDS, remaining),
     ):
-        outcome = probe_interpreter(
-            candidate, python_version=python_version, runner=runner
-        )
+        outcome = try_candidate(candidate)
+        if outcome is None:
+            return ProbeOutcome(
+                False,
+                reason=(
+                    f"检查本机 Python 超过 {timeout_seconds:g} 秒，已停止；"
+                    "可手动指定 python.exe，或下载私有 Python 3.12。"
+                ),
+            )
         if outcome.ok:
             return outcome
-        bucket.append(RejectedCandidate(candidate, outcome.reason))
 
     return ProbeOutcome(False)
 
@@ -466,6 +516,67 @@ def describe_failure(rejected: Iterable[RejectedCandidate]) -> str:
     return "\n".join(lines)
 
 
+class InterpreterProbe:
+    """One bounded, shared discovery result for status, diagnostics and install."""
+
+    def __init__(
+        self,
+        *,
+        preferred: Path | None,
+        python_version: str = PYTHON_VERSION,
+        runner: CommandRunner | None = None,
+        environ: dict[str, str] | None = None,
+        on_result: Callable[[ProbeOutcome, list[RejectedCandidate]], None]
+        | None = None,
+    ) -> None:
+        self.preferred = preferred
+        self.python_version = python_version
+        self.runner = runner
+        self.environ = environ
+        self.on_result = on_result
+        self._lock = threading.Lock()
+        self._done = False
+        self._outcome = ProbeOutcome(False)
+        self._rejected: list[RejectedCandidate] = []
+
+    @property
+    def done(self) -> bool:
+        return self._done
+
+    def report(
+        self,
+        *,
+        on_candidate: Callable[[Path], None] | None = None,
+    ) -> tuple[ProbeOutcome, list[RejectedCandidate]]:
+        with self._lock:
+            if not self._done:
+                rejected: list[RejectedCandidate] = []
+                outcome = locate_interpreter(
+                    preferred=self.preferred,
+                    python_version=self.python_version,
+                    runner=self.runner,
+                    environ=self.environ,
+                    rejected=rejected,
+                    on_candidate=on_candidate,
+                )
+                self._outcome = outcome
+                self._rejected = rejected
+                self._done = True
+                if self.on_result is not None:
+                    self.on_result(outcome, list(rejected))
+            return self._outcome, list(self._rejected)
+
+    def reset(self, preferred: Path | None) -> None:
+        with self._lock:
+            self.preferred = preferred
+            self._done = False
+            self._outcome = ProbeOutcome(False)
+            self._rejected = []
+
+    def __call__(self) -> Path | None:
+        return self.report()[0].path
+
+
 def make_prober(
     *,
     preferred: Path | None,
@@ -473,7 +584,7 @@ def make_prober(
     runner: CommandRunner | None = None,
     environ: dict[str, str] | None = None,
     on_result: Callable[[ProbeOutcome, list[RejectedCandidate]], None] | None = None,
-) -> Callable[[], Path | None]:
+) -> InterpreterProbe:
     """A ``system_python_prober`` for ``RuntimeEnvironment``.
 
     Probed once and memoised, matching what the upstream class does with its own
@@ -481,23 +592,10 @@ def make_prober(
     one spawns subprocesses.
     """
 
-    state: dict[str, object] = {"done": False, "path": None}
-
-    def prober() -> Path | None:
-        if state["done"]:
-            return state["path"]  # type: ignore[return-value]
-        rejected: list[RejectedCandidate] = []
-        outcome = locate_interpreter(
-            preferred=preferred,
-            python_version=python_version,
-            runner=runner,
-            environ=environ,
-            rejected=rejected,
-        )
-        state["done"] = True
-        state["path"] = outcome.path
-        if on_result is not None:
-            on_result(outcome, rejected)
-        return outcome.path
-
-    return prober
+    return InterpreterProbe(
+        preferred=preferred,
+        python_version=python_version,
+        runner=runner,
+        environ=environ,
+        on_result=on_result,
+    )

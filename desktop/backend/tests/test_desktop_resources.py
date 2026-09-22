@@ -44,7 +44,7 @@ class FakeBootstrap:
     def cache_path(self, resource_id: str) -> Path:
         return self.root / "cache" / resource_id
 
-    def install(self, resource_id: str, progress) -> ResourceStatus:
+    def install(self, resource_id: str, progress, **_kwargs) -> ResourceStatus:
         self.installed.append(resource_id)
         self.states[resource_id] = self.states[resource_id].model_copy(
             update={"state": "ready"}
@@ -98,7 +98,7 @@ class FakeRuntime:
             state="ready" if self.ready else "missing",
         )
 
-    def install(self) -> ResourceStatus:
+    def install(self, **_kwargs) -> ResourceStatus:
         self.installs += 1
         self.ready = True
         return self.status()
@@ -139,6 +139,139 @@ def test_python_install_bootstraps_uv_before_activating_runtime(
     assert result.state == "ready"
     assert bootstrap.installed == ["uv"]
     assert runtime.installs == 1
+
+
+def test_runtime_status_does_not_probe_before_the_user_starts_setup(
+    tmp_path: Path,
+) -> None:
+    runtime = FakeRuntime(tmp_path)
+    prober = python_interpreter.make_prober(preferred=None, environ={})
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=runtime,
+        system_tool_finders={},
+        interpreter_prober=prober,
+    )
+
+    status = service.status("uv")
+    all_statuses = service.check_all()
+
+    assert status.state == "missing"
+    assert "12 秒" in status.detail
+    assert runtime.force_probes == []
+    assert not prober.done
+    assert any(item.id == "models" for item in all_statuses)
+
+
+def test_python_install_reports_bounded_discovery_before_installing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    interpreter = tmp_path / "python-312"
+    interpreter.write_bytes(b"MZ")
+    seen_candidates: list[Path] = []
+
+    def locate(**kwargs):
+        kwargs["on_candidate"](interpreter)
+        seen_candidates.append(interpreter)
+        return python_interpreter.ProbeOutcome(
+            True,
+            path=interpreter.resolve(),
+            version="3.12.6",
+        )
+
+    monkeypatch.setattr(python_interpreter, "locate_interpreter", locate)
+    runtime = FakeRuntime(tmp_path)
+    prober = python_interpreter.make_prober(preferred=None, environ={})
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=runtime,
+        system_tool_finders={},
+        interpreter_prober=prober,
+    )
+    stages: list[tuple[str, str]] = []
+    logs: list[str] = []
+
+    result = service.install(
+        "uv",
+        lambda _event: None,
+        stage=lambda stage, message: stages.append((stage, message)),
+        log=logs.append,
+        should_pause=lambda: False,
+    )
+
+    assert result.state == "ready"
+    assert stages[0][0] == "discovering_python"
+    assert seen_candidates == [interpreter]
+    assert str(interpreter) in logs[0]
+    assert prober.done
+
+
+def test_configured_interpreter_applies_without_restarting(
+    tmp_path: Path,
+) -> None:
+    interpreter = tmp_path / "python-312"
+    interpreter.write_bytes(b"MZ")
+    runtime = FakeRuntime(tmp_path)
+    runtime._system_python_checked = True
+    runtime._system_python = tmp_path / "old-python"
+    prober = python_interpreter.make_prober(preferred=None, environ={})
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=runtime,
+        system_tool_finders={},
+        interpreter_prober=prober,
+    )
+
+    chosen = service.configure_interpreter(interpreter)
+
+    assert chosen == interpreter.resolve()
+    assert python_interpreter.load_configured_interpreter(
+        runtime.paths.user_data
+    ) == interpreter.resolve()
+    assert prober.preferred == interpreter.resolve()
+    assert not prober.done
+    assert runtime._system_python_checked is False
+    assert runtime._system_python is None
+
+
+def test_explicit_interpreter_check_refreshes_the_cached_result(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = tmp_path / "python-first"
+    second = tmp_path / "python-second"
+    for candidate in (first, second):
+        candidate.write_bytes(b"MZ")
+    outcomes = iter(
+        (
+            python_interpreter.ProbeOutcome(
+                True, path=first.resolve(), version="3.12.6"
+            ),
+            python_interpreter.ProbeOutcome(
+                True, path=second.resolve(), version="3.12.7"
+            ),
+        )
+    )
+    calls: list[None] = []
+
+    def locate(**_kwargs):
+        calls.append(None)
+        return next(outcomes)
+
+    monkeypatch.setattr(python_interpreter, "locate_interpreter", locate)
+    prober = python_interpreter.make_prober(preferred=None, environ={})
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        interpreter_prober=prober,
+    )
+
+    original = service.interpreter_choice(refresh=True)
+    refreshed = service.interpreter_choice(refresh=True)
+
+    assert original["found"] == str(first.resolve())
+    assert refreshed["found"] == str(second.resolve())
+    assert len(calls) == 2
 
 
 def test_storage_relocation_uses_the_core_shell_and_adopts_its_paths(
