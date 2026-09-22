@@ -403,8 +403,59 @@ def test_backups_are_never_discarded_while_the_install_is_broken(
     assert backup.is_dir(), "an unbootable root must keep its backup"
 
     (target / "Yanami Sub.exe").write_bytes(b"restored")
+    _write_app_version(target / "app" / "versions" / "1.0.0", "1.0.0")
+    (target / "app" / "current.json").write_text(
+        '{"current":"1.0.0","previous":null,"pendingHealth":false}',
+        encoding="utf-8",
+    )
     discard_backups(target)
     assert not backup.exists()
+
+
+def test_startup_repairs_pointer_to_newest_complete_version(tmp_path: Path) -> None:
+    from desktop.backend.updates.recovery import repair_active_app_version
+
+    target = tmp_path / "Yanami Sub"
+    _write_app_version(target / "app" / "versions" / "1.2.0", "1.2.0")
+    _write_app_version(target / "app" / "versions" / "1.3.0", "1.3.0")
+    incomplete = target / "app" / "versions" / "1.4.0"
+    incomplete.mkdir(parents=True)
+    (target / "app" / "current.json").write_text(
+        '{"current":"1.4.0","previous":"1.3.0","pendingHealth":true}',
+        encoding="utf-8",
+    )
+
+    assert repair_active_app_version(target) == "1.3.0"
+    pointer = json.loads(
+        (target / "app" / "current.json").read_text(encoding="utf-8")
+    )
+    assert pointer == {
+        "current": "1.3.0",
+        "previous": None,
+        "pendingHealth": False,
+        "healthAttempts": 0,
+    }
+
+
+def test_update_handoff_marker_blocks_only_while_owner_is_live(
+    tmp_path: Path,
+) -> None:
+    from desktop.backend.updates.recovery import (
+        full_update_in_progress,
+        mark_full_update,
+    )
+
+    root = tmp_path / "Yanami Sub"
+    marker = mark_full_update(root, version="1.1.0", updater_pid=42)
+
+    assert full_update_in_progress(
+        root, process_is_running=lambda pid: pid == 42
+    ) is True
+    assert marker.is_file()
+    assert full_update_in_progress(
+        root, process_is_running=lambda _pid: False
+    ) is False
+    assert not marker.exists()
 
 
 def test_an_incomplete_app_version_is_replaced_rather_than_adopted(

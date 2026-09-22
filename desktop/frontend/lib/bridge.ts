@@ -208,10 +208,49 @@ function previewApi(): DesktopApi {
   let storage = structuredClone(previewBootstrap.storage!);
   const installs = new Map<string, ResourceInstallSnapshot>();
   let batch: BatchSnapshot | null = null;
+  const previewCapabilities = (): CapabilityState => ({
+    raw_srt: true,
+    translation:
+      settings.api_keys.gemini_free === "configured" ||
+      settings.api_keys.gemini_paid === "configured" ||
+      routing.targets.some(
+        (target) =>
+          target.available &&
+          (target.backend === "local_agent" ||
+            target.backend === "conversational_agent"),
+      ),
+    web_search:
+      settings.api_keys.exa === "configured" ||
+      settings.api_keys.tavily === "configured",
+  });
+  const syncPreviewApiTargets = () => {
+    const configured = new Set(
+      (["gemini_free", "gemini_paid"] as const)
+        .filter((provider) => settings.api_keys[provider] === "configured")
+        .map((provider) => provider.toUpperCase()),
+    );
+    routing = {
+      ...routing,
+      providers: routing.providers.map((provider) =>
+        configured.has(provider.id)
+          ? { ...provider, configured: true }
+          : provider.id === "GEMINI_FREE" || provider.id === "GEMINI_PAID"
+            ? { ...provider, configured: false }
+            : provider,
+      ),
+      targets: routing.targets.map((target) =>
+        target.provider_tier === "GEMINI_FREE" ||
+        target.provider_tier === "GEMINI_PAID"
+          ? { ...target, available: configured.has(target.provider_tier) }
+          : target,
+      ),
+    };
+  };
   return {
     async getBootstrapState() {
       return structuredClone({
         ...previewBootstrap,
+        capabilities: previewCapabilities(),
         settings,
         routing,
         preferences,
@@ -503,6 +542,7 @@ function previewApi(): DesktopApi {
           tavily: keys.tavily?.trim() ? "configured" : settings.api_keys.tavily,
         },
       };
+      syncPreviewApiTargets();
       return structuredClone(settings);
     },
     async reloadSettings() {
@@ -510,13 +550,14 @@ function previewApi(): DesktopApi {
       // it already holds.
       return {
         settings: structuredClone(settings),
-        capabilities: structuredClone(previewBootstrap.capabilities),
+        capabilities: previewCapabilities(),
       };
     },
     async deleteApiKey(provider) {
       settings = {
         api_keys: { ...settings.api_keys, [provider]: "missing" },
       };
+      syncPreviewApiTargets();
       return structuredClone(settings);
     },
     async revealApiKeys() {
@@ -582,6 +623,14 @@ function previewApi(): DesktopApi {
       return structuredClone(routing);
     },
     async probeLocalAgents() {
+      routing = {
+        ...routing,
+        targets: routing.targets.map((target) =>
+          target.provider_tier === "LOCAL_CODEX"
+            ? { ...target, available: true }
+            : target,
+        ),
+      };
       return [
         { provider_tier: "LOCAL_CODEX", driver: "codex", models: ["gpt-5.6"], quota_pools: ["LOCAL_CODEX"], status: "ready" as const, available: true, version: "codex-cli preview", detail: "" },
         { provider_tier: "LOCAL_AGY", driver: "agy", models: ["gemini-3.7-flash"], quota_pools: ["AGY_GEMINI"], status: "missing" as const, available: false, version: "", detail: "agy is not installed" },
@@ -727,6 +776,12 @@ function previewApi(): DesktopApi {
     },
     async openUpdatePage() {
       return { url: "https://github.com/tuzibuqiahuluobo/yanami-sub/releases" };
+    },
+    async openExternalUrl(url) {
+      if (typeof window !== "undefined") {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }
+      return { url };
     },
     async openTasksDirectory() {
       return { path: "C:\\Yanami Sub\\tasks" };
@@ -916,6 +971,8 @@ function nativeApi(): DesktopApi {
     getUpdateInstall: () =>
       call<UpdateInstallSnapshot | null>("get_update_install"),
     openUpdatePage: () => call<{ url: string }>("open_update_page"),
+    openExternalUrl: (url) =>
+      call<{ url: string }>("open_external_url", url),
     openTasksDirectory: (taskId = "") =>
       call<{ path: string }>("open_tasks_directory", taskId),
     openOutput: (path) => call<{ path: string }>("open_output", path),

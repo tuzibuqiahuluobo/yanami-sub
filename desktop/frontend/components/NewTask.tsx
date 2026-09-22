@@ -161,6 +161,8 @@ export function NewTask({
               </strong>
               {state.task.error.code === "api_key_required" ? (
                 <span>{t.newTask.apiKeyError}</span>
+              ) : state.task.error.code === "route_unavailable" ? (
+                <span>{t.newTask.routeError}</span>
               ) : null}
             </div>
           ) : null}

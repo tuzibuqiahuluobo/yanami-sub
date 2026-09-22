@@ -18,6 +18,7 @@ from desktop.backend.common.models import (
     KnowledgeCommandRequest,
     KnowledgeShareCommandRequest,
     RefinedKnowledgeUpdateRequest,
+    LocalAgentStatus,
     RoutingUpdate,
     SharedSettings,
     TaskRequest,
@@ -82,6 +83,17 @@ RESOURCE_LABELS = {
     "git": "git（知识库更新需要）",
     "yt-dlp": "yt-dlp（链接下载需要）",
 }
+
+# Frontend callers may only open these audited provider pages. Keeping this an
+# exact allowlist means a compromised or stale web view cannot turn the native
+# bridge into an arbitrary URL launcher.
+API_KEY_HELP_URLS = frozenset(
+    {
+        "https://aistudio.google.com/app/apikey",
+        "https://dashboard.exa.ai/api-keys",
+        "https://app.tavily.com/home",
+    }
+)
 
 
 def _missing_resource_error(missing: list[str], verb: str) -> BridgeError:
@@ -958,7 +970,14 @@ class DesktopBridge:
             return self._internal_error("save_routing_settings")
 
     def probe_local_agents(self) -> dict[str, Any]:
-        return self._guard(self.settings.probe_local_agents)
+        def probe_and_refresh() -> list[LocalAgentStatus]:
+            statuses = self.settings.probe_local_agents()
+            # A CLI may have been installed after Yanami Sub started. Feed the
+            # freshly resolved concrete commands to every later worker now.
+            self._refresh_worker_environment()
+            return statuses
+
+        return self._guard(probe_and_refresh)
 
     def get_knowledge_snapshot(self) -> dict[str, Any]:
         return self._knowledge_guard(self.knowledge.snapshot)
@@ -1089,6 +1108,23 @@ class DesktopBridge:
 
         def open_page() -> dict[str, str]:
             url = self.updates.release_url()
+            self.url_opener(url)
+            return {"url": url}
+
+        return self._guard(open_page)
+
+    def open_external_url(self, url: str) -> dict[str, Any]:
+        """Open one of the fixed, official API-key destinations."""
+
+        if url not in API_KEY_HELP_URLS:
+            return _failure(
+                BridgeError(
+                    code="invalid_request",
+                    message="该链接不是 Yanami Sub 允许打开的官方密钥页面。",
+                )
+            )
+
+        def open_page() -> dict[str, str]:
             self.url_opener(url)
             return {"url": url}
 

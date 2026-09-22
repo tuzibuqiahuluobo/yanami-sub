@@ -27,9 +27,13 @@ from desktop.backend.resources import gpus, install_log, python_interpreter
 from desktop.backend.resources.desktop_service import DesktopResourceService
 from desktop.backend.resources.install_manager import ResourceInstallManager
 from desktop.backend.settings.store import SettingsStore
+from desktop.backend.settings.local_agents import configure_local_agents
 from desktop.backend.updates.install_manager import UpdateInstallManager
 from desktop.backend.updates.installer import AppInstaller
-from desktop.backend.updates.recovery import recover_interrupted_update
+from desktop.backend.updates.recovery import (
+    recover_interrupted_update,
+    repair_active_app_version,
+)
 from desktop.backend.updates.service import (
     GitHubUpdateService,
     LauncherUpdateConfig,
@@ -91,6 +95,7 @@ PUBLIC_BRIDGE_METHODS = (
     "install_update",
     "get_update_install",
     "open_update_page",
+    "open_external_url",
     "open_tasks_directory",
     "open_batch_directory",
     "open_batch_output",
@@ -658,6 +663,9 @@ def create_backend_services(
     # state beside Yanami Sub's fixed runtime unless explicitly
     # overridden; this is Astral's workaround for Windows os error 448.
     os.environ.setdefault("UV_DATA_DIR", str(paths.runtime / "uv-data"))
+    # Resolve concrete shell-free Agent commands before worker environments
+    # are captured. This also refreshes a PATH that may predate CLI installs.
+    configure_local_agents()
     settings = SettingsStore(paths.user_data)
     bootstrap = _load_resources(paths, app_source)
 
@@ -796,6 +804,10 @@ def create_application(
         # executable here and the only copy of the program is under `.update`.
         # Nothing used to look, and the next update attempt deleted it.
         recover_interrupted_update(paths.root, log=print)
+        # `YanamiSub.py` does this before importing the app source in a frozen
+        # build. Keep the runtime path defensive as well for direct launcher
+        # calls and test/development harnesses.
+        repair_active_app_version(paths.root)
         installer.prepare_startup()
     frontend_url = resolve_frontend_url(
         paths,

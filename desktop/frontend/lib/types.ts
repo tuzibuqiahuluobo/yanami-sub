@@ -76,6 +76,7 @@ export interface RoutingTargetSummary {
   supports_native_search: boolean;
   is_free: boolean;
   quality_score: number;
+  available?: boolean;
 }
 
 export interface RoutingSettings {
@@ -710,6 +711,7 @@ export interface DesktopApi {
   installUpdate(kind: "app" | "full", version: string): Promise<UpdateInstallSnapshot>;
   getUpdateInstall(): Promise<UpdateInstallSnapshot | null>;
   openUpdatePage(): Promise<{ url: string }>;
+  openExternalUrl(url: string): Promise<{ url: string }>;
   openTasksDirectory(taskId?: string): Promise<{ path: string }>;
   openOutput(path: string): Promise<{ path: string }>;
   minimizeWindow(): Promise<unknown>;

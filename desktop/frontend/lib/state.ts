@@ -147,6 +147,16 @@ function definedOnly(values: Partial<TaskRequest> | undefined): Partial<TaskRequ
   return out as Partial<TaskRequest>;
 }
 
+
+function routingHasAvailableAgent(routing: RoutingSettings): boolean {
+  return routing.targets.some(
+    (target) =>
+      target.available === true &&
+      (target.backend === "local_agent" ||
+        target.backend === "conversational_agent"),
+  );
+}
+
 const defaultRequest: Omit<TaskRequest, "input"> = {
   output: null,
   name: "",
@@ -552,7 +562,7 @@ export function reduceAppState(
           translation:
             action.settings.api_keys.gemini_free === "configured" ||
             action.settings.api_keys.gemini_paid === "configured" ||
-            state.routing.local_agent_bound,
+            routingHasAvailableAgent(state.routing),
           web_search:
             action.settings.api_keys.exa === "configured" ||
             action.settings.api_keys.tavily === "configured",
@@ -569,7 +579,7 @@ export function reduceAppState(
           translation:
             state.settings.api_keys.gemini_free === "configured" ||
             state.settings.api_keys.gemini_paid === "configured" ||
-            action.routing.local_agent_bound,
+            routingHasAvailableAgent(action.routing),
         },
       };
     case "resetTask":

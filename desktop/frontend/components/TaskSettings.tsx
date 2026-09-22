@@ -65,6 +65,34 @@ export function TaskSettings({
   const hasResearchOverride = request.llm_model.some((value) =>
     value.trimStart().startsWith("research="),
   );
+  const selectedRoute =
+    request.llm_model.find((value) => !value.includes("=")) ?? "";
+  const agentBackends = new Set(["local_agent", "conversational_agent"]);
+  const routeOptions = [
+    { value: "", label: t.newTask.settings.llmRouteAuto },
+    ...(routing?.targets ?? [])
+      .filter((target) => agentBackends.has(target.backend))
+      .map((target) => ({
+        value: target.id,
+        label: `${t.newTask.settings.llmRouteAgent} · ${target.display_name || target.id} · ${target.available ? t.newTask.settings.llmRouteReady : t.newTask.settings.llmRouteAgentUnavailable}`,
+      })),
+    ...(routing?.targets ?? [])
+      .filter((target) => !agentBackends.has(target.backend))
+      .map((target) => ({
+        value: target.id,
+        label: `${t.newTask.settings.llmRouteApi} · ${target.display_name || target.id} · ${target.available ? t.newTask.settings.llmRouteReady : t.newTask.settings.llmRouteApiUnavailable}`,
+      })),
+    ...Object.entries(routing?.model_groups ?? {}).map(([group, targetIds]) => {
+      const available = targetIds.some(
+        (targetId) =>
+          routing?.targets.find((target) => target.id === targetId)?.available,
+      );
+      return {
+        value: group,
+        label: `${t.newTask.settings.llmRouteGroup} · ${group} · ${available ? t.newTask.settings.llmRouteReady : t.newTask.settings.llmRouteGroupUnavailable}`,
+      };
+    }),
+  ];
   // Surfaced on the tab itself: the note explaining the missing key lives
   // inside the LLM panel, which the user may not have open.
   const llmNeedsKey = translationSelected && !capabilities.translation;
@@ -194,6 +222,32 @@ export function TaskSettings({
           {/* Values are kept, not cleared, while the stage leaves them unused:
               switching back to final-srt must find them where they were. */}
           <div className="field-grid">
+            <div className="field field-wide task-route-field">
+              <span>{t.newTask.settings.llmRoute}</span>
+              <CustomSelect
+                value={selectedRoute}
+                disabled={disabled || !translationSelected || Boolean(routing?.error)}
+                ariaLabel={t.newTask.settings.llmRoute}
+                onChange={(value) => {
+                  const target = routing?.targets.find((item) => item.id === value);
+                  const mediaUnsupported =
+                    target &&
+                    ((request.llm_media === "audio" && !target.supports_audio) ||
+                      (request.llm_media === "video" && !target.supports_video));
+                  const scopedOverrides = request.llm_model.filter((item) =>
+                    item.includes("="),
+                  );
+                  onChange({
+                    llm_model: value
+                      ? [value, ...scopedOverrides]
+                      : scopedOverrides,
+                    ...(mediaUnsupported ? { llm_media: "text" as const } : {}),
+                  });
+                }}
+                options={routeOptions}
+              />
+              <small className="field-help">{t.newTask.settings.llmRouteHint}</small>
+            </div>
             <label className="field field-wide">
               <span>{t.newTask.settings.extraInfo}</span>
               <textarea

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 from typing import Literal
@@ -25,6 +26,11 @@ from desktop.backend.common.models import (
 )
 from finesub_bootstrap import secrets
 from desktop.backend.settings.config_file import update_config_file
+from desktop.backend.settings.local_agents import (
+    COMMANDS_ENV,
+    configure_local_agents,
+    suppress_windows_child_error_dialogs,
+)
 
 
 Provider = Literal["gemini_free", "gemini_paid", "exa", "tavily"]
@@ -65,8 +71,20 @@ class SettingsStore:
     ) -> BridgeError | None:
         if stage not in {"translated-srt", "final-srt"}:
             return None
-        if self._has_llm_route(self._read_keys(), llm_model=llm_model):
+        keys = self._read_keys()
+        if self._has_llm_route(keys, llm_model=llm_model):
             return None
+        if llm_model and (
+            any(keys.get(name) for name in self._known_env_names())
+            or self._configured_agent_tiers()
+        ):
+            return BridgeError(
+                code="route_unavailable",
+                message=(
+                    "已选择的模型当前不可用：对应 API 密钥未配置，或本地 Agent "
+                    "尚未通过就绪检测。请在“纠错翻译”中改选标记为“可用”的模型。"
+                ),
+            )
         return BridgeError(
             code="api_key_required",
             message="翻译功能需要可用的 Gemini 凭据或本地 Agent 路由。",
@@ -133,11 +151,28 @@ class SettingsStore:
                 request.llm_retrieval != "native"
                 or "native_search" not in str(error)
             ):
-                return BridgeError(
-                    code="capability_unavailable",
-                    message="当前翻译配置没有可用的模型，请在设置中检查路由或 API Key。",
-                    action="open_settings",
-                )
+                keys = self._read_keys()
+                has_key = any(keys.get(name) for name in self._known_env_names())
+                has_agent = bool(self._configured_agent_tiers())
+                if has_key:
+                    message = (
+                        "API 密钥已保存，但当前模型路由、执行策略或媒体要求"
+                        "没有匹配的可用模型。请在本任务的“纠错翻译”中选择"
+                        "一个 API/Agent，或调整设置中的模型路由。"
+                    )
+                elif has_agent:
+                    message = (
+                        "已检测到本地 Agent，但当前模型路由、执行策略或媒体要求"
+                        "与它不匹配。请在本任务的“纠错翻译”中选择该 Agent。"
+                    )
+                else:
+                    message = (
+                        "当前翻译配置没有可用模型。请先填写 API 密钥或完成"
+                        "本地 Agent 就绪检测，再在本任务中选择模型。"
+                    )
+                # Stay on the task page: its route selector is the nearest fix.
+                # Redirecting to Settings made a saved key look lost.
+                return BridgeError(code="route_unavailable", message=message)
             return BridgeError(
                 code="native_search_unavailable",
                 message=(
@@ -193,7 +228,9 @@ class SettingsStore:
         core still owns media capability filtering and fallback decisions.
         """
 
-        if keys.get("GEMINI_FREE") or keys.get("GEMINI_PAID"):
+        if not llm_model and (
+            keys.get("GEMINI_FREE") or keys.get("GEMINI_PAID")
+        ):
             return True
         try:
             from finesub.llm.routing.model_routes import (
@@ -218,7 +255,12 @@ class SettingsStore:
             for target_id in targets:
                 target = routes.targets[target_id]
                 if target.backend in {"local_agent", "conversational_agent"}:
-                    return True
+                    if (
+                        routes.target_fact(target_id).provider_tier
+                        in self._configured_agent_tiers()
+                    ):
+                        return True
+                    continue
                 provider = routes.provider_for_target(target_id)
                 env_name = (
                     provider.key_env
@@ -232,6 +274,21 @@ class SettingsStore:
             # turn the settings panel itself into a second config parser.
             return False
         return False
+
+    @staticmethod
+    def _configured_agent_tiers() -> set[str]:
+        try:
+            document = json.loads(os.environ.get(COMMANDS_ENV, "{}"))
+        except (TypeError, ValueError):
+            return set()
+        if not isinstance(document, dict):
+            return set()
+        return {
+            str(tier).strip().upper()
+            for tier, command in document.items()
+            if isinstance(command, list)
+            and any(isinstance(part, str) and part for part in command)
+        }
 
     # ------------------------------------------------- shared config.toml
 
@@ -290,11 +347,15 @@ class SettingsStore:
 
     def build_worker_env(self) -> dict[str, str]:
         keys = self._read_keys()
-        return {
+        environment = {
             env_name: keys[env_name]
             for env_name in self._known_env_names()
             if keys.get(env_name)
         }
+        agent_commands = os.environ.get(COMMANDS_ENV, "").strip()
+        if agent_commands and agent_commands != "{}":
+            environment[COMMANDS_ENV] = agent_commands
+        return environment
 
     def save_api_keys(
         self,
@@ -490,8 +551,24 @@ class SettingsStore:
                 for provider in routes.providers.values()
             ]
             targets = []
+            agent_tiers = self._configured_agent_tiers()
+            allowed_backends = routes.policies[execution.policy_id].allowed_backends
             for target in routes.targets.values():
                 fact = routes.target_fact(target.id)
+                provider = routes.provider_for_target(target.id)
+                env_name = (
+                    provider.key_env
+                    or _PROVIDER_TIER_ENV_NAMES.get(provider.id, "")
+                    or target.enabled_by
+                )
+                if target.backend in {"local_agent", "conversational_agent"}:
+                    available = fact.provider_tier in agent_tiers
+                else:
+                    # Providers without a key environment are deliberately
+                    # unauthenticated/private endpoints; the core catalog is
+                    # the authority saying they need no desktop credential.
+                    available = not env_name or bool(keys.get(env_name))
+                available = available and target.backend in allowed_backends
                 targets.append(
                     RoutingTargetSummary(
                         id=target.id,
@@ -504,6 +581,7 @@ class SettingsStore:
                         supports_native_search=fact.supports_native_search,
                         is_free=fact.is_free,
                         quality_score=fact.quality_score,
+                        available=available,
                     )
                 )
             return RoutingSettings(
@@ -598,6 +676,11 @@ class SettingsStore:
     def probe_local_agents(self) -> list[LocalAgentStatus]:
         """Probe installed CLIs only; never spend an API/subscription call."""
 
+        # Refresh the inherited desktop PATH and resolve supported source/npm
+        # installs on every explicit scan. The app can stay open while a CLI
+        # is installed, so startup-only discovery would immediately go stale.
+        commands = configure_local_agents()
+
         from finesub.llm.routing.execution_policy import (
             driver_for_provider_tier,
             load_execution_settings,
@@ -623,28 +706,41 @@ class SettingsStore:
         statuses: list[LocalAgentStatus] = []
         for tier, row in sorted(grouped.items()):
             fact = routes.target_fact(first_target[tier])
+            command_detail = " ".join(commands.get(tier, ()))
             try:
                 driver = driver_for_provider_tier(
                     execution,
                     provider_tier=tier,
                     model=fact.api_model_id,
                 )
-                probe = driver.probe()
-                if not probe.available:
-                    status = probe.failure_kind or "broken"
-                    if status not in {"missing", "broken"}:
-                        status = "broken"
-                    detail = probe.error
-                    ready = False
-                elif not driver.meets_requirements(probe):
-                    status = "unusable"
-                    detail = "the installed CLI lacks capabilities required by FineSub"
-                    ready = False
-                else:
-                    blocker = driver.check_environment() or ""
-                    status = "unusable" if blocker else "ready"
-                    detail = blocker
-                    ready = not blocker
+                with suppress_windows_child_error_dialogs():
+                    probe = driver.probe()
+                    if not probe.available:
+                        status = probe.failure_kind or "broken"
+                        if status not in {"missing", "broken"}:
+                            status = "broken"
+                        detail = " · ".join(
+                            part for part in (probe.error, command_detail) if part
+                        )
+                        ready = False
+                    elif not driver.meets_requirements(probe):
+                        status = "unusable"
+                        detail = " · ".join(
+                            part
+                            for part in (
+                                "the installed CLI lacks capabilities required by FineSub",
+                                command_detail,
+                            )
+                            if part
+                        )
+                        ready = False
+                    else:
+                        blocker = driver.check_environment() or ""
+                        status = "unusable" if blocker else "ready"
+                        detail = " · ".join(
+                            part for part in (blocker, command_detail) if part
+                        )
+                        ready = not blocker
                 statuses.append(
                     LocalAgentStatus(
                         provider_tier=tier,

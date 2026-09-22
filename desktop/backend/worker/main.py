@@ -30,6 +30,7 @@ from finesub_bootstrap.locks import (
 )
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.worker.protocol import EventLogWriter, WorkerEvent, encode_event
 
 
@@ -417,6 +418,7 @@ def _parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = _parse_args()
+    install_local_agent_command_overrides()
     request_line = sys.stdin.readline()
     if not request_line:
         raise ValueError("worker request is missing")

@@ -708,6 +708,26 @@ def test_restart_application_uses_the_configured_relauncher(tmp_path: Path) -> N
     assert calls == ["restart"]
 
 
+def test_api_key_help_opens_only_audited_official_pages(tmp_path: Path) -> None:
+    opened: list[str] = []
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        url_opener=opened.append,
+    )
+
+    accepted = bridge.open_external_url(
+        "https://aistudio.google.com/app/apikey"
+    )
+    rejected = bridge.open_external_url("https://example.test/key")
+
+    assert accepted["ok"] is True
+    assert opened == ["https://aistudio.google.com/app/apikey"]
+    assert rejected["ok"] is False
+    assert rejected["error"]["code"] == "invalid_request"
+
+
 def test_the_missing_resource_is_named_rather_than_guessed(tmp_path: Path) -> None:
     # "请先安装 Python 运行环境和 FFmpeg" was the whole message regardless of what
     # was actually missing. With git and yt-dlp installed on demand, a user told

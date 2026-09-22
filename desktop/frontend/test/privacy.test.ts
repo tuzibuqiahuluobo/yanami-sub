@@ -5,7 +5,7 @@ import test from "node:test";
 import { translations } from "../lib/translations";
 
 
-test("translation mode discloses Gemini media uploads", () => {
+test("translation mode discloses API processing", () => {
   const component = readFileSync(
     new URL("../components/NewTask.tsx", import.meta.url),
     "utf8",
@@ -18,10 +18,10 @@ test("translation mode discloses Gemini media uploads", () => {
   // renders, not whichever file happens to hold it.
   assert.match(
     translations.zh.newTask.privacyNoteCloud,
-    /翻译会向 Gemini 上传必要的媒体片段/,
+    /使用 API 模型时，任务所需内容会发送给对应服务/,
   );
   assert.match(
     translations.en.newTask.privacyNoteCloud,
-    /Translation uploads only the required media clips to Gemini/,
+    /API models receive only the content required for the task/,
   );
 });

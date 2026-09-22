@@ -54,9 +54,9 @@ def test_frozen_entrypoint_activates_the_versioned_core_before_startup(
     entrypoint = (Path(__file__).resolve().parents[2] / "YanamiSub.py").read_text(
         encoding="utf-8"
     )
-    assert entrypoint.index("\n_activate_packaged_source()\n") < entrypoint.index(
-        "\nfrom desktop.backend.launcher.main import main"
-    )
+    assert entrypoint.index("\nif _STARTUP_ALLOWED:\n") < entrypoint.index(
+        "    _activate_packaged_source()"
+    ) < entrypoint.index("    from desktop.backend.launcher.main import main")
 
 
 def test_personal_data_is_the_same_place_for_every_form(
@@ -225,6 +225,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "install_update",
         "get_update_install",
         "open_update_page",
+        "open_external_url",
         "open_tasks_directory",
         "open_batch_directory",
         "open_batch_output",

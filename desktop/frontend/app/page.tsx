@@ -649,6 +649,7 @@ function HomeContent() {
         onAppearanceChange={updateAppearance}
         onSaveKey={saveKey}
         onDeleteKey={deleteKey}
+        onOpenExternalUrl={(url) => desktopApi.openExternalUrl(url)}
         onRevealKeys={() => desktopApi.revealApiKeys()}
         onExportKeys={() => desktopApi.exportApiKeys()}
         onSaveRouting={async (values: RoutingUpdate) => {
@@ -663,7 +664,14 @@ function HomeContent() {
           const routing = await desktopApi.deleteProviderKey(providerId);
           dispatch({ type: "routingChanged", routing });
         }}
-        onProbeLocalAgents={() => desktopApi.probeLocalAgents()}
+        onProbeLocalAgents={async () => {
+          const statuses = await desktopApi.probeLocalAgents();
+          dispatch({
+            type: "routingChanged",
+            routing: await desktopApi.getRoutingSettings(),
+          });
+          return statuses;
+        }}
         onUseRawSubtitle={() => {
           dispatch({
             type: "requestChanged",

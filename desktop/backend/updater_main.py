@@ -16,6 +16,11 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from finesub_bootstrap.fsops import remove_tree
 
 from desktop.backend.updates.installer import REQUIRED_APP_FILES
+from desktop.backend.updates.recovery import (
+    UPDATE_RELAUNCH_ENV,
+    clear_full_update_marker,
+    mark_full_update,
+)
 
 LOGGER = logging.getLogger(__name__)
 
@@ -340,12 +345,10 @@ def _restore_after_failed_merge(
     executable.
     """
 
-    for original, saved in reversed(moved):
-        try:
-            if saved.exists() and not original.exists():
-                _rename_with_patience(saved, original)
-        except OSError:
-            LOGGER.exception("could not restore %s", original)
+    # New payload paths occupy the old paths after the copy. Remove them
+    # before restoring the moved originals; restoring first silently skipped
+    # every occupied destination and the following cleanup then deleted the
+    # only copy in the install root.
     for destination in reversed(installed):
         try:
             if destination.is_dir():
@@ -354,6 +357,12 @@ def _restore_after_failed_merge(
                 destination.unlink()
         except OSError:
             LOGGER.exception("could not remove %s", destination)
+    for original, saved in reversed(moved):
+        try:
+            if saved.exists() and not original.exists():
+                _rename_with_patience(saved, original)
+        except OSError:
+            LOGGER.exception("could not restore %s", original)
     if app_change is not None:
         try:
             _rollback_app_merge(target / "app", *app_change)
@@ -429,10 +438,13 @@ def apply_full_update(
         )
         if not executable.is_file():
             raise FileNotFoundError(f"Relaunch executable does not exist: {executable}")
+        environment = os.environ.copy()
+        environment[UPDATE_RELAUNCH_ENV] = "1"
         subprocess.Popen(
             [str(executable)],
             cwd=str(target),
             close_fds=True,
+            env=environment,
         )
 
 
@@ -449,7 +461,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         request = FullUpdateRequest.model_validate_json(
             request_path.read_text(encoding="utf-8")
         )
-        apply_full_update(request)
+        target = Path(request.target).expanduser().resolve()
+        mark_full_update(
+            target,
+            updater_pid=os.getpid(),
+        )
+        try:
+            apply_full_update(request)
+        finally:
+            clear_full_update_marker(target)
     except Exception as error:
         # This runs as a windowed build with no console, where an unhandled
         # exception becomes PyInstaller's modal traceback dialog -- which blocks

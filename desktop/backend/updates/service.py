@@ -30,7 +30,11 @@ from desktop.backend.common.product import (
 )
 from desktop.backend.updater_main import FullUpdateRequest
 from desktop.backend.updates.installer import AppInstaller, REQUIRED_APP_FILES
-from desktop.backend.updates.recovery import discard_backups
+from desktop.backend.updates.recovery import (
+    clear_full_update_marker,
+    discard_backups,
+    mark_full_update,
+)
 from desktop.backend.updates.manifest import (
     LocalUpdateState,
     UpdateManifest,
@@ -276,9 +280,26 @@ class GitHubUpdateService:
             encoding="utf-8",
             newline="\n",
         )
-        self.process_launcher(
-            [str(runner_executable), "--request", str(request_path)]
-        )
+        # Own the install root before the child is started. This closes the
+        # small but real gap where a second shortcut launch can race the
+        # updater and load a half-replaced version. The updater replaces the
+        # hand-off pid with its own and clears the marker only after it has
+        # either completed or rolled back.
+        mark_full_update(self.paths.root, version=manifest.version)
+        try:
+            process = self.process_launcher(
+                [str(runner_executable), "--request", str(request_path)]
+            )
+            process_pid = getattr(process, "pid", 0)
+            if isinstance(process_pid, int) and process_pid > 0:
+                mark_full_update(
+                    self.paths.root,
+                    version=manifest.version,
+                    updater_pid=process_pid,
+                )
+        except BaseException:
+            clear_full_update_marker(self.paths.root)
+            raise
         return {
             "kind": "full",
             "version": manifest.version,

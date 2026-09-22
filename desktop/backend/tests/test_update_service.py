@@ -219,6 +219,12 @@ def test_full_update_stages_archive_and_launches_isolated_updater(
     assert Path(request["target"]) == service.paths.root
     assert request["relaunch_path"] == "Yanami Sub.exe"
     assert "app" in request["preserved"]
+    handoff = json.loads(
+        (service.paths.root / ".update" / "full-update-in-progress.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert handoff["version"] == "1.1.0"
 
 
 def test_full_update_without_versioned_app_is_rejected(tmp_path: Path) -> None:

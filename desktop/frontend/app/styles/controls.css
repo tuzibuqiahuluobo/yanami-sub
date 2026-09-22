@@ -413,6 +413,8 @@
   margin: 0;
   padding: 5px;
   list-style: none;
+  max-height: min(420px, 50vh);
+  overflow-y: auto;
   border: 1px solid var(--glass-border);
   border-radius: calc(var(--radius-control) + 4px);
   background: var(--glass-bg);

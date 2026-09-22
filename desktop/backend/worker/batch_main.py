@@ -20,6 +20,7 @@ from desktop.backend.common.models import (
     BatchItemSnapshot,
     BatchRequest,
 )
+from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.worker.main import _publish_output, _routing_override
 from desktop.backend.worker.protocol import EventLogWriter
 
@@ -210,6 +211,7 @@ def run_batch_request(
 
 def main() -> int:
     args = _parse_args()
+    install_local_agent_command_overrides()
     request_line = sys.stdin.readline()
     if not request_line:
         raise ValueError("batch request is missing")

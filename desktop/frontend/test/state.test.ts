@@ -187,6 +187,26 @@ test("api_key_required keeps the task editable and opens settings", () => {
 });
 
 
+test("a route mismatch stays beside the task model selector", () => {
+  const selected = reduceAppState(initialState, {
+    type: "fileSelected",
+    path: "D:/media/a.mp4",
+  });
+
+  const next = reduceAppState(selected, {
+    type: "taskRejected",
+    error: {
+      code: "route_unavailable",
+      message: "密钥已保存，但所选路由不可用",
+    },
+  });
+
+  assert.equal(next.task.phase, "ready");
+  assert.equal(next.route, "new-task");
+  assert.equal(next.task.selectedFile, "D:/media/a.mp4");
+});
+
+
 test("completed event exposes subtitle actions", () => {
   const next = reduceAppState(initialState, {
     type: "workerEvent",

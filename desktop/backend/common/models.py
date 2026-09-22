@@ -131,6 +131,7 @@ class RoutingTargetSummary(DesktopModel):
     supports_native_search: bool = False
     is_free: bool = False
     quality_score: int = 0
+    available: bool = False
 
 
 class RoutingSettings(DesktopModel):

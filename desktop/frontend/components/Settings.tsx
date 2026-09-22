@@ -67,6 +67,7 @@ interface SettingsProps extends UpdateSectionProps {
     value: string,
   ) => Promise<void>;
   onDeleteKey: (provider: ApiProvider) => Promise<void>;
+  onOpenExternalUrl: (url: string) => Promise<unknown>;
   onRevealKeys: () => Promise<RevealedApiKeys>;
   onExportKeys: () => Promise<KeyExportResult>;
   onSaveRouting: (values: RoutingUpdate) => Promise<void>;
@@ -84,6 +85,7 @@ export function Settings({
   onAppearanceChange,
   onSaveKey,
   onDeleteKey,
+  onOpenExternalUrl,
   onRevealKeys,
   onExportKeys,
   onSaveRouting,
@@ -422,20 +424,30 @@ export function Settings({
 
         <div className="api-key-list">
           <ApiKeyField
-            label="Gemini Free"
+            label={t.settings.translation.freeKeyLabel}
             description={t.settings.translation.geminiFree}
             placeholder={t.settings.translation.poolPlaceholder}
             status={state.settings.api_keys.gemini_free}
             onSave={(value) => onSaveKey("gemini_free", value)}
             onDelete={() => onDeleteKey("gemini_free")}
+            guide={{
+              url: "https://aistudio.google.com/app/apikey",
+              ...t.settings.translation.guides.geminiFree,
+            }}
+            onOpenOfficial={onOpenExternalUrl}
           />
           <ApiKeyField
-            label="Gemini Paid"
+            label={t.settings.translation.paidKeyLabel}
             description={t.settings.translation.geminiPaid}
             placeholder={t.settings.translation.poolPlaceholder}
             status={state.settings.api_keys.gemini_paid}
             onSave={(value) => onSaveKey("gemini_paid", value)}
             onDelete={() => onDeleteKey("gemini_paid")}
+            guide={{
+              url: "https://aistudio.google.com/app/apikey",
+              ...t.settings.translation.guides.geminiPaid,
+            }}
+            onOpenOfficial={onOpenExternalUrl}
           />
           <ApiKeyField
             label="Exa"
@@ -444,6 +456,11 @@ export function Settings({
             status={state.settings.api_keys.exa}
             onSave={(value) => onSaveKey("exa", value)}
             onDelete={() => onDeleteKey("exa")}
+            guide={{
+              url: "https://dashboard.exa.ai/api-keys",
+              ...t.settings.translation.guides.exa,
+            }}
+            onOpenOfficial={onOpenExternalUrl}
           />
           <ApiKeyField
             label="Tavily"
@@ -452,6 +469,11 @@ export function Settings({
             status={state.settings.api_keys.tavily}
             onSave={(value) => onSaveKey("tavily", value)}
             onDelete={() => onDeleteKey("tavily")}
+            guide={{
+              url: "https://app.tavily.com/home",
+              ...t.settings.translation.guides.tavily,
+            }}
+            onOpenOfficial={onOpenExternalUrl}
           />
         </div>
 

@@ -11,6 +11,8 @@ import tempfile
 import traceback
 from typing import Any, Iterator, Mapping
 
+from desktop.backend.settings.local_agents import install_local_agent_command_overrides
+
 
 _MAINTENANCE_COMMANDS = {
     "log",
@@ -336,6 +338,7 @@ def _dispatch(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def main() -> int:
     try:
+        install_local_agent_command_overrides()
         payload = json.loads(sys.stdin.readline())
         if not isinstance(payload, dict):
             raise ValueError("knowledge worker request must be a JSON object")

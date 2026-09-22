@@ -169,6 +169,19 @@ test("the LLM panel re-reads keys written from outside the app", () => {
 });
 
 
+test("the task form exposes Agent and API model selection", () => {
+  const taskSettings = read("../components/TaskSettings.tsx");
+  const settings = read("../components/Settings.tsx");
+
+  assert.match(taskSettings, /llmRouteAgent/);
+  assert.match(taskSettings, /llmRouteApi/);
+  assert.match(taskSettings, /onChange\(\{[\s\S]*llm_model:/);
+  assert.match(taskSettings, /mediaUnsupported/);
+  assert.match(settings, /freeKeyLabel/);
+  assert.match(settings, /paidKeyLabel/);
+});
+
+
 test("every output stage the dropdown offers is one the pipeline has", () => {
   const taskSettings = read("../components/TaskSettings.tsx");
   const types = read("../lib/types.ts");

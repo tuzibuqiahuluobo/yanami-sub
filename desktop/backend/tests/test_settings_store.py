@@ -5,6 +5,7 @@ import pytest
 from finesub import config as app_config
 from desktop.backend.common.models import RoutingUpdate, TaskRequest
 from desktop.backend.settings.store import SettingsStore
+from desktop.backend.settings.local_agents import COMMANDS_ENV
 from finesub_bootstrap import secrets
 from finesub.llm.routing.api_keys import (
     EXA_POOL,
@@ -42,6 +43,7 @@ def fake_backend():
 
 @pytest.fixture(autouse=True)
 def isolate_core_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.delenv(COMMANDS_ENV, raising=False)
     monkeypatch.setenv("FINESUB_CONFIG_FILE", str(tmp_path / "config.toml"))
     app_config.clear_config_cache()
     default_model_routes.cache_clear()
@@ -323,6 +325,44 @@ def test_paid_native_route_passes_the_launch_guard(tmp_path: Path):
     request = TaskRequest(input="D:/media/a.mp4", stage="final-srt", llm_retrieval="native")
 
     assert store.validate_request(request) is None
+
+
+def test_selected_target_must_have_its_own_credential(
+    tmp_path: Path,
+) -> None:
+    store = SettingsStore(tmp_path)
+    store._read_keys = lambda: {"GEMINI_FREE": "free-only"}  # type: ignore[method-assign]
+    request = TaskRequest(
+        input="D:/media/a.mp4",
+        stage="final-srt",
+        llm_model=["gemini-paid-3_8-flash"],
+    )
+
+    error = store.validate_stage(request.stage, request.llm_model)
+
+    assert error is not None
+    assert error.code == "route_unavailable"
+    assert error.action is None
+
+
+def test_routing_catalog_marks_saved_api_targets_available(tmp_path: Path) -> None:
+    store = SettingsStore(tmp_path)
+    store._read_keys = lambda: {"GEMINI_FREE": "free-only"}  # type: ignore[method-assign]
+
+    routing = store.routing_settings()
+    free_targets = [
+        target
+        for target in routing.targets
+        if target.provider_tier == "GEMINI_FREE"
+    ]
+    paid_targets = [
+        target
+        for target in routing.targets
+        if target.provider_tier == "GEMINI_PAID"
+    ]
+
+    assert free_targets and all(target.available for target in free_targets)
+    assert paid_targets and not any(target.available for target in paid_targets)
 
 
 def test_routing_settings_are_projected_from_the_core_catalog(tmp_path: Path) -> None:
