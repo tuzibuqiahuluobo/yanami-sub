@@ -275,10 +275,10 @@
 .field textarea:focus,
 .field select:focus,
 .secret-input input:focus {
-  border-color: #1a1a1e;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
   box-shadow:
-    0 0 0 3px rgb(26 26 30 / 6%),
-    0 2px 8px rgb(26 26 30 / 4%);
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 2px 8px rgb(26 26 30 / 3%);
   background: white;
 }
 
@@ -333,7 +333,7 @@
 }
 
 .select-wrap:focus-within>svg {
-  color: #1a1a1e;
+  color: var(--accent);
   transform: translateY(-50%) rotate(180deg);
 }
 
@@ -372,11 +372,13 @@
   border-color: var(--muted);
 }
 
-.custom-select.is-open .custom-select-trigger {
-  border-color: #1a1a1e;
+.custom-select.is-open .custom-select-trigger,
+.custom-select-trigger:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
   box-shadow:
-    0 0 0 3px rgb(26 26 30 / 6%),
-    0 2px 8px rgb(26 26 30 / 4%);
+    0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent),
+    0 2px 8px rgb(26 26 30 / 3%);
 }
 
 .custom-select.is-disabled .custom-select-trigger {
@@ -399,7 +401,7 @@
 
 .custom-select.is-open .custom-select-arrow {
   transform: rotate(180deg);
-  color: #1a1a1e;
+  color: var(--accent);
 }
 
 .custom-select-menu {

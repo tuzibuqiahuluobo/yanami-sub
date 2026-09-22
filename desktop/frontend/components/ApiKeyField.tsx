@@ -3,6 +3,7 @@
 import { Check, Eye, EyeOff, KeyRound, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useLanguage } from "./LanguageProvider";
+import { useToast } from "./ToastProvider";
 
 
 interface ApiKeyFieldProps {
@@ -24,6 +25,7 @@ export function ApiKeyField({
   onDelete,
 }: ApiKeyFieldProps) {
   const { t } = useLanguage();
+  const { showSuccess } = useToast();
   const [value, setValue] = useState("");
   const [visible, setVisible] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -85,6 +87,7 @@ export function ApiKeyField({
               try {
                 await onDelete();
                 setValue("");
+                showSuccess(`${label} ${t.toast.deleted}`, `api-key-delete-${label}`);
               } catch (error) {
                 setFailure(
                   error instanceof Error ? error.message : t.apiKey.failed,
@@ -107,6 +110,7 @@ export function ApiKeyField({
             try {
               await onSave(value);
               setValue("");
+              showSuccess(`${label} ${t.toast.saved}`, `api-key-save-${label}`);
             } catch (error) {
               setFailure(
                 error instanceof Error ? error.message : t.apiKey.failed,

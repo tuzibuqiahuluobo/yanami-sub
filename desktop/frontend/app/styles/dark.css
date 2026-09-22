@@ -12,8 +12,8 @@
 }
 
 [data-theme="dark"] .custom-select.is-open .custom-select-trigger {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(232 233 236 / 8%);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 [data-theme="dark"] .custom-select-menu {
@@ -49,8 +49,8 @@
 [data-theme="dark"] .field textarea:focus,
 [data-theme="dark"] .field select:focus,
 [data-theme="dark"] .secret-input input:focus {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgb(232 233 236 / 8%);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
   background: var(--panel);
 }
 

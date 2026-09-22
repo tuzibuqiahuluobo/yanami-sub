@@ -29,6 +29,7 @@ import type {
 } from "@/lib/types";
 
 import { useLanguage } from "./LanguageProvider";
+import { useToast } from "./ToastProvider";
 
 
 type KnowledgeTab = "library" | "feedback" | "maintenance" | "sharing";
@@ -71,6 +72,7 @@ function taskLabel(task: CompletedKnowledgeTask): string {
 
 export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
   const { t } = useLanguage();
+  const { showSuccess } = useToast();
   const [tab, setTab] = useState<KnowledgeTab>("library");
   const [snapshot, setSnapshot] = useState<KnowledgeSnapshot | null>(null);
   const [document, setDocument] = useState<KnowledgeEntryDocument | null>(null);
@@ -193,6 +195,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
         setDocument(next);
         setDraft(next.text);
       }
+      showSuccess(t.toast.knowledgeUpdated, `knowledge-maintenance-${command}`);
       return result;
     } catch (reason) {
       setError(errorMessage(reason));
@@ -209,6 +212,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
       const result = await desktopApi.runKnowledgeShare({ command, args });
       setOutput(result.output || `share ${command}: OK`);
       await loadSnapshot();
+      showSuccess(t.toast.knowledgeUpdated, `knowledge-share-${command}`);
       return result;
     } catch (reason) {
       setError(errorMessage(reason));
@@ -275,6 +279,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
       });
       setOutput(JSON.stringify(report, null, 2));
       await loadSnapshot();
+      showSuccess(t.toast.knowledgeUpdated, "knowledge-refined-update");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {

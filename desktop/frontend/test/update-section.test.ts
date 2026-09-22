@@ -15,3 +15,22 @@ test("a ready update restarts app patches but only exits for full updates", () =
   );
   assert.match(source, /disabled=\{updateBusy\}/);
 });
+
+
+test("download progress is root-owned instead of an inline Settings bar", () => {
+  const page = readFileSync(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const section = readFileSync(
+    new URL("../components/UpdateSection.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /\[updateInstall, setUpdateInstall\]/);
+  assert.match(page, /setInterval\(\(\) => void pollUpdateInstall\(\), 500\)/);
+  assert.match(page, /<ToastViewport updateInstall=\{updateInstall\}/);
+  assert.match(section, /updateInstall: UpdateInstallSnapshot \| null/);
+  assert.doesNotMatch(section, /onGetUpdateInstall/);
+  assert.doesNotMatch(section, /update-progress-bar/);
+});

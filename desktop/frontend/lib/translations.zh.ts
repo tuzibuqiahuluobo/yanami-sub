@@ -4,6 +4,19 @@ export const zh = {
   common: {
     select: "请选择",
   },
+  toast: {
+    notifications: "通知",
+    close: "关闭提示",
+    saved: "已保存",
+    deleted: "已删除",
+    taskCompleted: "字幕已导出",
+    batchCompleted: "批处理已完成",
+    resourceInstalled: "{name} 已下载完成",
+    knowledgeUpdated: "知识库操作已完成",
+    updateDownloading: "正在下载",
+    updateInstalling: "正在安装",
+    updateDownloaded: "下载完成",
+  },
   // 标题栏
   titleBar: {
     brand: "字幕工作台",

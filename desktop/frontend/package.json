@@ -1,6 +1,6 @@
 {
   "name": "yanami-sub-frontend",
-  "version": "0.1.0-rc.5.post4",
+  "version": "0.1.0-rc.6",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack",

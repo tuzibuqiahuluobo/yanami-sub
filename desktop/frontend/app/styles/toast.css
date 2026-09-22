@@ -1,0 +1,195 @@
+/* Global, non-modal feedback. Update progress stays visible across routes. */
+
+.toast-viewport {
+  position: fixed;
+  z-index: 120;
+  right: 24px;
+  bottom: 24px;
+  display: grid;
+  width: min(360px, calc(100vw - 48px));
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast-list {
+  display: grid;
+  gap: 10px;
+}
+
+.toast-item {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  box-shadow: var(--shadow-float);
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  pointer-events: auto;
+  animation:
+    toast-enter var(--motion-normal) var(--motion-ease-out) both,
+    toast-leave var(--motion-fast) ease-in 4.34s forwards;
+}
+
+.toast-status-icon {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 50%;
+  color: #fff;
+  background: var(--success);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.toast-message {
+  min-width: 0;
+  flex: 1 1 auto;
+  font-size: 0.8667rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.toast-dismiss {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  color: var(--muted);
+  background: transparent;
+  transition: color var(--motion-fast) ease, background var(--motion-fast) ease;
+}
+
+.toast-dismiss:hover {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.update-progress-toast {
+  animation: toast-enter var(--motion-normal) var(--motion-ease-out) both;
+}
+
+.update-progress-toast.is-ready {
+  animation:
+    toast-enter var(--motion-normal) var(--motion-ease-out) both,
+    toast-leave var(--motion-fast) ease-in 4.34s forwards;
+}
+
+.update-progress-ring {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+}
+
+.update-progress-ring svg {
+  width: 30px;
+  height: 30px;
+  overflow: visible;
+  transform: rotate(-90deg);
+}
+
+.update-progress-ring circle {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+.update-ring-track {
+  stroke: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.update-ring-value {
+  stroke: var(--accent);
+  stroke-linecap: round;
+  stroke-dasharray: 100;
+  transition: stroke-dashoffset 220ms ease-out;
+}
+
+.update-progress-ring.is-indeterminate .update-ring-value {
+  stroke-dasharray: 28 72;
+  stroke-dashoffset: 0 !important;
+  transform-origin: center;
+  animation: update-ring-spin 1s linear infinite;
+}
+
+.update-progress-copy {
+  display: grid;
+  min-width: 0;
+  flex: 1 1 auto;
+  gap: 1px;
+}
+
+.update-progress-copy strong {
+  font-size: 0.8667rem;
+}
+
+.update-progress-copy small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.7333rem;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes toast-leave {
+  to {
+    opacity: 0;
+    transform: translate3d(0, 6px, 0);
+  }
+}
+
+@keyframes update-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+[data-motion="off"] .toast-item,
+[data-motion="off"] .update-progress-ring.is-indeterminate .update-ring-value {
+  animation: none;
+}
+
+[data-motion="off"] .update-ring-value {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast-item,
+  .update-progress-ring.is-indeterminate .update-ring-value {
+    animation: none;
+  }
+
+  .update-ring-value {
+    transition: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .toast-viewport {
+    right: 16px;
+    bottom: 16px;
+    width: min(360px, calc(100vw - 32px));
+  }
+}

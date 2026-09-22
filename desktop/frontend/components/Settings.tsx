@@ -54,6 +54,7 @@ import { ApiKeyField } from "./ApiKeyField";
 import { CustomSelect } from "./CustomSelect";
 import { useLanguage } from "./LanguageProvider";
 import { UpdateSection, type UpdateSectionProps } from "./UpdateSection";
+import { useToast } from "./ToastProvider";
 
 
 /** The update panel keeps its own props; this page only passes them through. */
@@ -97,6 +98,7 @@ export function Settings({
   ...update
 }: SettingsProps) {
   const appearance = appearanceProp ?? DEFAULT_APPEARANCE;
+  const { showSuccess } = useToast();
   const [docsOpen, setDocsOpen] = useState(false);
   const [routingCatalogOpen, setRoutingCatalogOpen] = useState(false);
   // Preferences are hydrated before this page can be reached, so the initial
@@ -548,7 +550,17 @@ export function Settings({
                 setExportResult(null);
                 try {
                   const result = await onExportKeys();
-                  if (!result.cancelled) setExportResult(result);
+                  if (!result.cancelled) {
+                    setExportResult(result);
+                    if (result.count > 0 && result.path) {
+                      showSuccess(
+                        t.settings.translation.exported
+                          .replace("{count}", String(result.count))
+                          .replace("{path}", result.path),
+                        "api-keys-exported",
+                      );
+                    }
+                  }
                 } catch {
                   setExportError(true);
                 } finally {
@@ -707,6 +719,7 @@ export function Settings({
                   setRoutingError("");
                   try {
                     await onSaveRouting(routingDraft);
+                    showSuccess(t.toast.saved, "routing-settings-saved");
                   } catch (error) {
                     setRoutingError(error instanceof Error ? error.message : t.settings.routing.saveFailed);
                   } finally {
@@ -865,6 +878,7 @@ export function Settings({
                 setLengthError(false);
                 try {
                   await onSaveSharedSettings({ split_length_scale: scale });
+                  showSuccess(t.toast.saved, "subtitle-length-saved");
                 } catch {
                   setLengthChoice(previous);
                   setLengthError(true);

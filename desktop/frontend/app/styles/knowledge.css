@@ -530,8 +530,9 @@
 
 .knowledge-busy {
   position: fixed;
-  right: 24px;
+  right: auto;
   bottom: 24px;
+  left: calc(var(--sidebar-width) + 24px);
   z-index: 20;
   display: inline-flex;
   align-items: center;

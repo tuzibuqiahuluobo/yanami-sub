@@ -47,8 +47,9 @@
 }
 
 .url-row input:focus {
-  border-color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
   outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .url-row button {

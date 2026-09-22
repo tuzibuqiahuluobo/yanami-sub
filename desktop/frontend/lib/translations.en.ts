@@ -6,6 +6,19 @@ export const en: Translations = {
   common: {
     select: "Select",
   },
+  toast: {
+    notifications: "Notifications",
+    close: "Dismiss notification",
+    saved: "Saved",
+    deleted: "Deleted",
+    taskCompleted: "Subtitles exported",
+    batchCompleted: "Batch completed",
+    resourceInstalled: "{name} finished downloading",
+    knowledgeUpdated: "Knowledge operation completed",
+    updateDownloading: "Downloading",
+    updateInstalling: "Installing",
+    updateDownloaded: "Download complete",
+  },
   // Title Bar
   titleBar: {
     brand: "Subtitle Workbench",

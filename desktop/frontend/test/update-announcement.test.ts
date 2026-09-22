@@ -16,7 +16,7 @@ test("an available startup update opens an in-app announcement", () => {
   );
 
   assert.match(page, /<UpdateAnnouncement/);
-  assert.match(page, /desktopApi\.installUpdate\(startupUpdate\.kind, startupUpdate\.version\)/);
+  assert.match(page, /startUpdateInstall\(startupUpdate\.kind, startupUpdate\.version\)/);
   assert.match(page, /dispatch\(\{ type: "navigate", route: "settings" \}\)/);
   assert.match(announcement, /role="dialog"/);
   assert.match(announcement, /aria-modal="true"/);
@@ -48,8 +48,8 @@ test("history stays bundled and unrendered until the user loads it", () => {
     "utf8",
   );
 
-  assert.equal(UPDATE_HISTORY.length, 6);
-  assert.equal(updateHistoryFor("zh")[0]?.version, "0.1.0-rc.5.post3");
+  assert.equal(UPDATE_HISTORY.length, 7);
+  assert.equal(updateHistoryFor("zh")[0]?.version, "0.1.0-rc.5.post4");
   assert.equal(updateHistoryFor("en").at(-1)?.version, "0.1.0-rc.3");
   assert.match(source, /historyLoaded \? \(/);
   assert.match(source, /setHistoryLoaded\(\(value\) => !value\)/);

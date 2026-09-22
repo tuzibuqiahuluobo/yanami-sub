@@ -1,20 +1,20 @@
 # Yanami Sub 中文使用说明
 
-本文面向 `v0.1.0-rc.5.post4`（RC5.4）。字幕处理由固定版本的
+本文面向 `v0.1.0-rc.6`（RC6）。字幕处理由固定版本的
 [FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1) 提供。
 
 ## 安装与迁移
 
 1. 在 [Yanami Sub Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases)
-   下载 `Yanami-Sub-0.1.0-rc.5.post4-Setup.exe` 和对应的 `.sha256` 文件。
+   下载 `Yanami-Sub-0.1.0-rc.6-Setup.exe` 和对应的 `.sha256` 文件。
 2. 在 PowerShell 中运行以下命令校验安装包：
 
    ```powershell
-   Get-FileHash .\Yanami-Sub-0.1.0-rc.5.post4-Setup.exe -Algorithm SHA256
+   Get-FileHash .\Yanami-Sub-0.1.0-rc.6-Setup.exe -Algorithm SHA256
    ```
 
 3. 将输出与 `.sha256` 文件中的值比较，完全一致后再运行安装器。
-4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC5.4 会沿用原安装记录、
+4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC6 会沿用原安装记录、
    覆盖旧版并清理旧名称的可执行文件与快捷方式。
 
 Windows 可能显示 SmartScreen 提示。请只使用本仓库 Release 的安装包，
@@ -118,8 +118,8 @@ Yanami Sub 或 FineSub CLI 实例。
 
 RC3 起使用新的 Yanami Sub 更新清单名称，旧版 FineSub Desktop 不会把它误识别为可自动安装的
 更新。因此从旧名称迁移必须手动运行 Yanami Sub 安装器。RC4 的完整更新器不会保留 Windows
-卸载器，所以 RC4 仍需要手动运行 RC5.4 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
-起每个桌面 Release 都会发布在线更新清单和签名，RC5、RC5.1、RC5.2、RC5.3 可通过
+卸载器，所以 RC4 仍需要手动运行 RC6 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
+起每个桌面 Release 都会发布在线更新清单和签名，RC5 至 RC5.4 可通过
 “应用更新”检查新版本。
 
 启用“自动检查更新”时，应用每次启动只查询一次；发现新版本会显示更新公告，可直接在应用内

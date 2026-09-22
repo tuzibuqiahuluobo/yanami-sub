@@ -168,14 +168,28 @@
 }
 
 ::view-transition-old(active-theme-choice),
-::view-transition-new(active-theme-choice),
 ::view-transition-old(active-task-tab),
+::view-transition-old(active-knowledge-tab) {
+  height: 100%;
+  animation: active-choice-fade-out 180ms ease-in both;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(active-theme-choice),
 ::view-transition-new(active-task-tab),
-::view-transition-old(active-knowledge-tab),
 ::view-transition-new(active-knowledge-tab) {
   height: 100%;
-  animation-duration: 460ms;
+  animation: active-choice-fade-in 260ms ease-out 90ms both;
   mix-blend-mode: normal;
+}
+
+@keyframes active-choice-fade-out {
+  to { opacity: 0; }
+}
+
+@keyframes active-choice-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 [data-motion="off"] .theme-btn.is-active,

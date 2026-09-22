@@ -29,6 +29,7 @@ import type {
   StorageState,
 } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
+import { useToast } from "./ToastProvider";
 
 
 // 格式化字节大小
@@ -90,6 +91,7 @@ export function ResourceManager({
   onPurgeRebuildableData,
 }: ResourceManagerProps) {
   const { t } = useLanguage();
+  const { showSuccess } = useToast();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
   const [pythonPreflight, setPythonPreflight] = useState<PythonInterpreterChoice | null>(null);
@@ -211,10 +213,12 @@ export function ResourceManager({
       if (kind === "clear") {
         await onClearPythonInterpreter();
         setPythonNotice(t.resources.diagnostics.pythonCleared);
+        showSuccess(t.resources.diagnostics.pythonCleared, "python-interpreter-cleared");
       } else {
         const result = await onSelectPythonInterpreter();
         if (!result?.cancelled) {
           setPythonNotice(t.resources.diagnostics.pythonRestart);
+          showSuccess(t.resources.diagnostics.pythonRestart, "python-interpreter-saved");
           selected = result;
         }
       }
@@ -256,13 +260,14 @@ export function ResourceManager({
         ? await onPurgeRebuildableData()
         : await onRelocateData(kind === "reset");
       if (!result.cancelled) {
-        setMaintenanceMessage(
+        const message =
           kind === "purge"
             ? t.resources.storage.purged
             : kind === "reset"
               ? t.resources.storage.resetDone
-              : t.resources.storage.moved,
-        );
+              : t.resources.storage.moved;
+        setMaintenanceMessage(message);
+        showSuccess(message, `storage-maintenance-${kind}`);
       }
     } catch (error) {
       setMaintenanceError(

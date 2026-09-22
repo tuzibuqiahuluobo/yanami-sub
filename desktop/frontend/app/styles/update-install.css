@@ -13,17 +13,3 @@
   max-width: 420px;
 }
 
-.update-progress {
-  height: 4px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--border);
-}
-
-.update-progress-bar {
-  height: 100%;
-  border-radius: inherit;
-  background: var(--accent);
-  transition: width 200ms ease;
-}
-

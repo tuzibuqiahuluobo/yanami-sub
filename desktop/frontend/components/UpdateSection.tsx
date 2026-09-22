@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, RefreshCw } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { formatBytes } from "@/lib/formatters";
 import type { UpdateCheck, UpdateInstallSnapshot } from "@/lib/types";
@@ -17,7 +17,7 @@ export interface UpdateSectionProps {
     kind: "app" | "full",
     version: string,
   ) => Promise<UpdateInstallSnapshot>;
-  onGetUpdateInstall: () => Promise<UpdateInstallSnapshot | null>;
+  updateInstall: UpdateInstallSnapshot | null;
   onCloseWindow: () => Promise<unknown>;
   onRestartApplication: () => Promise<unknown>;
   onOpenUpdatePage: () => Promise<unknown>;
@@ -29,15 +29,14 @@ export interface UpdateSectionProps {
  * The settings page's update panel: what is available, what is downloading,
  * and the one switch that decides whether we look on startup.
  *
- * Its own component because none of that state is shared with the rest of the
- * page -- five pieces of state, a polling timer and three effects that exist
- * only to keep a progress bar honest.
+ * Download state is controlled by the app root so its compact progress card
+ * survives navigation; this panel keeps the actionable restart/retry controls.
  */
 export function UpdateSection({
   startupUpdate,
   onCheckUpdates,
   onInstallUpdate,
-  onGetUpdateInstall,
+  updateInstall: install,
   onCloseWindow,
   onRestartApplication,
   onOpenUpdatePage,
@@ -59,62 +58,6 @@ export function UpdateSection({
     }
   }, [startupUpdate]);
   const [updateBusy, setUpdateBusy] = useState(false);
-  const [install, setInstall] = useState<UpdateInstallSnapshot | null>(null);
-  // A download runs in a backend thread, so the page owns no progress of its
-  // own -- it polls the snapshot until the install reaches a terminal state.
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current !== null) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  const pollInstall = useCallback(async () => {
-    try {
-      const snapshot = await onGetUpdateInstall();
-      setInstall(snapshot);
-      if (snapshot === null || snapshot.state === "ready" || snapshot.state === "failed") {
-        stopPolling();
-      }
-    } catch {
-      // A poll that fails is not itself a failed install; keep the last
-      // snapshot on screen and let the next tick decide.
-    }
-  }, [onGetUpdateInstall, stopPolling]);
-
-  const startPolling = useCallback(() => {
-    stopPolling();
-    pollingRef.current = setInterval(() => {
-      void pollInstall();
-    }, 500);
-  }, [pollInstall, stopPolling]);
-
-  // Self-starting, driven by the install's own state rather than by the click
-  // that began it. Polling used to start only from the install button, while
-  // the mount effect's cleanup depended on `pollInstall` -> `onGetUpdateInstall`
-  // -- an inline arrow rebuilt on every render of the page. So the timer was
-  // cleared by any re-render of the parent (changing the theme was enough) and
-  // nothing ever restarted it: the progress bar froze, `ready` never arrived,
-  // and the restart button never appeared. The comment this replaces --
-  // "reopening Settings mid-download has to find the install still running" --
-  // is the behaviour it was meant to provide.
-  const installIsActive =
-    install !== null && (install.state === "queued" || install.state === "running");
-
-  useEffect(() => {
-    void pollInstall();
-  }, [pollInstall]);
-
-  useEffect(() => {
-    if (!installIsActive) {
-      return;
-    }
-    startPolling();
-    return stopPolling;
-  }, [installIsActive, startPolling, stopPolling]);
-
   return (
     <section className="settings-section update-section">
       <div>
@@ -125,29 +68,8 @@ export function UpdateSection({
           <p className="update-notes">{availableUpdate.releaseNotes}</p>
         ) : null}
       </div>
-      {install ? (
+      {install?.state === "ready" || install?.state === "failed" ? (
         <div className="update-install" role="status" aria-live="polite">
-          {install.state === "running" || install.state === "queued" ? (
-            <>
-              <div className="update-progress">
-                <div
-                  className="update-progress-bar"
-                  style={{
-                    width: install.total
-                      ? `${Math.min(100, (install.downloaded / install.total) * 100)}%`
-                      : "100%",
-                  }}
-                />
-              </div>
-              <span className="update-message">
-                {install.phase === "downloading" && install.total
-                  ? t.settings.updates.downloading
-                      .replace("{done}", formatBytes(install.downloaded))
-                      .replace("{total}", formatBytes(install.total))
-                  : t.settings.updates.installing}
-              </span>
-            </>
-          ) : null}
           {install.state === "ready" ? (
             <span className="update-message">
               {install.exit_required
@@ -210,8 +132,7 @@ export function UpdateSection({
               setUpdateBusy(true);
               setUpdateMessage("");
               try {
-                setInstall(await onInstallUpdate(kind, availableUpdate.version));
-                startPolling();
+                await onInstallUpdate(kind, availableUpdate.version);
               } catch (error) {
                 setUpdateMessage(
                   error instanceof Error ? error.message : "Unable to install update",

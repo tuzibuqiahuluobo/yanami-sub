@@ -14,6 +14,7 @@ import { ProcessingView } from "@/components/ProcessingView";
 import { ResourceManager } from "@/components/ResourceManager";
 import { Settings } from "@/components/Settings";
 import { TaskHistory } from "@/components/TaskHistory";
+import { ToastProvider, ToastViewport, useToast } from "@/components/ToastProvider";
 import { UpdateAnnouncement } from "@/components/UpdateAnnouncement";
 import {
   BridgeCallError,
@@ -42,6 +43,7 @@ import type {
   RoutingUpdate,
   TaskRequest,
   UpdateCheck,
+  UpdateInstallSnapshot,
 } from "@/lib/types";
 import { useAppearance } from "@/lib/useAppearance";
 
@@ -81,10 +83,23 @@ const RESOURCE_REQUIRED_ERROR: BridgeError = {
 
 
 export default function Home() {
+  return (
+    <LanguageProvider>
+      <ToastProvider>
+        <HomeContent />
+      </ToastProvider>
+    </LanguageProvider>
+  );
+}
+
+
+function HomeContent() {
   const [state, dispatch] = useReducer(reduceAppState, initialState);
   const [busy, setBusy] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<BridgeError | null>(null);
   const eventCursor = useRef(0);
+  const { t } = useLanguage();
+  const { showSuccess } = useToast();
   const { settings: appearance, update: updateAppearance } = useAppearance();
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Which task the cleanup dialog is asking about; null when it is closed.
@@ -94,6 +109,43 @@ export default function Home() {
   const [autoUpdateCheck, setAutoUpdateCheck] = useState(
     () => uiValue<boolean>("autoUpdateCheck", true),
   );
+  const [updateInstall, setUpdateInstall] = useState<UpdateInstallSnapshot | null>(null);
+
+  const pollUpdateInstall = useCallback(async () => {
+    try {
+      const snapshot = await desktopApi.getUpdateInstall();
+      setUpdateInstall((current) =>
+        snapshot === null &&
+        (current?.state === "queued" || current?.state === "running")
+          ? current
+          : snapshot,
+      );
+    } catch {
+      // Keep the last useful progress through a transient bridge failure.
+    }
+  }, []);
+
+  const startUpdateInstall = useCallback(
+    async (kind: "app" | "full", version: string) => {
+      const snapshot = await desktopApi.installUpdate(kind, version);
+      setUpdateInstall(snapshot);
+      return snapshot;
+    },
+    [],
+  );
+
+  const updateInstallActive =
+    updateInstall?.state === "queued" || updateInstall?.state === "running";
+
+  useEffect(() => {
+    void pollUpdateInstall();
+  }, [pollUpdateInstall]);
+
+  useEffect(() => {
+    if (!updateInstallActive) return;
+    const timer = window.setInterval(() => void pollUpdateInstall(), 500);
+    return () => window.clearInterval(timer);
+  }, [pollUpdateInstall, updateInstallActive]);
 
   const changeAutoUpdateCheck = useCallback((enabled: boolean) => {
     setAutoUpdateCheck(enabled);
@@ -111,10 +163,10 @@ export default function Home() {
 
   const installAnnouncedUpdate = useCallback(async () => {
     if (!startupUpdate?.kind) return;
-    await desktopApi.installUpdate(startupUpdate.kind, startupUpdate.version);
+    await startUpdateInstall(startupUpdate.kind, startupUpdate.version);
     setDismissedUpdateVersion(startupUpdate.version);
     dispatch({ type: "navigate", route: "settings" });
-  }, [startupUpdate]);
+  }, [startupUpdate, startUpdateInstall]);
 
   const openAnnouncedUpdatePage = useCallback(
     () => desktopApi.openUpdatePage(),
@@ -296,6 +348,36 @@ export default function Home() {
       window.clearInterval(timer);
     };
   }, [hasActiveResourceInstall, state.bootstrapped, state.route]);
+
+  const completedTaskToasts = useRef(new Set<string>());
+  useEffect(() => {
+    if (
+      state.task.phase !== "completed" ||
+      !state.task.taskId ||
+      completedTaskToasts.current.has(state.task.taskId)
+    ) {
+      return;
+    }
+    completedTaskToasts.current.add(state.task.taskId);
+    showSuccess(t.toast.taskCompleted, `task-completed-${state.task.taskId}`);
+  }, [showSuccess, state.task.phase, state.task.taskId, t.toast.taskCompleted]);
+
+  const previousResourceStates = useRef<Map<string, string> | null>(null);
+  useEffect(() => {
+    const next = new Map(state.resources.map((resource) => [resource.id, resource.state]));
+    const previous = previousResourceStates.current;
+    if (previous) {
+      for (const resource of state.resources) {
+        if (resource.state === "ready" && previous.get(resource.id) === "downloading") {
+          showSuccess(
+            t.toast.resourceInstalled.replace("{name}", resource.id),
+            `resource-ready-${resource.id}-${resource.version}`,
+          );
+        }
+      }
+    }
+    previousResourceStates.current = next;
+  }, [showSuccess, state.resources, t.toast.resourceInstalled]);
 
   const selectFile = async () => {
     try {
@@ -591,10 +673,8 @@ export default function Home() {
         }}
         startupUpdate={startupUpdate}
         onCheckUpdates={() => desktopApi.checkUpdates()}
-        onInstallUpdate={(kind, version) =>
-          desktopApi.installUpdate(kind, version)
-        }
-        onGetUpdateInstall={() => desktopApi.getUpdateInstall()}
+        updateInstall={updateInstall}
+        onInstallUpdate={startUpdateInstall}
         onCloseWindow={() => desktopApi.closeWindow()}
         onRestartApplication={() => desktopApi.restartApplication()}
         onOpenUpdatePage={() => desktopApi.openUpdatePage()}
@@ -663,7 +743,7 @@ export default function Home() {
   }
 
   return (
-    <LanguageProvider>
+    <>
       {!state.bootstrapped ? (
         <BootstrapScreen error={bootstrapError} onRetry={loadBootstrap} />
       ) : (
@@ -704,7 +784,8 @@ export default function Home() {
           />
         </AppShell>
       )}
-    </LanguageProvider>
+      <ToastViewport updateInstall={updateInstall} />
+    </>
   );
 }
 

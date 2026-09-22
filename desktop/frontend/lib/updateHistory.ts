@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.5.post4",
+    title: { zh: "RC5.4 · Python 准备与更新公告", en: "RC5.4 · Python setup and update announcements" },
+    notes: {
+      zh: [
+        "将 Python 发现改为有进度、有超时且可跳过的准备流程，并支持即时指定解释器。",
+        "规避私有 Python 安装中的 Windows 装入点错误，同时保持依赖环境隔离。",
+        "新增可关闭的启动更新公告，并按需加载历史更新内容。",
+      ],
+      en: [
+        "Made Python discovery bounded, visible, skippable, and immediately configurable.",
+        "Avoided the Windows mount-point failure while keeping managed dependencies isolated.",
+        "Added dismissible update announcements with on-demand release history.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.5.post3",
     title: { zh: "RC5.3 · 运行环境与任务流程修复", en: "RC5.3 · Runtime and task-flow fixes" },
     notes: {

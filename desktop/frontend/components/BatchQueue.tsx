@@ -15,7 +15,7 @@ import {
   Square,
   Trash2,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
 import { readProcessingDevice, requestDeviceFields } from "@/lib/processingDevice";
@@ -30,6 +30,7 @@ import type {
 
 import { useLanguage } from "./LanguageProvider";
 import { TaskSettings } from "./TaskSettings";
+import { useToast } from "./ToastProvider";
 
 
 interface BatchQueueProps {
@@ -62,6 +63,7 @@ export function BatchQueue({
   onOpenResources,
 }: BatchQueueProps) {
   const { t } = useLanguage();
+  const { showSuccess } = useToast();
   const [items, setItems] = useState<BatchItemRequest[]>([]);
   const [urlDraft, setUrlDraft] = useState("");
   const [snapshot, setSnapshot] = useState<BatchSnapshot | null>(null);
@@ -73,6 +75,15 @@ export function BatchQueue({
   const [retryFailed, setRetryFailed] = useState(1);
   const [manifestBusy, setManifestBusy] = useState(false);
   const [manifestNotice, setManifestNotice] = useState("");
+  const previousBatchState = useRef<BatchSnapshot["state"] | null>(null);
+
+  useEffect(() => {
+    const previous = previousBatchState.current;
+    if (previous === "running" && snapshot?.state === "completed") {
+      showSuccess(t.toast.batchCompleted, `batch-completed-${snapshot.batch_id}`);
+    }
+    previousBatchState.current = snapshot?.state ?? null;
+  }, [showSuccess, snapshot?.batch_id, snapshot?.state, t.toast.batchCompleted]);
 
   const appendSources = (incoming: string[]) => {
     const device = requestDeviceFields(readProcessingDevice());
@@ -216,13 +227,14 @@ export function BatchQueue({
       setRetryFailed(result.request.retry_failed);
       const { input, group, priority, ...shared } = result.request.items[0];
       onRequestChange(shared);
-      setManifestNotice(
+      const notice =
         result.ignored_fields.length
           ? t.batch.manifestImportedIgnored
               .replace("{count}", String(result.request.items.length))
               .replace("{fields}", result.ignored_fields.join(", "))
-          : t.batch.manifestImported.replace("{count}", String(result.request.items.length)),
-      );
+          : t.batch.manifestImported.replace("{count}", String(result.request.items.length));
+      setManifestNotice(notice);
+      showSuccess(notice, "batch-manifest-imported");
       void input;
       void group;
       void priority;
@@ -240,7 +252,9 @@ export function BatchQueue({
     try {
       const result = await desktopApi.exportBatchManifest(payload);
       if (!result.cancelled) {
-        setManifestNotice(t.batch.manifestExported.replace("{path}", result.path ?? ""));
+        const notice = t.batch.manifestExported.replace("{path}", result.path ?? "");
+        setManifestNotice(notice);
+        showSuccess(notice, "batch-manifest-exported");
       }
     } catch (caught) {
       setError({ message: caught instanceof Error ? caught.message : t.batch.errors.manifestExport });

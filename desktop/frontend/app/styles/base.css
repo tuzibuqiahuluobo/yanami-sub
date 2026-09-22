@@ -58,6 +58,16 @@ textarea,
   outline-offset: 2px;
 }
 
+/* Form controls already have a bordered surface, so focus belongs on that
+   surface instead of adding a second, detached outline around it. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: color-mix(in srgb, var(--accent) 52%, var(--border));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
 button {
   cursor: pointer;
 }

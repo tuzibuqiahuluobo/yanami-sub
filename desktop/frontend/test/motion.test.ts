@@ -50,6 +50,9 @@ test("theme-coloured switchers share the animation preference gate", () => {
   assert.match(css, /view-transition-name: active-knowledge-tab/);
   assert.match(css, /\[data-motion="off"\] \.task-tab\.is-active/);
   assert.match(css, /\[data-motion="off"\] \.knowledge-tabs button\.is-active/);
+  assert.match(css, /@keyframes active-choice-fade-out/);
+  assert.match(css, /@keyframes active-choice-fade-in/);
+  assert.match(css, /active-choice-fade-in 260ms ease-out 90ms/);
 });
 
 test("the routing catalog has an accessible two-way reveal", () => {
@@ -76,6 +79,15 @@ test("highlighted form controls share the rounded control token", () => {
 test("a first run starts with the light theme", () => {
   assert.equal(DEFAULT_APPEARANCE.theme, "light");
   assert.equal(DEFAULT_APPEARANCE.animations, true);
+});
+
+test("form focus uses one subtle themed halo while buttons keep keyboard focus", () => {
+  const css = readStylesheet();
+
+  assert.match(css, /input:focus-visible,[\s\S]*?outline: none;[\s\S]*?color-mix\(in srgb, var\(--accent\) 10%, transparent\)/);
+  assert.match(css, /\.custom-select-trigger:focus-visible[\s\S]*?outline: none/);
+  assert.match(css, /:focus-visible\s*\{[\s\S]*?outline: 2px solid/);
+  assert.doesNotMatch(css, /\.field input:focus,[\s\S]*?border-color: #1a1a1e/);
 });
 
 test("the animations stay native to the platform", () => {
