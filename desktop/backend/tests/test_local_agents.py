@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
+import pytest
+
+import desktop.backend.settings.local_agents as local_agents
 from desktop.backend.settings.local_agents import (
     COMMANDS_ENV,
+    configure_local_agents,
     discover_local_agent_commands,
     install_local_agent_command_overrides,
 )
@@ -69,6 +74,52 @@ def test_discovery_supports_native_npm_and_dsh_source_installs(
         str(workbuddy_node.resolve()),
         str(workbuddy_entry.resolve()),
     )
+
+
+def test_inaccessible_npm_candidate_does_not_hide_healthy_claude(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    broken = tmp_path / "broken"
+    healthy = tmp_path / "healthy"
+    healthy.mkdir()
+    node = healthy / "node.exe"
+    node.write_bytes(b"node")
+    claude = healthy / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js"
+    claude.parent.mkdir(parents=True)
+    claude.write_text("", encoding="utf-8")
+    inaccessible = broken / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js"
+    original_is_file = Path.is_file
+
+    def is_file(path: Path) -> bool:
+        if path == inaccessible:
+            raise OSError(448, "untrusted mount point")
+        return original_is_file(path)
+
+    monkeypatch.setattr(Path, "is_file", is_file)
+    commands = discover_local_agent_commands(
+        environ={
+            "PATH": os.pathsep.join((str(broken), str(healthy))),
+            "LOCALAPPDATA": str(tmp_path / "local"),
+            "USERPROFILE": str(tmp_path / "home"),
+        },
+        source_roots=[],
+    )
+
+    assert commands["LOCAL_CLAUDE"] == (str(node.resolve()), str(claude.resolve()))
+
+
+def test_optional_agent_scan_error_does_not_abort_startup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_discovery() -> dict[str, tuple[str, ...]]:
+        raise OSError(448, "untrusted mount point")
+
+    monkeypatch.setattr(local_agents, "discover_local_agent_commands", fail_discovery)
+    monkeypatch.setattr(local_agents, "install_local_agent_command_overrides", lambda: {})
+    monkeypatch.setenv(COMMANDS_ENV, "before")
+
+    assert configure_local_agents() == {}
+    assert json.loads(os.environ[COMMANDS_ENV]) == {}
 
 
 def test_resolved_command_is_used_by_the_core_driver(

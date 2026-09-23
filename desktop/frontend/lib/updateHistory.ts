@@ -17,6 +17,20 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post6",
+    title: { zh: "RC6.6 · 更新发现修复", en: "RC6.6 · Update discovery fix" },
+    notes: {
+      zh: [
+        "GitHub 发布列表缺少附件时，继续查询该版本的独立附件接口。",
+        "保留签名清单、版本匹配与下载包 SHA-256 校验。",
+      ],
+      en: [
+        "Query a release's asset endpoint when GitHub omits assets from the releases list.",
+        "Keep signed-manifest, version, and package SHA-256 verification intact.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post5",
     title: { zh: "RC6.5 · 本地依赖安装修复", en: "RC6.5 · Local dependency installation fixes" },
     notes: {

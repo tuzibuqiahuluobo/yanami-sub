@@ -48,8 +48,8 @@ test("history stays bundled and unrendered until the user loads it", () => {
     "utf8",
   );
 
-  assert.equal(UPDATE_HISTORY.length, 13);
-  assert.equal(updateHistoryFor("zh")[0]?.version, "0.1.0-rc.6.post5");
+  assert.equal(UPDATE_HISTORY.length, 14);
+  assert.equal(updateHistoryFor("zh")[0]?.version, "0.1.0-rc.6.post6");
   assert.equal(updateHistoryFor("en").at(-1)?.version, "0.1.0-rc.3");
   assert.match(source, /historyLoaded \? \(/);
   assert.match(source, /setHistoryLoaded\(\(value\) => !value\)/);

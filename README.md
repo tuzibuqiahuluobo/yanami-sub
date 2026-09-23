@@ -12,7 +12,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 ## 快速开始
 
 1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.1.0-rc.6.post6-Setup.exe`。
+   `Yanami-Sub-0.1.0-rc.6.post7-Setup.exe`。
 2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
 3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
 4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
@@ -24,10 +24,11 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 准备 Python 前会在后台检查本机可复用的 64 位 Python 3.12（最长约 12 秒），并明确提供
 “使用本机 Python”“指定解释器”或“下载私有 Python”三种选择。
 
-> `v0.1.0-rc.6.post6`（RC6.6）是预览版，修复 GitHub 发布列表缺少附件时的更新发现逻辑。
-> 截至发布后实测，GitHub 列表仍对 RC6.5/RC6.6 隐去附件，旧版客户端暂时无法从应用内发现 RC6.6；
-> 请先运行 RC6.6 安装器覆盖安装一次。RC6.6 客户端已能查询独立附件接口，后续更新可继续在应用内进行。
-> 旧版 FineSub Desktop 与 RC4 也需通过安装器迁移。
+> `v0.1.0-rc.6.post7`（RC6.7）修复部分 Windows 设备启动时因本地 Agent 路径
+> 抛出 WinError 448 而直接退出的问题。RC6.6 若无法打开，请下载 RC6.7 安装器
+> 覆盖安装；不需要卸载，也不要删除 Claude Code 或用户数据。
+> 能正常打开的 RC6.6 可在“应用更新”中检查 RC6.7；旧版 FineSub Desktop、RC4，
+> 以及因 GitHub 发布列表异常而无法发现更新的更早版本，请使用安装器。
 > 每个桌面 Release 均同时提供在线更新清单和签名。请从本仓库 Release 下载并按页面
 > 提供的 SHA-256 校验。
 

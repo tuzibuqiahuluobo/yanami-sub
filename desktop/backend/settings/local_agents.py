@@ -111,8 +111,11 @@ def _npm_entry(
 ) -> Path | None:
     for directory in path_directories:
         candidate = directory.joinpath("node_modules", *package, *relative)
-        if candidate.is_file():
-            return candidate.resolve()
+        try:
+            if candidate.is_file():
+                return candidate.resolve()
+        except OSError:
+            continue
     return None
 
 
@@ -315,7 +318,11 @@ def install_local_agent_command_overrides() -> dict[str, tuple[str, ...]]:
 
 
 def configure_local_agents() -> dict[str, tuple[str, ...]]:
-    commands = discover_local_agent_commands()
+    try:
+        commands = discover_local_agent_commands()
+    except OSError:
+        # Optional Agent discovery must not prevent the desktop from opening.
+        commands = {}
     os.environ[COMMANDS_ENV] = json.dumps(commands, ensure_ascii=False)
     install_local_agent_command_overrides()
     return commands
