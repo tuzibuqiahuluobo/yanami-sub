@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import os
 from pathlib import Path
+import subprocess
+import sys
 
 import pytest
 
@@ -14,6 +17,7 @@ from desktop.backend.resources.model_prefetch import ModelPrefetchFailed
 from desktop.backend.resources import python_interpreter
 from desktop.backend.resources.desktop_service import (
     DesktopResourceService,
+    SOCKSIO_WHEEL,
     capability_requirements,
 )
 from finesub_bootstrap.system_tools import SystemTool
@@ -76,6 +80,7 @@ class FakeBootstrap:
 class FakeRuntime:
     def __init__(self, root: Path) -> None:
         self.root = root
+        self.app_source = root / "app"
         self.paths = AppPaths.for_root(root)
         self.ready = False
         self.installs = 0
@@ -630,13 +635,40 @@ def test_git_goes_on_path_and_yt_dlp_goes_on_pythonpath(tmp_path: Path) -> None:
     environment = service.worker_context({}).environment
 
     assert environment["PATH_DIRS"] == str(tmp_path / "git" / "cmd")
-    assert environment["PYTHONPATH_EXTRA"] == str(tmp_path / "yt-dlp")
+    assert environment["PYTHONPATH_EXTRA"] == os.pathsep.join(
+        (
+            str(tmp_path / "yt-dlp"),
+            str(tmp_path / "app" / "desktop" / "resources" / "wheels" / SOCKSIO_WHEEL),
+        )
+    )
 
 
-def test_an_uninstalled_yt_dlp_adds_nothing_to_pythonpath(tmp_path: Path) -> None:
+def test_an_uninstalled_yt_dlp_still_adds_socksio_to_pythonpath(tmp_path: Path) -> None:
     service = _service(tmp_path)
 
-    assert service.worker_context({}).environment["PYTHONPATH_EXTRA"] == ""
+    assert service.worker_context({}).environment["PYTHONPATH_EXTRA"] == str(
+        tmp_path / "app" / "desktop" / "resources" / "wheels" / SOCKSIO_WHEEL
+    )
+
+
+def test_pinned_socksio_wheel_supports_httpx_proxy_without_runtime_install() -> None:
+    wheel = Path(__file__).resolve().parents[2] / "resources" / "wheels" / SOCKSIO_WHEEL
+    assert hashlib.sha256(wheel.read_bytes()).hexdigest() == (
+        "95dc1f15f9b34e8d7b16f06d74b8ccf48f609af32ab33c608d08761c5dcbb1f3"
+    )
+    environment = {**os.environ, "PYTHONPATH": str(wheel)}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import socksio, httpx; httpx.Client(proxy='socks5://127.0.0.1:1').close()",
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_an_installed_tokcount_is_named_for_the_llm_layer(

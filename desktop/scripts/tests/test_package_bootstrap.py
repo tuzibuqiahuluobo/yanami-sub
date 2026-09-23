@@ -37,6 +37,15 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources() -> None:
         (fixture_repo / "desktop" / "resources" / "manifest.json").write_text(
             "{}\n", "utf-8"
         )
+        socksio_wheel = (
+            fixture_repo
+            / "desktop"
+            / "resources"
+            / "wheels"
+            / "socksio-1.0.0-py3-none-any.whl"
+        )
+        socksio_wheel.parent.mkdir(parents=True)
+        socksio_wheel.write_bytes(b"wheel fixture")
         # A tracked non-.py file under `src/`: the payload has to carry it,
         # and since the desktop split the runtime lock is exactly that --
         # the launcher reads it out of the app snapshot it installs.
@@ -144,6 +153,13 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources() -> None:
             / "finesub_bootstrap"
             / "pylock.win-py312.toml"
         ).is_file()
+        assert (
+            version_root
+            / "desktop"
+            / "resources"
+            / "wheels"
+            / socksio_wheel.name
+        ).read_bytes() == b"wheel fixture"
         assert not (launcher_dist / "updater").exists()
         assert not (launcher_dist / "FineSub.exe").exists()
         # The split desktop package has one executable surface; command-line

@@ -1,20 +1,20 @@
 # Yanami Sub 中文使用说明
 
-本文面向 `v0.1.0-rc.6.post7`（RC6.7）。字幕处理由固定版本的
+本文面向 `v0.1.0-rc.6.post8`（RC6.8）。字幕处理由固定版本的
 [FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1) 提供。
 
 ## 安装与迁移
 
 1. 在 [Yanami Sub Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases)
-   下载 `Yanami-Sub-0.1.0-rc.6.post7-Setup.exe` 和对应的 `.sha256` 文件。
+   下载 `Yanami-Sub-0.1.0-rc.6.post8-Setup.exe` 和对应的 `.sha256` 文件。
 2. 在 PowerShell 中运行以下命令校验安装包：
 
    ```powershell
-   Get-FileHash .\Yanami-Sub-0.1.0-rc.6.post7-Setup.exe -Algorithm SHA256
+   Get-FileHash .\Yanami-Sub-0.1.0-rc.6.post8-Setup.exe -Algorithm SHA256
    ```
 
 3. 将输出与 `.sha256` 文件中的值比较，完全一致后再运行安装器。
-4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC6.7 会沿用原安装记录、
+4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC6.8 会沿用原安装记录、
    覆盖旧版并清理旧名称的可执行文件与快捷方式。
 
 Windows 可能显示 SmartScreen 提示。请只使用本仓库 Release 的安装包，
@@ -118,10 +118,10 @@ Yanami Sub 或 FineSub CLI 实例。
 
 RC3 起使用新的 Yanami Sub 更新清单名称，旧版 FineSub Desktop 不会把它误识别为可自动安装的
 更新。因此从旧名称迁移必须手动运行 Yanami Sub 安装器。RC4 的完整更新器不会保留 Windows
-卸载器，所以 RC4 仍需要手动运行 RC6.7 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
-起每个桌面 Release 都会发布在线更新清单和签名。RC6.6 已加入独立附件接口回退，
-因此能正常打开的 RC6.6 可以检查 RC6.7 更新；若 RC6.6 在打开窗口前就报 WinError 448，
-则无法点击应用内更新，请直接运行 RC6.7 Setup 覆盖安装，不必删除用户数据或 Claude Code。
+卸载器，所以 RC4 仍需要手动运行 RC6.8 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
+起每个桌面 Release 都会发布在线更新清单和签名。RC6.7 可在应用内检查 RC6.8 更新；
+若 RC6.6 在打开窗口前就报 WinError 448，则无法点击应用内更新，请直接运行 RC6.8 Setup
+覆盖安装，不必删除用户数据或 Claude Code。
 更早版本若因 GitHub 发布列表异常看不到新版本，也请使用安装器。
 
 启用“自动检查更新”时，应用每次启动只查询一次；发现新版本会显示更新公告，可直接在应用内
@@ -138,6 +138,8 @@ GitHub 备用入口下载完整安装器覆盖安装。
 
 打开任务日志与资源页，先重试失败资源。中国大陆网络会优先走 TUNA 的 Python 镜像；模型和
 其他资源仍可能需要官方源。代理、杀毒软件和磁盘剩余空间都会影响下载。
+RC6.8 已在应用包中提供 SOCKS 代理所需的轻量模块；使用 SOCKS 代理下载 Whisper 等
+模型时无需再向系统 Python 安装 `httpx[socks]`，也不必重装已就绪的 AI 运行环境。
 如果 Python 环境提示某个 AI 依赖 wheel 失败，资源卡片会显示原始下载链接、准确文件名和
 缓存目录。按原名下载并放入该目录后点击“继续下载”；程序会校验 SHA-256，匹配后才使用
 本地文件。若仍失败，展开卡片中的错误日志，以区分网络、磁盘或解压问题。

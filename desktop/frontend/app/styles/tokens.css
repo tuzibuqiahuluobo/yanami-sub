@@ -8,7 +8,10 @@
   --sidebar-soft: #f0f1f3;
   --text: #1a1a1e;
   --muted: #8b8d93;
+  --text-secondary: #5f636b;
+  --ink: #1a1a1e;
   --border: #e8e9ec;
+  --line: #e8e9ec;
   --accent: #1a1a1e;
   --accent-hover: #333338;
   --accent-soft: #f0f1f3;
@@ -40,29 +43,33 @@
 }
 
 [data-theme="dark"] {
-  --app-bg: #131316;
-  --panel: #1e1e22;
-  --panel-subtle: #26262b;
-  --sidebar: #1a1a1e;
-  --sidebar-soft: #26262b;
-  --text: #e8e9ec;
-  --muted: #a3a6ad;
-  --border: #2e2f34;
-  --accent: #e8e9ec;
-  --accent-hover: #c8c9cd;
-  --accent-soft: #2a2a30;
-  --accent-gradient: linear-gradient(135deg, #ffffff 0%, #cfd1d7 100%);
-  --accent-gradient-hover: linear-gradient(135deg, #f2f3f5 0%, #b9bbc2 100%);
-  --accent-contrast: #131316;
-  --success: #4cbb6a;
-  --warning: #f5b84d;
-  --danger: #f06558;
-  --shadow-float: 0 8px 32px rgb(0 0 0 / 30%);
-  --shadow-card: 0 2px 12px rgb(0 0 0 / 20%);
-  /* Glass effect variables for dark mode */
-  --glass-bg: rgba(30, 30, 34, var(--glass-opacity));
-  --glass-bg-subtle: rgba(38, 38, 43, var(--glass-opacity));
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-shadow: 0 8px 32px rgb(0 0 0 / 40%);
+  color-scheme: dark;
+  --app-bg: #191b1d;
+  --panel: #25272a;
+  --panel-subtle: #2c2e32;
+  --sidebar: #202225;
+  --sidebar-soft: #2c2e32;
+  --text: #e9eaec;
+  --muted: #aeb2b8;
+  --text-secondary: #c3c6cc;
+  --ink: #e9eaec;
+  --border: #3a3d42;
+  --line: #3a3d42;
+  --accent: #e0e2e5;
+  --accent-hover: #c9cbd0;
+  --accent-soft: #34373c;
+  --accent-gradient: linear-gradient(135deg, #e9eaec 0%, #c7cbd0 100%);
+  --accent-gradient-hover: linear-gradient(135deg, #f3f4f5 0%, #d3d6da 100%);
+  --accent-contrast: #191b1d;
+  --success: #75d294;
+  --warning: #e5be78;
+  --danger: #f18a82;
+  --shadow-float: 0 12px 28px rgb(0 0 0 / 20%);
+  --shadow-card: 0 1px 3px rgb(0 0 0 / 15%);
+  /* Neutral layers preserve the existing opacity control without color glows. */
+  --glass-bg: rgba(43, 45, 49, var(--glass-opacity));
+  --glass-bg-subtle: rgba(48, 50, 54, var(--glass-opacity));
+  --glass-border: #3a3d42;
+  --glass-shadow: 0 1px 3px rgb(0 0 0 / 15%);
 }
 

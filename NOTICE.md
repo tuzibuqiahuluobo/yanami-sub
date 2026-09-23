@@ -24,4 +24,6 @@ Yanami Sub 与打包的 FineSub v0.5.1 代码遵循
 
 随 FineSub 核心分发的 `src/finesub/llm/prompt_templates/` 明文模板采用
 [Creative Commons Attribution-ShareAlike 4.0 International](https://github.com/caca2331/finesub/blob/v0.5.1/src/finesub/llm/prompt_templates/LICENSE.md)。
+用于 SOCKS 代理模型下载的 `desktop/resources/wheels/socksio-1.0.0-py3-none-any.whl`
+采用 MIT 许可证，许可证原文保存在该 wheel 内的 `socksio-1.0.0.dist-info/LICENSE`。
 分发二进制或源码时，应同时保留 GPL、该目录的 CC BY-SA 声明以及本文件中的来源与作者归属。

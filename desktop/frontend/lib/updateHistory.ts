@@ -17,6 +17,34 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post8",
+    title: { zh: "RC6.8 · 深色模式与模型下载", en: "RC6.8 · Dark mode and model downloads" },
+    notes: {
+      zh: [
+        "统一深色界面的背景、卡片、状态标签和安装日志，保持浅色模式不变。",
+        "模型下载和任务运行可直接通过 SOCKS 代理，无需重装 AI 运行环境。",
+      ],
+      en: [
+        "Unified dark surfaces, status badges, and installation logs without changing light mode.",
+        "Model downloads and tasks can use SOCKS proxies without rebuilding the AI runtime.",
+      ],
+    },
+  },
+  {
+    version: "0.1.0-rc.6.post7",
+    title: { zh: "RC6.7 · 启动稳定性", en: "RC6.7 · Startup stability" },
+    notes: {
+      zh: [
+        "本地 Agent 扫描遇到不可访问的路径时继续启动应用。",
+        "修复部分 Windows 设备的 WinError 448 启动异常。",
+      ],
+      en: [
+        "Keep starting when local Agent discovery finds an inaccessible path.",
+        "Fixed the WinError 448 startup failure on affected Windows systems.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post6",
     title: { zh: "RC6.6 · 更新发现修复", en: "RC6.6 · Update discovery fix" },
     notes: {

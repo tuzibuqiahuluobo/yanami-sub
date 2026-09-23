@@ -55,6 +55,13 @@ ALWAYS_REQUIRED = ("uv", "ffmpeg")
 # turn a 3GB download into a gate on ever starting.
 MODELS_RESOURCE = "models"
 
+# HTTPX needs this optional, pure-Python package whenever a user selects a
+# SOCKS proxy. The managed AI runtime is intentionally separate from the
+# launcher, so the launcher's dependencies cannot satisfy that import. Keep
+# the tiny, hash-checked wheel in the app payload: existing 2.8 GB runtimes
+# gain SOCKS support on update without being rebuilt or hitting PyPI first.
+SOCKSIO_WHEEL = "socksio-1.0.0-py3-none-any.whl"
+
 # The weights are not versioned by us -- each library pins its own revision --
 # so the row carries a token rather than a number that would only ever be a
 # guess about somebody else's release. A token, not display text: `version`
@@ -735,9 +742,10 @@ class DesktopResourceService:
             if self.bootstrap.active_version("yt-dlp") is not None
             else []
         )
+        socksio = self.runtime.app_source / "desktop" / "resources" / "wheels" / SOCKSIO_WHEEL
         return self.runtime.worker_context(
             ffmpeg_bin=self.tool_directory("ffmpeg", "ffmpeg.exe"),
             extra_env=environment,
             extra_path_dirs=[git_bin] if git_bin is not None else [],
-            extra_python_path=yt_dlp,
+            extra_python_path=[*yt_dlp, socksio],
         )

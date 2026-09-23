@@ -141,7 +141,7 @@ WINDOW_READY_TIMEOUT_SECONDS = 10
 # brief native frame before saved preferences or the light first-run default
 # take over. Keep them in step with the `--app-bg` / `--text` pairs in CSS.
 LIGHT_WINDOW_COLORS = ("#F2F3F5", "#1A1A1E")
-DARK_WINDOW_COLORS = ("#131316", "#E8E9EC")
+DARK_WINDOW_COLORS = ("#191B1D", "#E9EAEC")
 
 
 def expose_bridge(window: Any, bridge: DesktopBridge) -> None:

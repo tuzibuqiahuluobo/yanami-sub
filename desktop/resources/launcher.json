@@ -1,8 +1,8 @@
 {
   "channel": "beta",
   "platform": "windows-x64",
-  "launcherVersion": "0.1.0-rc.6.post7",
+  "launcherVersion": "0.1.0-rc.6.post8",
   "schemaVersion": 1,
-  "appVersion": "0.1.0-rc.6.post7",
+  "appVersion": "0.1.0-rc.6.post8",
   "releaseRepository": "tuzibuqiahuluobo/yanami-sub"
 }
