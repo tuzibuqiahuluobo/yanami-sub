@@ -502,7 +502,11 @@ class DesktopResourceService:
             index = command.index("--requirement") + 1
             if index < len(command):
                 regional = lock.with_name(lock.name.replace(".toml", ".cn.toml"))
-                if Path(command[index]).name == regional.name and regional.is_file():
+                if (
+                    Path(command[index]).name
+                    in {regional.name, manual_wheels.install_lock_name(regional)}
+                    and regional.is_file()
+                ):
                     lock = regional
         wheel = manual_wheels.failed_wheel(lock, error)
         if wheel is None or not wheel.url.startswith("https://"):

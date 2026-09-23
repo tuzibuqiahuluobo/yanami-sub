@@ -11,6 +11,9 @@ from finesub_bootstrap.paths import AppPaths
 from desktop.YanamiSub import _activate_packaged_source
 from desktop.backend.common.product import INSTALLED_MARKER_NAME
 from desktop.backend.launcher.main import (
+    DESKTOP_UV_ASSET,
+    DESKTOP_UV_VERSION,
+    _load_resources,
     create_backend_services,
     dropped_file_path,
     expose_bridge,
@@ -29,6 +32,27 @@ from desktop.backend.settings.store import SettingsStore
 RUNTIME_MANIFEST = (
     Path(finesub_bootstrap.__file__).resolve().parent / "runtime-manifest.json"
 )
+
+
+def test_desktop_uv_bootstrap_is_pinned_without_rewriting_upstream_manifest(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "app"
+    package = source / "src" / "finesub_bootstrap"
+    package.mkdir(parents=True)
+    shutil.copy2(RUNTIME_MANIFEST, package / "runtime-manifest.json")
+    manager = _load_resources(AppPaths.for_root(tmp_path), source)
+    assert manager.resources["uv"].version == DESKTOP_UV_VERSION
+    assert manager.resources["uv"].asset.sha256 == DESKTOP_UV_ASSET["sha256"]
+    upstream = json.loads(RUNTIME_MANIFEST.read_text(encoding="utf-8"))
+    assert upstream["resources"][0]["version"] != DESKTOP_UV_VERSION
+    newer = json.loads((package / "runtime-manifest.json").read_text(encoding="utf-8"))
+    newer["resources"][0]["version"] = "0.13.0"
+    (package / "runtime-manifest.json").write_text(
+        json.dumps(newer), encoding="utf-8"
+    )
+    updated = _load_resources(AppPaths.for_root(tmp_path), source)
+    assert updated.resources["uv"].version == "0.13.0"
 
 
 def test_frozen_entrypoint_activates_the_versioned_core_before_startup(

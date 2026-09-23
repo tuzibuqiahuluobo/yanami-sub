@@ -175,11 +175,19 @@ class ResourceInstallManager:
             )
 
         def stage(phase: str, message: str) -> None:
+            # Bootstrap archive bytes are not AI-wheel bytes. Never keep
+            # showing a finished uv ZIP as dependency-install progress.
+            reset_progress = (
+                {"downloaded": 0, "total": 0, "bytes_per_second": 0}
+                if phase == "installing_dependencies"
+                else {}
+            )
             self._update(
                 resource_id,
                 state="running",
                 phase=phase,
                 message=message,
+                **reset_progress,
             )
 
         transcript = install_log.InstallLog.open(self.log_dir, resource_id)

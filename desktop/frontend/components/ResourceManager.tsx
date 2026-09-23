@@ -836,6 +836,11 @@ export function ResourceManager({
                         {install.message}
                       </strong>
                     )}
+                    {running && install.phase === "installing_dependencies" ? (
+                      <p className="resource-download-note">
+                        {t.resources.installingDependenciesNote}
+                      </p>
+                    ) : null}
                     {install.error ? (
                       <p className="resource-error">{install.error}</p>
                     ) : null}
@@ -847,9 +852,19 @@ export function ResourceManager({
                         </pre>
                       </details>
                     ) : (
-                      <pre className="resource-install-log">
-                        {install.logs.slice(-3).join("\n")}
-                      </pre>
+                      <>
+                        <pre className="resource-install-log">
+                          {install.logs.slice(-3).join("\n")}
+                        </pre>
+                        {running && install.logs.length > 3 ? (
+                          <details className="resource-log-details">
+                            <summary>{t.resources.paths.showInstallLog}</summary>
+                            <pre className="resource-install-log">
+                              {install.logs.join("\n")}
+                            </pre>
+                          </details>
+                        ) : null}
+                      </>
                     ) : null}
                     {failed && install.manual_download ? (
                       <div className="resource-manual-download">

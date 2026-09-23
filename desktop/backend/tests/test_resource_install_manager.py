@@ -72,6 +72,21 @@ def test_resource_install_runs_in_background_and_reports_progress(
     assert completed.phase == "complete"
 
 
+def test_dependency_stage_clears_bootstrap_archive_progress(tmp_path: Path) -> None:
+    class Dependencies(FakeResources):
+        def install(self, resource_id, progress, *, stage, log, should_pause):
+            progress(DownloadProgress(downloaded=100, total=100, bytes_per_second=50))
+            stage("installing_dependencies", "正在安装 FineSub AI 依赖")
+            return ResourceStatus(id=resource_id, version="1.0", state="ready")
+
+    manager = ResourceInstallManager(Dependencies(tmp_path))
+    manager.start("uv")
+    finished = _wait_for(manager, "uv", "ready")
+    assert finished.downloaded == 0
+    assert finished.total == 0
+    assert finished.bytes_per_second == 0
+
+
 def test_failed_python_install_exposes_the_verified_manual_download(tmp_path: Path) -> None:
     class FailedResources(FakeResources):
         def install(self, resource_id, progress, *, stage, log, should_pause):

@@ -24,7 +24,7 @@ if (-not (Test-Path -LiteralPath $VenvPath -PathType Container)) {
 }
 
 $PythonPath = Join-Path $VenvPath "Scripts\python.exe"
-& $PythonPath -m pip install --upgrade pip "uv==0.11.32"
+& $PythonPath -m pip install --upgrade pip "uv==0.12.17"
 if ($LASTEXITCODE -ne 0) {
     throw "pip/uv bootstrap failed with exit code $LASTEXITCODE"
 }

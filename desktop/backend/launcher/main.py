@@ -40,6 +40,17 @@ from desktop.backend.updates.service import (
 )
 
 
+# Desktop bootstrap only. FineSub's dependency locks remain unchanged.
+# uv 0.12.17 retries interrupted wheel transfers with HTTP Range when supported.
+DESKTOP_UV_FROM_VERSION = "0.11.32"
+DESKTOP_UV_VERSION = "0.12.17"
+DESKTOP_UV_ASSET = {
+    "url": "https://github.com/astral-sh/uv/releases/download/0.12.17/uv-x86_64-pc-windows-msvc.zip",
+    "size": 17906210,
+    "sha256": "a252121d5b59398fcb137c6ea448176459a44010f33f67e0072305a637119ca7",
+}
+
+
 PUBLIC_BRIDGE_METHODS = (
     "get_bootstrap_state",
     "get_diagnostics",
@@ -644,10 +655,18 @@ def _load_resources(paths: AppPaths, app_source: Path) -> ResourceManager:
         app_source / "src" / "finesub_bootstrap" / "runtime-manifest.json"
     )
     body = json.loads(manifest_path.read_text(encoding="utf-8"))
-    specs = [
-        ResourceSpec.model_validate(resource)
-        for resource in body.get("resources", [])
-    ]
+    specs = []
+    for resource in body.get("resources", []):
+        if (
+            resource.get("id") == "uv"
+            and resource.get("version") == DESKTOP_UV_FROM_VERSION
+        ):
+            resource = {
+                **resource,
+                "version": DESKTOP_UV_VERSION,
+                "asset": DESKTOP_UV_ASSET,
+            }
+        specs.append(ResourceSpec.model_validate(resource))
     return ResourceManager(paths, specs)
 
 

@@ -64,7 +64,7 @@ const previewBootstrap: BootstrapState = {
   // The same resources the backend reports, with optional rows left
   // uninstalled so the preview also shows their on-demand presentation.
   resources: [
-    { id: "uv", version: "0.11.32", state: "ready" },
+    { id: "uv", version: "0.12.17", state: "ready" },
     { id: "ffmpeg", version: "N-125752", state: "ready" },
     { id: "git", version: "2.55.0.3", state: "ready" },
     // Deliberately one version behind, so the browser preview also shows the

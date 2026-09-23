@@ -456,7 +456,9 @@ export const zh = {
       openCacheDir: "打开缓存目录",
       openInstallDir: "打开安装目录",
       showFailureLog: "查看错误日志",
+      showInstallLog: "查看完整安装日志",
     },
+    installingDependenciesNote: "正在下载并安装 AI 依赖。单个大型依赖暂无可靠的字节进度；下方日志会显示当前下载源与传输方式，已校验的缓存会在重试时复用。",
     manualDownload: {
       title: "手动下载失败的依赖",
       instructions: "从原始发布地址下载下列文件，保留文件名，放入下方缓存目录。然后点击“继续下载”，应用会先校验 SHA-256，再安装本地文件。",
@@ -469,7 +471,7 @@ export const zh = {
     },
     sourceNote: {
       title: "下载与镜像策略",
-      description: "Yanami Sub 会先扫描本机磁盘并按大小与 SHA-256 校验同版本资源；未命中或版本不符时才联网下载。中国大陆网络的 Python 依赖会自动使用清华大学 TUNA 镜像，镜像失败时回退到官方源。",
+      description: "Yanami Sub 会先查找并校验本地资源。自动线路会结合网络区域与大型依赖的短连接测试选择官方源或国内镜像；网络错误时再尝试直连或切换下载源。手动指定的下载源不会被自动覆盖。",
     },
     confirm: {
       title: "确认准备资源",

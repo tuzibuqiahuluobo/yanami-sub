@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post3",
+    title: { zh: "RC6.3 · 依赖安装恢复", en: "RC6.3 · Dependency installation recovery" },
+    notes: {
+      zh: [
+        "延长依赖下载的超时和重试，并在失败时提供准确的依赖链接与日志。",
+        "支持从缓存复用手动下载且通过 SHA-256 校验的 wheel。",
+        "整理资源目录按钮及应用更新操作的布局。",
+      ],
+      en: [
+        "Extended dependency download timeouts and retries with exact failure links and logs.",
+        "Allowed verified, manually downloaded wheels to be reused from the cache.",
+        "Refined resource folder controls and update action placement.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post2",
     title: { zh: "RC6.2 · 下载线路切换", en: "RC6.2 · Download route selection" },
     notes: {

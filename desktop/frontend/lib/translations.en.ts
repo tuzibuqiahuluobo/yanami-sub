@@ -458,7 +458,9 @@ export const en: Translations = {
       openCacheDir: "Open Cache Directory",
       openInstallDir: "Open Install Directory",
       showFailureLog: "Show error log",
+      showInstallLog: "Show full installation log",
     },
+    installingDependenciesNote: "Downloading and installing AI dependencies. Reliable byte progress is not available for a single large wheel; the log below shows the current source and transport. Verified cache files are reused on retry.",
     manualDownload: {
       title: "Download the failed dependency manually",
       instructions: "Download this file from its original release source, keep the filename, and place it in the cache directory shown below. Select Continue Download; the app verifies its SHA-256 before installing the local file.",
@@ -471,7 +473,7 @@ export const en: Translations = {
     },
     sourceNote: {
       title: "Download and mirror strategy",
-      description: "Yanami Sub scans local disks first and verifies matching resources by size and SHA-256. It downloads only missing or mismatched versions. Python dependencies on mainland China routes automatically use the Tsinghua TUNA mirror, with the official source as fallback.",
+      description: "Yanami Sub checks and verifies local resources first. Auto combines region and a short connection test for the large AI dependency when choosing the official source or China mirror; network failures can trigger direct access or a source switch. A manually selected source is not overridden.",
     },
     confirm: {
       title: "Confirm Resource Setup",
