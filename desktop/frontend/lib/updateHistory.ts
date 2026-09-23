@@ -17,6 +17,20 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post4",
+    title: { zh: "RC6.4 · 下载线路与安装恢复", en: "RC6.4 · Download routes and installation recovery" },
+    notes: {
+      zh: [
+        "升级 uv 并改善大文件断点传输、官方源与国内镜像测速及线路回退。",
+        "修复国内锁文件名称兼容性，并在资源页提供可展开的安装日志。",
+      ],
+      en: [
+        "Updated uv and improved large-download resumption, source probes, and route fallback.",
+        "Fixed lockfile naming compatibility and added expandable installation logs.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post3",
     title: { zh: "RC6.3 · 依赖安装恢复", en: "RC6.3 · Dependency installation recovery" },
     notes: {

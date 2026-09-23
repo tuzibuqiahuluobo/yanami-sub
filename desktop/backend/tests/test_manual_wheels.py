@@ -82,9 +82,11 @@ def test_failed_locked_wheel_can_be_guided_into_verified_local_retry(
         commands.append(command)
         environments.append(env)
         assert Path(command[-1]).read_text(encoding="utf-8").count(
-            local.resolve().as_uri()
+            f'path = "{local.resolve().as_posix()}"'
         ) == 1
-        assert URL not in Path(command[-1]).read_text(encoding="utf-8")
+        patched = Path(command[-1]).read_text(encoding="utf-8")
+        assert URL not in patched
+        assert "file:///" not in patched
 
     runtime = DesktopRuntimeEnvironment(
         paths=paths,
@@ -232,6 +234,55 @@ def test_proxy_retry_does_not_repeat_local_or_integrity_failure(
             log=None, should_pause=None,
         )
     assert attempts == 1
+
+
+@pytest.mark.parametrize("repair_succeeds", [True, False])
+def test_missing_uv_archive_cleans_only_failed_package_and_never_blames_proxy(
+    tmp_path: Path, repair_succeeds: bool,
+) -> None:
+    lock = _lock(tmp_path, hashlib.sha256(b"wheel").hexdigest())
+    calls: list[list[str]] = []
+
+    def runner(command, *, cwd, env, check):
+        calls.append(command)
+        if command[1:3] == ["pip", "install"] and (
+            len(calls) == 1 or not repair_succeeds
+        ):
+            raise subprocess.CalledProcessError(
+                2,
+                command,
+                output=(
+                    "network timed out earlier\n"
+                    f"error: Failed to install: {FILENAME}\n"
+                    "cause: failed to read directory "
+                    r"E:\Yanami Sub\cache\uv\archive-v0\missing: "
+                    "系统找不到指定的路径。 (os error 3)"
+                ),
+            )
+
+    runtime = DesktopRuntimeEnvironment(
+        paths=AppPaths.for_root(tmp_path), app_source=tmp_path,
+        runtime_lock=lock, uv_executable=lambda: tmp_path / "uv.exe",
+        command_runner=runner,
+    )
+    logs: list[str] = []
+    def run() -> None:
+        runtime._run(
+            ["uv", "pip", "install", "--requirement", str(lock)],
+            {"HTTPS_PROXY": "http://proxy.example.org:8080"},
+            log=logs.append, should_pause=None,
+        )
+    if repair_succeeds:
+        run()
+    else:
+        with pytest.raises(subprocess.CalledProcessError):
+            run()
+    assert [command[1:3] for command in calls] == [
+        ["pip", "install"], ["cache", "clean"], ["pip", "install"]
+    ]
+    assert calls[1][-1] == "ctranslate2"
+    assert any("本地安装缓存缺失" in line for line in logs)
+    assert not any("代理连接失败" in line for line in logs)
 
 
 def test_auto_global_network_failure_retries_existing_cn_lock(

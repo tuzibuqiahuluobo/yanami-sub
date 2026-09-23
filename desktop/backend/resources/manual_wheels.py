@@ -40,15 +40,32 @@ PROXY_VARIABLES = (
     "https_proxy",
     "all_proxy",
 )
+LOCAL_INSTALL_FAILURE_MARKERS = (
+    *LOCAL_FAILURE_MARKERS,
+    "failed to read directory",
+    "url scheme is not allowed",
+    "os error 3",
+    "系统找不到指定的路径",
+)
+
+
+def _local_failure(error: BaseException) -> bool:
+    detail = _install_failure_text(error)
+    return any(marker in detail for marker in LOCAL_INSTALL_FAILURE_MARKERS)
 
 
 def _network_failure(error: BaseException) -> bool:
     """Retry a transport only for network trouble, never local storage trouble."""
 
+    return not _local_failure(error) and _is_retryable_install(error)
+
+
+def _missing_uv_archive(error: BaseException) -> bool:
     detail = _install_failure_text(error)
-    return not any(
-        marker in detail for marker in LOCAL_FAILURE_MARKERS
-    ) and _is_retryable_install(error)
+    return "archive-v0" in detail and any(
+        marker in detail
+        for marker in ("os error 3", "no such file or directory", "系统找不到指定的路径")
+    )
 
 
 def _sample_wheel(
@@ -230,7 +247,7 @@ def local_lock(
         original = f'url = "{wheel.url}"'
         if original not in text:
             continue
-        text = text.replace(original, f'url = "{local.resolve().as_uri()}"', 1)
+        text = text.replace(original, f'path = "{local.resolve().as_posix()}"', 1)
         changed = True
         if log is not None:
             log(f"使用已校验的本地依赖：{wheel.filename}")
@@ -315,10 +332,7 @@ class DesktopRuntimeEnvironment(RuntimeEnvironment):
             except DownloadPaused:
                 raise
             except Exception as error:
-                local_error = any(
-                    marker in _install_failure_text(error)
-                    for marker in LOCAL_FAILURE_MARKERS
-                )
+                local_error = _local_failure(error)
                 retryable = not local_error and (
                     _is_retryable_from_mirror(error)
                     if lock == cn_lock
@@ -355,10 +369,35 @@ class DesktopRuntimeEnvironment(RuntimeEnvironment):
                 proxied = any(network.get(name) for name in PROXY_VARIABLES)
                 if log is not None:
                     log("AI 依赖传输：" + ("代理" if proxied else "直连"))
+                run = super()._run
+
+                def install_with_cache_repair(active_environment: dict[str, str]) -> None:
+                    try:
+                        return run(
+                            patched, active_environment, log=log, should_pause=should_pause
+                        )
+                    except DownloadPaused:
+                        raise
+                    except Exception as error:
+                        if not _missing_uv_archive(error):
+                            raise
+                        wheel = failed_wheel(Path(command[index]), error)
+                        if wheel is None:
+                            raise
+                        if log is not None:
+                            log(f"本地安装缓存缺失，清理 {wheel.package} 缓存后重试一次")
+                        run(
+                            [command[0], "cache", "clean", wheel.package],
+                            active_environment,
+                            log=log,
+                            should_pause=should_pause,
+                        )
+                        return run(
+                            patched, active_environment, log=log, should_pause=should_pause
+                        )
+
                 try:
-                    return super()._run(
-                        patched, network, log=log, should_pause=should_pause
-                    )
+                    return install_with_cache_repair(network)
                 except DownloadPaused:
                     raise
                 except Exception as error:
@@ -371,9 +410,7 @@ class DesktopRuntimeEnvironment(RuntimeEnvironment):
                         for key, value in network.items()
                         if key not in PROXY_VARIABLES
                     }
-                    return super()._run(
-                        patched, direct, log=log, should_pause=should_pause
-                    )
+                    return install_with_cache_repair(direct)
         return super()._run(
             command, environment, log=log, should_pause=should_pause
         )

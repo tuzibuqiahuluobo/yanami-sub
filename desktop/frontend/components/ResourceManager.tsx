@@ -844,27 +844,15 @@ export function ResourceManager({
                     {install.error ? (
                       <p className="resource-error">{install.error}</p>
                     ) : null}
-                    {install.logs.length ? failed ? (
+                    {install.logs.length ? (
                       <details className="resource-log-details">
-                        <summary>{t.resources.paths.showFailureLog}</summary>
+                        <summary>
+                          {failed ? t.resources.paths.showFailureLog : t.resources.paths.showInstallLog}
+                        </summary>
                         <pre className="resource-install-log">
                           {install.logs.join("\n")}
                         </pre>
                       </details>
-                    ) : (
-                      <>
-                        <pre className="resource-install-log">
-                          {install.logs.slice(-3).join("\n")}
-                        </pre>
-                        {running && install.logs.length > 3 ? (
-                          <details className="resource-log-details">
-                            <summary>{t.resources.paths.showInstallLog}</summary>
-                            <pre className="resource-install-log">
-                              {install.logs.join("\n")}
-                            </pre>
-                          </details>
-                        ) : null}
-                      </>
                     ) : null}
                     {failed && install.manual_download ? (
                       <div className="resource-manual-download">

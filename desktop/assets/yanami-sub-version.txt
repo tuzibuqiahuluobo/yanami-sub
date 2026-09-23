@@ -21,7 +21,7 @@ VSVersionInfo(
           StringStruct('LegalCopyright', 'Copyright (c) Yanami Sub contributors'),
           StringStruct('OriginalFilename', 'Yanami Sub.exe'),
           StringStruct('ProductName', 'Yanami Sub'),
-          StringStruct('ProductVersion', '0.1.0-rc.6.post4')
+          StringStruct('ProductVersion', '0.1.0-rc.6.post5')
         ]
       )
     ]),
