@@ -17,6 +17,20 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post5",
+    title: { zh: "RC6.5 · 本地依赖安装修复", en: "RC6.5 · Local dependency installation fixes" },
+    notes: {
+      zh: [
+        "修复已校验的手动下载 wheel 无法安装的问题。",
+        "uv 缓存目录缺失时仅清理出错依赖并重试；资源页只保留完整安装日志。",
+      ],
+      en: [
+        "Fixed installation of verified, manually downloaded wheels.",
+        "Retry a missing uv cache entry per package and keep one complete installation log.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post4",
     title: { zh: "RC6.4 · 下载线路与安装恢复", en: "RC6.4 · Download routes and installation recovery" },
     notes: {

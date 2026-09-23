@@ -382,6 +382,25 @@ def _fetch_release(
                 if not isinstance(releases, list):
                     raise ValueError("GitHub releases response is malformed")
                 for release in releases:
+                    if (
+                        isinstance(release, dict)
+                        and not release.get("assets")
+                        and not release.get("draft")
+                        and bool(release.get("prerelease")) == (channel == "beta")
+                        and type(release.get("id")) is int
+                    ):
+                        # GitHub can omit a new release's embedded assets while
+                        # its release-specific asset endpoint already has them.
+                        assets_response = client.get(
+                            f"https://api.github.com/repos/{repository}"
+                            f"/releases/{release['id']}/assets",
+                            params={"per_page": 100},
+                        )
+                        assets_response.raise_for_status()
+                        assets = assets_response.json()
+                        if not isinstance(assets, list):
+                            raise ValueError("GitHub release assets response is malformed")
+                        release["assets"] = assets
                     if is_desktop_release(release, channel):
                         return release
                 raise ValueError(

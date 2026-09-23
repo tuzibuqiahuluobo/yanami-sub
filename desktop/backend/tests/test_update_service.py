@@ -386,3 +386,47 @@ def test_release_check_falls_back_from_limited_and_unusable_proxies(
 
     assert release["tag_name"] == "v0.3.2"
     assert calls == ["代理已限流", "SOCKS 不可用", "直连"]
+
+
+def test_release_check_recovers_assets_omitted_from_github_release_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    newest = _release("v0.3.2", assets=(), prerelease=True)
+    newest["id"] = 123
+    newest["assets_url"] = "https://untrusted.example/assets"
+    older = _release("v0.3.1", assets=SIGNED, prerelease=True)
+    requested: list[str] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requested.append(request.url.path)
+        if request.url.path == "/repos/owner/project/releases":
+            return httpx.Response(200, json=[newest, older], request=request)
+        assert request.url.path == "/repos/owner/project/releases/123/assets"
+        return httpx.Response(
+            200,
+            json=[
+                {"name": name, "browser_download_url": f"https://x/{name}"}
+                for name in SIGNED
+            ],
+            request=request,
+        )
+
+    monkeypatch.setattr(
+        update_service,
+        "network_routes",
+        lambda: [NetworkRoute("直连", None)],
+    )
+    monkeypatch.setattr(
+        update_service,
+        "create_client",
+        lambda *_args, **_kwargs: httpx.Client(transport=httpx.MockTransport(respond)),
+    )
+
+    release = update_service._fetch_release("owner/project", "beta")
+
+    assert release["tag_name"] == "v0.3.2"
+    assert is_desktop_release(release, "beta")
+    assert requested == [
+        "/repos/owner/project/releases",
+        "/repos/owner/project/releases/123/assets",
+    ]
