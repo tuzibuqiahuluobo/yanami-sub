@@ -17,6 +17,20 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post9",
+    title: { zh: "RC6.9 · 模型下载线路恢复", en: "RC6.9 · Model download route recovery" },
+    notes: {
+      zh: [
+        "模型下载代理连接失败时尝试其他可用线路，自动选择官方源失败时可尝试内置国内镜像。",
+        "普通任务不再继承已失效的代理地址；下载失败时提示检查代理或切换网络。",
+      ],
+      en: [
+        "Retry model downloads on another route when the proxy connection fails, with a built-in mainland mirror fallback after automatic official-source transport failures.",
+        "Avoid inheriting stale proxy addresses in normal tasks and explain when to check the proxy or switch networks.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post8",
     title: { zh: "RC6.8 · 深色模式与模型下载", en: "RC6.8 · Dark mode and model downloads" },
     notes: {

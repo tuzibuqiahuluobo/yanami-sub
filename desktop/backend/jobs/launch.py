@@ -18,8 +18,10 @@ from typing import Any
 
 from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE
 from finesub_bootstrap import task_output
+from finesub_bootstrap.http_client import network_routes
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.network import apply_network_route
 
 
 ProcessFactory = Callable[..., Any]
@@ -144,6 +146,7 @@ def spawn_worker(
     ]
     environment = os.environ.copy()
     environment.update(context.environment)
+    apply_network_route(environment, network_routes()[0])
     pinned, notice = device_environment(request, available_gpus)
     environment.update(pinned)
     if output_root is not None:

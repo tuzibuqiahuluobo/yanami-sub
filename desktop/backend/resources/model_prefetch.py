@@ -18,6 +18,9 @@ import time
 from typing import Any, Protocol
 
 from finesub_bootstrap.downloader import DownloadPaused
+from finesub_bootstrap.http_client import NetworkRoute, network_routes
+
+from desktop.backend.common.network import apply_network_route
 
 
 class _Context(Protocol):
@@ -28,6 +31,28 @@ class _Context(Protocol):
 
 class ModelPrefetchFailed(RuntimeError):
     pass
+
+
+_TRANSPORT_ERRORS = (
+    "httpx.ConnectError:",
+    "httpx.ConnectTimeout:",
+    "httpx.ProxyError:",
+    "httpx.ReadError:",
+    "httpx.ReadTimeout:",
+    "httpx.WriteError:",
+    "httpx.WriteTimeout:",
+    "httpx.CloseError:",
+    "httpx.PoolTimeout:",
+    "httpx.RemoteProtocolError:",
+)
+
+
+def is_prefetch_transport_failure(error: BaseException) -> bool:
+    """Recognize a child's final HTTPX transport error across the pipe."""
+
+    return isinstance(error, ModelPrefetchFailed) and any(
+        marker in str(error) for marker in _TRANSPORT_ERRORS
+    )
 
 
 def _creation_flags() -> int:
@@ -43,6 +68,7 @@ def run_model_prefetch(
     stage: Callable[[str, str], None] | None = None,
     log: Callable[[str], None] | None = None,
     should_pause: Callable[[], bool] | None = None,
+    route: NetworkRoute | None = None,
     process_factory: Callable[..., Any] = subprocess.Popen,
 ) -> None:
     """Fetch `model_ids` with the managed interpreter, streaming its output."""
@@ -55,6 +81,7 @@ def run_model_prefetch(
     ]
     environment = os.environ.copy()
     environment.update(context.environment)
+    apply_network_route(environment, route or network_routes()[0])
     process = process_factory(
         command,
         stdout=subprocess.PIPE,
@@ -137,4 +164,9 @@ def run_model_prefetch(
     returncode = process.returncode
     if returncode != 0:
         detail = "；".join(tail[-3:]) if tail else f"退出码 {returncode}"
-        raise ModelPrefetchFailed(f"模型下载失败：{detail}")
+        failure = ModelPrefetchFailed(f"模型下载失败：{detail}")
+        if is_prefetch_transport_failure(failure):
+            raise ModelPrefetchFailed(
+                f"模型下载连接失败，请检查代理或切换网络后重试；{detail}"
+            )
+        raise failure

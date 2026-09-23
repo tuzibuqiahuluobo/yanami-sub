@@ -10,6 +10,8 @@ import sys
 import pytest
 
 from finesub_bootstrap import model_caches
+from finesub_bootstrap import download_routes
+from finesub_bootstrap.http_client import NetworkRoute
 from finesub_bootstrap.paths import AppPaths
 from finesub_bootstrap.models import ResourceStatus
 from desktop.backend.common.models import TaskRequest
@@ -927,6 +929,214 @@ def test_the_fallback_attempt_does_not_carry_the_mirror_back_in(
     service.install("models", lambda event: None)
 
     assert endpoints == ["https://mirror.example", ""]
+
+
+def test_refused_proxy_retries_direct_before_changing_model_source(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _isolate_shared_caches(monkeypatch, tmp_path)
+    table = tmp_path / "sources.json"
+    table.write_text(
+        json.dumps({"hfEndpoint": "https://mirror.example"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("FINESUB_DOWNLOAD_SOURCES", str(table))
+    monkeypatch.setenv("FINESUB_DOWNLOAD_REGION", "cn")
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.setattr(
+        "desktop.backend.resources.desktop_service.network_routes",
+        lambda: [
+            NetworkRoute("代理", "socks5://127.0.0.1:7890"),
+            NetworkRoute("直连", None),
+        ],
+    )
+    attempts: list[tuple[str, str | None]] = []
+    logs: list[str] = []
+
+    def prefetch(model_ids, **kwargs):
+        attempts.append(
+            (kwargs["context"].environment.get("HF_ENDPOINT", ""), kwargs["route"].proxy)
+        )
+        if len(attempts) == 1:
+            raise ModelPrefetchFailed("httpx.ConnectError: [WinError 10061]")
+        _install_managed_weights(service.runtime.paths.models, *model_ids)
+
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        model_prefetch=prefetch,
+    )
+    service.install("uv", lambda event: None)
+    _install_managed_weights(service.runtime.paths.models, "separator", "qwen-referee")
+
+    result = service.install("models", lambda event: None, log=logs.append)
+
+    assert result.state == "ready"
+    assert attempts == [
+        ("https://mirror.example", "socks5://127.0.0.1:7890"),
+        ("https://mirror.example", None),
+    ]
+    assert download_routes.failures(service.runtime.paths.data_root, "huggingface") == 0
+    assert any("改用下一连接方式" in line for line in logs)
+
+
+def test_model_source_changes_only_after_direct_transport_fails(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _isolate_shared_caches(monkeypatch, tmp_path)
+    table = tmp_path / "sources.json"
+    table.write_text(
+        json.dumps({"hfEndpoint": "https://mirror.example"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("FINESUB_DOWNLOAD_SOURCES", str(table))
+    monkeypatch.setenv("FINESUB_DOWNLOAD_REGION", "cn")
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.setattr(
+        "desktop.backend.resources.desktop_service.network_routes",
+        lambda: [
+            NetworkRoute("代理", "socks5://127.0.0.1:7890"),
+            NetworkRoute("直连", None),
+        ],
+    )
+    attempts: list[tuple[str, str | None]] = []
+
+    def prefetch(model_ids, **kwargs):
+        attempts.append(
+            (kwargs["context"].environment.get("HF_ENDPOINT", ""), kwargs["route"].proxy)
+        )
+        if len(attempts) < 3:
+            raise ModelPrefetchFailed("httpx.ConnectError: [WinError 10061]")
+        _install_managed_weights(service.runtime.paths.models, *model_ids)
+
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        model_prefetch=prefetch,
+    )
+    service.install("uv", lambda event: None)
+    _install_managed_weights(service.runtime.paths.models, "separator", "qwen-referee")
+
+    assert service.install("models", lambda event: None).state == "ready"
+    assert attempts == [
+        ("https://mirror.example", "socks5://127.0.0.1:7890"),
+        ("https://mirror.example", None),
+        ("", "socks5://127.0.0.1:7890"),
+    ]
+
+
+def test_cached_overseas_route_can_recover_through_configured_mirror(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _isolate_shared_caches(monkeypatch, tmp_path)
+    table = tmp_path / "sources.json"
+    table.write_text(
+        json.dumps({"hfEndpoint": "https://mirror.example"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("FINESUB_DOWNLOAD_SOURCES", str(table))
+    monkeypatch.delenv("FINESUB_HF_ENDPOINT", raising=False)
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.setattr(
+        download_routes,
+        "resolve_region",
+        lambda _root: download_routes.RouteDecision("global", "cached"),
+    )
+    monkeypatch.setattr(
+        "desktop.backend.resources.desktop_service.network_routes",
+        lambda: [NetworkRoute("直连", None)],
+    )
+    endpoints: list[str] = []
+
+    def prefetch(model_ids, **kwargs):
+        endpoints.append(kwargs["context"].environment.get("HF_ENDPOINT", ""))
+        if len(endpoints) == 1:
+            raise ModelPrefetchFailed("httpx.ConnectError: official unreachable")
+        _install_managed_weights(service.runtime.paths.models, *model_ids)
+
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        model_prefetch=prefetch,
+    )
+    service.install("uv", lambda event: None)
+    _install_managed_weights(service.runtime.paths.models, "separator", "qwen-referee")
+
+    assert service.install("models", lambda event: None).state == "ready"
+    assert endpoints == ["", "https://mirror.example"]
+
+
+def test_forced_official_model_source_is_not_overridden_after_failure(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _isolate_shared_caches(monkeypatch, tmp_path)
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.setattr(
+        download_routes,
+        "resolve_region",
+        lambda _root: download_routes.RouteDecision("global", "forced"),
+    )
+    monkeypatch.setattr(
+        "desktop.backend.resources.desktop_service.network_routes",
+        lambda: [NetworkRoute("直连", None)],
+    )
+    calls: list[str] = []
+
+    def prefetch(_model_ids, **kwargs):
+        calls.append(kwargs["context"].environment.get("HF_ENDPOINT", ""))
+        raise ModelPrefetchFailed("httpx.ConnectError: official unreachable")
+
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        model_prefetch=prefetch,
+    )
+    service.install("uv", lambda event: None)
+    _install_managed_weights(service.runtime.paths.models, "separator", "qwen-referee")
+
+    with pytest.raises(ModelPrefetchFailed):
+        service.install("models", lambda event: None)
+    assert calls == [""]
+
+
+def test_offline_transport_does_not_permanently_disable_backup_mirror(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _isolate_shared_caches(monkeypatch, tmp_path)
+    table = tmp_path / "sources.json"
+    table.write_text(
+        json.dumps({"hfEndpoint": "https://mirror.example"}), encoding="utf-8"
+    )
+    monkeypatch.setenv("FINESUB_DOWNLOAD_SOURCES", str(table))
+    monkeypatch.delenv("FINESUB_HF_ENDPOINT", raising=False)
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    monkeypatch.setattr(
+        download_routes,
+        "resolve_region",
+        lambda _root: download_routes.RouteDecision("global", "cached"),
+    )
+    monkeypatch.setattr(
+        "desktop.backend.resources.desktop_service.network_routes",
+        lambda: [NetworkRoute("直连", None)],
+    )
+
+    def prefetch(_model_ids, **_kwargs):
+        raise ModelPrefetchFailed("httpx.ConnectError: offline")
+
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+        model_prefetch=prefetch,
+    )
+    service.install("uv", lambda event: None)
+    _install_managed_weights(service.runtime.paths.models, "separator", "qwen-referee")
+
+    for _ in range(3):
+        with pytest.raises(ModelPrefetchFailed):
+            service.install("models", lambda event: None)
+    assert download_routes.failures(service.runtime.paths.data_root, "huggingface") == 0
 
 
 def test_a_successful_prefetch_must_also_pass_the_final_cache_check(

@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+import socket
 
 import pytest
 
 from finesub_bootstrap.downloader import DownloadPaused
+from finesub_bootstrap.http_client import NetworkRoute
+from finesub_bootstrap import http_client
 
 from desktop.backend.resources.model_prefetch import (
     ModelPrefetchFailed,
+    is_prefetch_transport_failure,
     run_model_prefetch,
 )
 
@@ -133,6 +137,87 @@ def test_a_failing_prefetch_reports_the_last_thing_it_said(tmp_path: Path) -> No
         )
 
     assert "qwen-referee" in str(failure.value)
+
+
+def test_dead_parent_proxy_is_removed_before_model_child_starts(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HTTPS_PROXY", "socks5://127.0.0.1:7890")
+    monkeypatch.setenv("all_proxy", "socks5://127.0.0.1:7890")
+    factory, captured = _spawn(["Whisper 识别模型已就绪"])
+
+    run_model_prefetch(
+        ["whisper"],
+        context=FakeContext(tmp_path),
+        route=NetworkRoute("直连", None),
+        process_factory=factory,
+    )
+
+    assert not any(key.lower().endswith("_proxy") for key in captured["env"])
+
+
+def test_default_model_route_skips_a_stopped_local_socks_port(
+    tmp_path: Path, monkeypatch
+) -> None:
+    with socket.socket() as listener:
+        listener.bind(("127.0.0.1", 0))
+        stopped_port = listener.getsockname()[1]
+    for name in (
+        "HTTP_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HTTPS_PROXY", f"socks5://127.0.0.1:{stopped_port}")
+    monkeypatch.setattr(http_client, "_windows_proxy", lambda: None)
+    factory, captured = _spawn(["Whisper 识别模型已就绪"])
+
+    run_model_prefetch(
+        ["whisper"], context=FakeContext(tmp_path), process_factory=factory
+    )
+
+    assert not any(key.lower().endswith("_proxy") for key in captured["env"])
+
+
+def test_model_child_uses_only_the_selected_proxy(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HTTPS_PROXY", "http://stale.example:8080")
+    factory, captured = _spawn(["Whisper 识别模型已就绪"])
+
+    run_model_prefetch(
+        ["whisper"],
+        context=FakeContext(tmp_path),
+        route=NetworkRoute("代理", "socks5://127.0.0.1:7890"),
+        process_factory=factory,
+    )
+
+    environment = captured["env"]
+    for name in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"):
+        assert environment[name] == "socks5://127.0.0.1:7890"
+    assert "http_proxy" not in environment
+
+
+def test_refused_socks_connection_is_actionable_and_retryable(tmp_path: Path) -> None:
+    factory, _ = _spawn(
+        ["httpx.ConnectError: [WinError 10061] connection refused"],
+        returncode=1,
+    )
+
+    with pytest.raises(ModelPrefetchFailed) as failure:
+        run_model_prefetch(
+            ["whisper"],
+            context=FakeContext(tmp_path),
+            route=NetworkRoute("直连", None),
+            process_factory=factory,
+        )
+
+    assert is_prefetch_transport_failure(failure.value)
+    assert "切换网络" in str(failure.value)
+
+
+def test_only_transport_errors_change_the_model_connection_route() -> None:
+    assert is_prefetch_transport_failure(ModelPrefetchFailed("httpx.WriteError: closed"))
+    assert not is_prefetch_transport_failure(ModelPrefetchFailed("OSError: disk full"))
+    assert not is_prefetch_transport_failure(
+        ModelPrefetchFailed("httpx.HTTPStatusError: 401 Unauthorized")
+    )
 
 
 def test_pausing_raises_the_pause_signal_the_installer_understands(

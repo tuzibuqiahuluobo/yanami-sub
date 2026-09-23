@@ -15,6 +15,7 @@ import pytest
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.jobs.history import JobSnapshot
 from desktop.backend.jobs.launch import WorkerLaunchContext
+from finesub_bootstrap.http_client import NetworkRoute
 from desktop.backend.jobs.manager import (
     JobAlreadyRunning,
     JobManager,
@@ -1498,6 +1499,29 @@ def test_a_spawn_sees_one_worker_context_even_if_it_is_swapped(tmp_path) -> None
         "cwd": "old-cwd",
         "marker": "old",
     }, "the spawn must not be a mix of two contexts"
+
+
+def test_task_worker_does_not_inherit_a_dead_proxy(monkeypatch) -> None:
+    monkeypatch.setenv("HTTPS_PROXY", "socks5://127.0.0.1:7890")
+    monkeypatch.setattr(
+        "desktop.backend.jobs.launch.network_routes",
+        lambda: [NetworkRoute("直连", None)],
+    )
+    seen: dict[str, str] = {}
+
+    def process_factory(command, **kwargs):
+        seen.update(kwargs["env"])
+        return FinishedProcess("")
+
+    manager = JobManager(
+        python_executable="python.exe",
+        worker_env={},
+        process_factory=process_factory,
+        terminate_process_tree=lambda child: None,
+    )
+    manager.start(TaskRequest(input="a.wav"))
+
+    assert not any(key.lower().endswith("_proxy") for key in seen)
 
 
 def test_quitting_terminates_a_running_task(tmp_path) -> None:

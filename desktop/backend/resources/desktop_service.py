@@ -5,6 +5,7 @@ from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import replace
 import importlib.metadata
 from io import StringIO
+import os
 from pathlib import Path
 import shutil
 
@@ -24,9 +25,14 @@ from finesub_bootstrap.model_caches import (
     missing_pipeline_models,
 )
 from finesub_bootstrap.downloader import DownloadPaused
+from finesub_bootstrap.http_client import network_routes
 from finesub_bootstrap.models import DownloadProgress, ResourceStatus
 from desktop.backend.resources import manual_wheels, python_interpreter
-from desktop.backend.resources.model_prefetch import run_model_prefetch
+from desktop.backend.resources.model_prefetch import (
+    ModelPrefetchFailed,
+    is_prefetch_transport_failure,
+    run_model_prefetch,
+)
 from desktop.backend.resources.local_reuse import LocalResourceReuse
 from finesub_bootstrap.system_tools import (
     SystemTool,
@@ -298,11 +304,12 @@ class DesktopResourceService:
         log: Callable[[str], None] | None,
         should_pause: Callable[[], bool] | None,
     ) -> None:
-        from finesub_bootstrap import model_fetch
+        from finesub_bootstrap import download_routes, model_fetch
         from finesub_bootstrap.download_routes import resolve_region
 
         data_root = self.runtime.paths.data_root
-        region = resolve_region(data_root).region
+        decision = resolve_region(data_root)
+        region = decision.region
 
         def run(environment) -> None:
             # The attempt's endpoint is authoritative, applied *after* the
@@ -318,13 +325,22 @@ class DesktopResourceService:
                 resolved[model_fetch.HF_ENDPOINT] = endpoint
             else:
                 resolved.pop(model_fetch.HF_ENDPOINT, None)
-            self.model_prefetch(
-                [model_id],
-                context=replace(context, environment=resolved),
-                stage=stage,
-                log=log,
-                should_pause=should_pause,
-            )
+            for route in network_routes():
+                try:
+                    self.model_prefetch(
+                        [model_id],
+                        context=replace(context, environment=resolved),
+                        stage=stage,
+                        log=log,
+                        should_pause=should_pause,
+                        route=route,
+                    )
+                    return
+                except ModelPrefetchFailed as error:
+                    if route.proxy is None or not is_prefetch_transport_failure(error):
+                        raise
+                    if log is not None:
+                        log("模型下载代理连接失败，改用下一连接方式重试")
 
         def retryable(error: BaseException) -> bool:
             # The same question fetch_fixed_files asks, and for the same
@@ -333,18 +349,51 @@ class DesktopResourceService:
             # mirror failure and answered by re-downloading gigabytes from the
             # official source, which fails again for the identical local
             # reason -- and three of those disable the mirror for this machine.
-            return model_fetch.is_mirror_failure(error)
+            return (
+                is_prefetch_transport_failure(error)
+                or model_fetch.is_mirror_failure(error)
+            )
 
         index, total = position
         if stage is not None:
             stage("models", f"正在获取模型 {index}/{total}")
-        model_fetch.fetch_with_fallback(
-            run,
-            base_environment={},
-            data_root=data_root,
-            region=region,
-            is_retryable=retryable,
-        )
+        try:
+            model_fetch.fetch_with_fallback(
+                run,
+                base_environment={},
+                data_root=data_root,
+                region=region,
+                is_retryable=retryable,
+            )
+        except ModelPrefetchFailed as error:
+            # A cached overseas verdict can outlive the proxy that produced
+            # it. Only an automatic official-source network failure earns a
+            # try of the already configured and revision-pinned CN mirror.
+            if (
+                region != "global"
+                or decision.source == "forced"
+                or bool(os.environ.get(model_fetch.HF_ENDPOINT))
+                or not is_prefetch_transport_failure(error)
+            ):
+                raise
+            mirror = model_fetch.hf_endpoint_for(data_root, "cn")
+            if not mirror:
+                raise
+            if log is not None:
+                log("官方模型源连接失败，改用备用镜像重试")
+            alternate = {model_fetch.HF_ENDPOINT: mirror}
+            model_fetch.apply_xet_policy(alternate, endpoint=mirror)
+            try:
+                run(alternate)
+            except Exception as mirror_error:
+                # A transport failure can describe a generally offline
+                # machine, not a bad mirror; do not permanently degrade it.
+                if retryable(mirror_error) and not is_prefetch_transport_failure(
+                    mirror_error
+                ):
+                    download_routes.record_failure(data_root, "huggingface")
+                raise
+            download_routes.record_success(data_root, "huggingface")
 
     def _install_models(
         self,
