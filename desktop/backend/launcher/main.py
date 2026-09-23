@@ -14,7 +14,7 @@ from finesub_bootstrap.migrations import apply_pending
 from finesub_bootstrap.models import ResourceSpec
 from finesub_bootstrap.paths import AppPaths, ensure_store, load_app_paths
 from finesub_bootstrap.resources import ResourceManager
-from finesub_bootstrap.environment import RuntimeEnvironment
+from desktop.backend.resources.manual_wheels import DesktopRuntimeEnvironment
 
 from desktop.backend.batches.manager import BatchManager
 from desktop.backend.common.product import PRODUCT_NAME
@@ -68,6 +68,7 @@ PUBLIC_BRIDGE_METHODS = (
     "set_download_route",
     "pause_resource_install",
     "open_resource_location",
+    "open_resource_dependency_download",
     "get_python_interpreter",
     "select_python_interpreter",
     "set_python_interpreter",
@@ -693,7 +694,7 @@ def create_backend_services(
         )
     )
 
-    runtime = RuntimeEnvironment(
+    runtime = DesktopRuntimeEnvironment(
         paths=paths,
         app_source=app_source,
         runtime_lock=(

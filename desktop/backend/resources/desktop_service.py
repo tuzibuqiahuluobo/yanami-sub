@@ -25,7 +25,7 @@ from finesub_bootstrap.model_caches import (
 )
 from finesub_bootstrap.downloader import DownloadPaused
 from finesub_bootstrap.models import DownloadProgress, ResourceStatus
-from desktop.backend.resources import python_interpreter
+from desktop.backend.resources import manual_wheels, python_interpreter
 from desktop.backend.resources.model_prefetch import run_model_prefetch
 from desktop.backend.resources.local_reuse import LocalResourceReuse
 from finesub_bootstrap.system_tools import (
@@ -490,6 +490,29 @@ class DesktopResourceService:
             self.bootstrap.cache_path(resource_id),
             self.bootstrap.install_path(resource_id),
         )
+
+    def manual_download(
+        self, resource_id: str, error: Exception
+    ) -> dict[str, str] | None:
+        if resource_id != "uv":
+            return None
+        lock = self.runtime.runtime_lock
+        command = getattr(error, "cmd", ())
+        if isinstance(command, (list, tuple)) and "--requirement" in command:
+            index = command.index("--requirement") + 1
+            if index < len(command):
+                regional = lock.with_name(lock.name.replace(".toml", ".cn.toml"))
+                if Path(command[index]).name == regional.name and regional.is_file():
+                    lock = regional
+        wheel = manual_wheels.failed_wheel(lock, error)
+        if wheel is None or not wheel.url.startswith("https://"):
+            return None
+        return {
+            "filename": wheel.filename,
+            "url": wheel.url,
+            "sha256": wheel.sha256,
+            "directory": str(self.runtime.paths.cache / "downloads"),
+        }
 
     def task_ready(self, request=None) -> bool:
         required = ALWAYS_REQUIRED + (

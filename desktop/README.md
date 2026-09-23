@@ -105,7 +105,7 @@ Yanami Sub，由随包发布的 updater 完成）。个人数据、模型、缓�
 也可以到 Release 页手动下载。
 
 RC3 是首次改名迁移版。旧 FineSub Desktop 与 RC4 必须手动运行 Yanami Sub 安装器；
-RC5 至 RC6.1 可以通过“应用更新”升级到 RC6.2，也可以手动运行 Setup；
+RC5 至 RC6.2 可以通过“应用更新”升级到 RC6.3，也可以手动运行 Setup；
 RC5/RC5.1 目前不在应用增量的适用范围内，请手动运行 Setup 覆盖安装。RC5 起已保护卸载器
 文件，RC5.2 起每个 Release 都会附带在线更新清单和签名。
 

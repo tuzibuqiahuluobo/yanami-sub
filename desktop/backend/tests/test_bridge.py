@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -279,6 +280,34 @@ def test_bridge_refreshes_python_discovery_for_an_explicit_check(
     assert result["ok"] is True
     assert result["data"]["found"].endswith("python.exe")
     assert resources.interpreter_refreshes == [True]
+
+
+def test_only_the_failed_locked_dependency_can_open_its_download_page(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/caca2331/finesub/releases/download/ct2/wheel.whl"
+    opened: list[str] = []
+
+    class Installs:
+        def get(self, resource_id: str):
+            assert resource_id == "uv"
+            return SimpleNamespace(
+                state="failed",
+                manual_download={"filename": "wheel.whl", "url": url},
+            )
+
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        resource_installs=Installs(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        url_opener=opened.append,
+    )
+
+    assert bridge.open_resource_dependency_download("other.whl")["ok"] is False
+    assert opened == []
+    assert bridge.open_resource_dependency_download("wheel.whl")["data"] == {"url": url}
+    assert opened == [url]
 
 
 def test_download_route_choice_is_persisted_and_auto_reprobes(

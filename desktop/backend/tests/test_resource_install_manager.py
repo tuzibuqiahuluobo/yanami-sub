@@ -72,6 +72,42 @@ def test_resource_install_runs_in_background_and_reports_progress(
     assert completed.phase == "complete"
 
 
+def test_failed_python_install_exposes_the_verified_manual_download(tmp_path: Path) -> None:
+    class FailedResources(FakeResources):
+        def install(self, resource_id, progress, *, stage, log, should_pause):
+            raise RuntimeError("Failed to install: wheel.whl")
+
+        def manual_download(self, resource_id, error):
+            assert resource_id == "uv"
+            return {"filename": "wheel.whl", "url": "https://example.org/wheel.whl"}
+
+    manager = ResourceInstallManager(FailedResources(tmp_path))
+    manager.start("uv")
+
+    failed = _wait_for(manager, "uv", "failed")
+    assert failed.manual_download == {
+        "filename": "wheel.whl",
+        "url": "https://example.org/wheel.whl",
+    }
+
+
+def test_failure_state_survives_broken_manual_help(tmp_path: Path) -> None:
+    class FailedResources(FakeResources):
+        def install(self, resource_id, progress, *, stage, log, should_pause):
+            raise RuntimeError("download failed")
+
+        def manual_download(self, resource_id, error):
+            raise ValueError("invalid lock")
+
+    manager = ResourceInstallManager(FailedResources(tmp_path))
+    manager.start("uv")
+
+    failed = _wait_for(manager, "uv", "failed")
+    assert failed.error == "download failed"
+    assert failed.manual_download is None
+    assert any("invalid lock" in line for line in failed.logs)
+
+
 def test_different_resources_download_concurrently(tmp_path: Path) -> None:
     manager = ResourceInstallManager(FakeResources(tmp_path))
 

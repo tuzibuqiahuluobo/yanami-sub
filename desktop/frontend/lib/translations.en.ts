@@ -457,6 +457,13 @@ export const en: Translations = {
       installPath: "Install Location",
       openCacheDir: "Open Cache Directory",
       openInstallDir: "Open Install Directory",
+      showFailureLog: "Show error log",
+    },
+    manualDownload: {
+      title: "Download the failed dependency manually",
+      instructions: "Download this file from its original release source, keep the filename, and place it in the cache directory shown below. Select Continue Download; the app verifies its SHA-256 before installing the local file.",
+      placeIn: "Place in:",
+      openSource: "Download dependency",
     },
     modelNote: {
       title: "How are models managed?",

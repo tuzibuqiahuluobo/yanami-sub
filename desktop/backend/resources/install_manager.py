@@ -217,11 +217,19 @@ class ResourceInstallManager:
             # always truthy, so the fallback never fired and a message-less
             # failure wrote "失败：" and nothing else.
             transcript.finish(f"失败：{str(error) or type(error).__name__}")
+            help_for_failure = getattr(self.resources, "manual_download", None)
+            manual_download = None
+            if callable(help_for_failure):
+                try:
+                    manual_download = help_for_failure(resource_id, error)
+                except Exception as help_error:
+                    log(f"无法生成手动下载指引：{help_error}")
             self._update(
                 resource_id,
                 state="failed",
                 message="资源安装失败",
                 error=str(error) or type(error).__name__,
+                manual_download=manual_download,
                 bytes_per_second=0,
             )
         else:

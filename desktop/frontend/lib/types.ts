@@ -160,6 +160,12 @@ export interface ResourceInstallSnapshot {
   install_path: string;
   logs: string[];
   error: string;
+  manual_download?: {
+    filename: string;
+    url: string;
+    sha256: string;
+    directory: string;
+  } | null;
   started_at: number;
   updated_at: number;
 }
@@ -670,6 +676,7 @@ export interface DesktopApi {
     resourceId: string,
     kind: "cache" | "install",
   ): Promise<{ path: string }>;
+  openResourceDependencyDownload(filename: string): Promise<{ url: string }>;
   saveApiKeys(keys: {
     gemini_free?: string | null;
     gemini_paid?: string | null;

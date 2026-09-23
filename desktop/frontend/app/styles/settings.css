@@ -652,22 +652,21 @@
 }
 
 .update-section {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
 }
 
 .update-auto-check {
-  flex-basis: 100%;
+  grid-column: 1;
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
 
-.update-section>div {
+.update-content {
   display: grid;
-  gap: 4px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .update-message {
@@ -676,7 +675,7 @@
 }
 
 .update-notes {
-  max-width: 620px;
+  max-width: 680px;
   color: var(--muted);
   font-size: 0.8rem;
   line-height: 1.6;
@@ -685,8 +684,9 @@
 
 .update-section>.update-actions {
   display: flex;
-  flex: 0 0 auto;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: 8px;
 }
 

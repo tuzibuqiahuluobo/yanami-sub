@@ -746,6 +746,29 @@ class DesktopBridge:
 
         return self._guard(open_location)
 
+    def open_resource_dependency_download(self, filename: str) -> dict[str, Any]:
+        """Open the locked source of the dependency that just failed."""
+
+        def open_download() -> dict[str, str]:
+            install = (
+                self.resource_installs.get("uv")
+                if self.resource_installs is not None
+                else None
+            )
+            manual = install.manual_download if install is not None else None
+            if (
+                install is None
+                or install.state != "failed"
+                or manual is None
+                or manual["filename"] != filename
+            ):
+                raise ValueError("当前没有可手动下载的失败依赖。")
+            url = manual["url"]
+            self.url_opener(url)
+            return {"url": url}
+
+        return self._guard(open_download)
+
     def get_python_interpreter(self) -> dict[str, Any]:
         """Which CPython the runtime will be built from.
 

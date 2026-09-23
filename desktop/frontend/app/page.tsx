@@ -623,6 +623,9 @@ function HomeContent() {
         onOpenLocation={(resourceId, kind) =>
           void desktopApi.openResourceLocation(resourceId, kind)
         }
+        onOpenDependencyDownload={(filename) =>
+          desktopApi.openResourceDependencyDownload(filename)
+        }
         onOpenLogs={() => void desktopApi.openInstallLogs()}
         onRunDiagnostics={() => desktopApi.getDiagnostics()}
         onCheckPythonInterpreter={() => desktopApi.getPythonInterpreter()}

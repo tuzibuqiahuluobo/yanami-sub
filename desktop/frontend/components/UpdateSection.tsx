@@ -60,13 +60,13 @@ export function UpdateSection({
   const [updateBusy, setUpdateBusy] = useState(false);
   return (
     <section className="settings-section update-section">
-      <div>
+      <div className="update-content">
         <h2>{t.settings.updates.title}</h2>
         <p>{t.settings.updates.description}</p>
-        {updateMessage ? <span className="update-message">{updateMessage}</span> : null}
         {availableUpdate?.available && availableUpdate.releaseNotes ? (
           <p className="update-notes">{availableUpdate.releaseNotes}</p>
         ) : null}
+        {updateMessage ? <span className="update-message">{updateMessage}</span> : null}
       </div>
       {install?.state === "ready" || install?.state === "failed" ? (
         <div className="update-install" role="status" aria-live="polite">
@@ -210,9 +210,6 @@ export function UpdateSection({
           {t.settings.updates.checkUpdate}
         </button>
       </div>
-      {/* Its own row under the buttons: the section is a space-between flex
-          row, and a third item between the text and the actions squeezed
-          both. */}
       <label className="switch-row update-auto-check">
         <input
           type="checkbox"

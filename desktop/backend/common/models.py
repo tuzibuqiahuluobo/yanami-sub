@@ -288,6 +288,7 @@ class ResourceInstallSnapshot(DesktopModel):
     # The full transcript on disk; `logs` above is only its tail.
     log_path: str = ""
     error: str = ""
+    manual_download: dict[str, str] | None = None
     started_at: float
     updated_at: float
 

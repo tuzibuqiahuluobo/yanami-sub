@@ -455,6 +455,13 @@ export const zh = {
       installPath: "安装位置",
       openCacheDir: "打开缓存目录",
       openInstallDir: "打开安装目录",
+      showFailureLog: "查看错误日志",
+    },
+    manualDownload: {
+      title: "手动下载失败的依赖",
+      instructions: "从原始发布地址下载下列文件，保留文件名，放入下方缓存目录。然后点击“继续下载”，应用会先校验 SHA-256，再安装本地文件。",
+      placeIn: "放入目录：",
+      openSource: "下载此依赖",
     },
     modelNote: {
       title: "模型如何管理？",

@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Check,
   Download,
+  ExternalLink,
   FolderOpen,
   Globe2,
   HardDrive,
@@ -66,6 +67,7 @@ interface ResourceManagerProps {
     resourceId: string,
     kind: "cache" | "install",
   ) => void;
+  onOpenDependencyDownload: (filename: string) => Promise<unknown>;
   onOpenLogs: () => void;
   onRunDiagnostics: () => Promise<DiagnosticsReport>;
   onCheckPythonInterpreter: () => Promise<PythonInterpreterChoice>;
@@ -89,6 +91,7 @@ export function ResourceManager({
   onGetDownloadRoute,
   onSetDownloadRoute,
   onOpenLocation,
+  onOpenDependencyDownload,
   onOpenLogs,
   onRunDiagnostics,
   onCheckPythonInterpreter,
@@ -119,6 +122,7 @@ export function ResourceManager({
     useState<DownloadRouteState | null>(null);
   const [downloadRouteBusy, setDownloadRouteBusy] = useState(false);
   const [downloadRouteError, setDownloadRouteError] = useState("");
+  const [manualDownloadError, setManualDownloadError] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -835,10 +839,43 @@ export function ResourceManager({
                     {install.error ? (
                       <p className="resource-error">{install.error}</p>
                     ) : null}
-                    {install.logs.length ? (
+                    {install.logs.length ? failed ? (
+                      <details className="resource-log-details">
+                        <summary>{t.resources.paths.showFailureLog}</summary>
+                        <pre className="resource-install-log">
+                          {install.logs.join("\n")}
+                        </pre>
+                      </details>
+                    ) : (
                       <pre className="resource-install-log">
                         {install.logs.slice(-3).join("\n")}
                       </pre>
+                    ) : null}
+                    {failed && install.manual_download ? (
+                      <div className="resource-manual-download">
+                        <strong>{t.resources.manualDownload.title}</strong>
+                        <p>{t.resources.manualDownload.instructions}</p>
+                        <code>{install.manual_download.filename}</code>
+                        <code>{install.manual_download.url}</code>
+                        <p>{t.resources.manualDownload.placeIn} <code>{install.manual_download.directory}</code></p>
+                        <div className="resource-manual-actions">
+                          <button
+                            type="button"
+                            className="button button-secondary button-compact"
+                            onClick={() => {
+                              setManualDownloadError("");
+                              void onOpenDependencyDownload(install.manual_download!.filename)
+                                .catch((error) => setManualDownloadError(
+                                  error instanceof Error ? error.message : String(error),
+                                ));
+                            }}
+                          >
+                            <ExternalLink size={14} /> {t.resources.manualDownload.openSource}
+                          </button>
+                        </div>
+                        {manualDownloadError ? <p className="resource-error" role="alert">{manualDownloadError}</p> : null}
+                        <small>SHA-256: {install.manual_download.sha256}</small>
+                      </div>
                     ) : null}
                     <div className="resource-paths">
                       <span title={install.cache_path}>
@@ -851,14 +888,14 @@ export function ResourceManager({
                     <div className="resource-location-actions">
                       <button
                         type="button"
-                        className="text-button"
+                        className="button button-secondary button-compact"
                         onClick={() => onOpenLocation(resource.id, "cache")}
                       >
                         <FolderOpen size={13} /> {t.resources.paths.openCacheDir}
                       </button>
                       <button
                         type="button"
-                        className="text-button"
+                        className="button button-secondary button-compact"
                         onClick={() => onOpenLocation(resource.id, "install")}
                       >
                         <FolderOpen size={13} /> {t.resources.paths.openInstallDir}

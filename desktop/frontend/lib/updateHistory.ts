@@ -17,6 +17,20 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post2",
+    title: { zh: "RC6.2 · 下载线路切换", en: "RC6.2 · Download route selection" },
+    notes: {
+      zh: [
+        "资源页可查看并切换自动、国内镜像与官方源下载线路。",
+        "重新选择自动时立即探测网络，失败后可切换线路重试。",
+      ],
+      en: [
+        "Added visible automatic, mainland-mirror, and official-source download routes.",
+        "Re-probed the network when reselecting automatic and allowed route switching after failures.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post1",
     title: { zh: "RC6.1 · 更新恢复与模型可用性", en: "RC6.1 · Update recovery and model availability" },
     notes: {

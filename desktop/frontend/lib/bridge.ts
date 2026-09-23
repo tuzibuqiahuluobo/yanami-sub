@@ -797,6 +797,11 @@ function previewApi(): DesktopApi {
     async openUpdatePage() {
       return { url: "https://github.com/tuzibuqiahuluobo/yanami-sub/releases" };
     },
+    async openResourceDependencyDownload(filename) {
+      const url = `https://github.com/caca2331/finesub/releases/download/ct2-4.8.1%2Bfinesub0.4.0/${encodeURIComponent(filename)}`;
+      window.open(url, "_blank", "noopener,noreferrer");
+      return { url };
+    },
     async openExternalUrl(url) {
       if (typeof window !== "undefined") {
         window.open(url, "_blank", "noopener,noreferrer");
@@ -937,6 +942,8 @@ function nativeApi(): DesktopApi {
       call<ResourceInstallSnapshot>("pause_resource_install", resourceId),
     openResourceLocation: (resourceId, kind) =>
       call<{ path: string }>("open_resource_location", resourceId, kind),
+    openResourceDependencyDownload: (filename) =>
+      call<{ url: string }>("open_resource_dependency_download", filename),
     openInstallLogs: () => call<{ path: string }>("open_install_logs"),
     rescanGpus: () => call("rescan_gpus"),
     getPythonInterpreter: () =>
