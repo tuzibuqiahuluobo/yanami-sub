@@ -80,9 +80,19 @@ def _targets(source: str, *, free_only: bool) -> tuple[str, ...]:
                 selected.append(native)
         return tuple(selected)
 
+    # Only models FineSub itself binds to correction belong in the task-wide
+    # override. Its catalog also contains search-only targets (notably Gemma),
+    # whose small windows make correction preflight reject the entire task.
+    correction_targets = {
+        target_id
+        for group_name in ("correction-capable", "correction-basic")
+        for target_id in routes.model_groups[group_name].target_ids
+    }
     selected: list[str] = []
     for target in routes.targets.values():
-        if target.backend in {"local_agent", "conversational_agent"}:
+        if target.id not in correction_targets or target.backend in {
+            "local_agent", "conversational_agent"
+        }:
             continue
         fact = routes.target_fact(target.id)
         if free_only and fact.provider_tier != "GEMINI_FREE":

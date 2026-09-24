@@ -22,12 +22,14 @@ export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
     notes: {
       zh: [
         "新建任务和批处理可选 API、Agent 或自动来源；本地 Agent 按顺序尝试，失败原因写入日志。",
+        "RC6.10 补丁修正自动/API 模型组：搜索专用模型不再阻止纠错翻译启动；已安装旧版 RC6.10 需手动覆盖。",
         "所有 Agent 均不可用时保留原始字幕并标记纠错翻译已跳过；字幕已生成后知识库更新失败不再丢失成品。",
         "任务日志可完整导出并打开保存位置；处理中切换页面可看到右下角进度提示，改善中英文日志显示。",
         "精简 Hugging Face 模型下载警告，保留真实下载错误和可选的鉴权提示。",
       ],
       en: [
         "Choose API, Agent, or automatic routing for tasks and batches; local Agents are tried in order with failures logged.",
+        "RC6.10 patch: exclude search-only models from correction routing; existing RC6.10 installs need a manual overwrite.",
         "Keep raw subtitles and mark correction skipped if every Agent is unavailable; a later knowledge-update failure no longer discards generated subtitles.",
         "Export the complete task log and open its location; see background task progress and improved multilingual logs.",
         "Clarified Hugging Face download warnings while preserving real errors and optional authentication guidance.",
