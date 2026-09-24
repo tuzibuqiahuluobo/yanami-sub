@@ -1282,6 +1282,34 @@ def _settle(manager, deadline_seconds: float = 2.0) -> None:
         time.sleep(0.01)
 
 
+def test_export_task_log_copies_complete_disk_file(tmp_path) -> None:
+    manager = _completed_manager(tmp_path)
+    task = manager.start(TaskRequest(input=str(tmp_path / "a.wav")))
+    _settle(manager)
+    destination = tmp_path / "export.txt"
+
+    assert manager.export_task_log(task.task_id, destination) == destination.resolve()
+    assert destination.read_text("utf-8") == "working\n"
+    with pytest.raises((ValueError, JobNotFound)):
+        manager.export_task_log("../other", destination)
+
+
+def test_running_task_log_export_prefers_live_part_over_previous_attempt(
+    tmp_path,
+) -> None:
+    manager = _completed_manager(tmp_path)
+    task = manager.start(TaskRequest(input=str(tmp_path / "a.wav")))
+    _settle(manager)
+    folder = manager.task_directory(task.task_id)
+    (folder / "task-log.txt.part").write_text("current attempt\n", encoding="utf-8")
+    manager._snapshot.state = "running"
+    destination = tmp_path / "export.txt"
+
+    manager.export_task_log(task.task_id, destination)
+
+    assert destination.read_text("utf-8") == "current attempt\n"
+
+
 def test_retry_keeps_the_task_id_so_outputs_and_log_stay_together(tmp_path) -> None:
     """A new id used to be paired with the old, already-resolved output path.
 

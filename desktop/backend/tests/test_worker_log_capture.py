@@ -70,6 +70,14 @@ def test_a_line_split_across_writes_is_emitted_once() -> None:
     assert emitted == ["half a line"]
 
 
+def test_mixed_language_log_chunks_keep_every_character() -> None:
+    writer, emitted = _writer()
+    writer.write("语音识别 / Speech ")
+    writer.write("recognition / 日本語 / café / ✅\n")
+
+    assert emitted == ["语音识别 / Speech recognition / 日本語 / café / ✅"]
+
+
 def test_flush_emits_a_pending_line_without_a_newline() -> None:
     writer, emitted = _writer()
     writer.write("no newline here")

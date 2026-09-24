@@ -6,6 +6,7 @@ import {
   FileText,
   FolderOpen,
   RotateCcw,
+  X,
 } from "lucide-react";
 
 import { fileName } from "@/lib/formatters";
@@ -33,6 +34,10 @@ export function CompletedView({
   const outputLabels: Record<string, string> = t.completed.labels;
   const outputs = taskOutputEntries(task.outputs);
   const preferred = preferredTaskOutput(task.outputs);
+  const rawFallback = ["translated-srt", "final-srt"].includes(task.request.stage)
+    && Boolean(task.outputs.rawSrt)
+    && !task.outputs.translatedSrt
+    && !task.outputs.finalSrt;
 
   return (
     <div className="page completed-page">
@@ -42,21 +47,21 @@ export function CompletedView({
           <h1>{t.completed.readyTitle}</h1>
           <p>{task.selectedFile}</p>
         </div>
-        <span className="completion-badge">
-          <Check size={14} />
-          {t.completed.done}
+        <span className={`completion-badge${rawFallback ? " is-partial" : ""}`}>
+          {rawFallback ? <X size={14} /> : <Check size={14} />}
+          {rawFallback ? t.completed.rawFallbackBadge : t.completed.done}
         </span>
       </header>
 
       <section className="completed-card">
         <div className="completed-summary">
-          <div className="success-mark">
-            <Check size={24} strokeWidth={2} />
+          <div className={`success-mark${rawFallback ? " is-partial" : ""}`}>
+            {rawFallback ? <X size={24} strokeWidth={2} /> : <Check size={24} strokeWidth={2} />}
           </div>
           <div>
             <p>{t.completed.summary}</p>
             <h2>{preferred ? fileName(preferred) : t.completed.fallbackName}</h2>
-            <span>{t.completed.description}</span>
+            <span>{rawFallback ? t.completed.rawFallback : t.completed.description}</span>
           </div>
         </div>
 

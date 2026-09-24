@@ -124,6 +124,13 @@ def run_model_prefetch(
             counter, _, message = remainder.partition(" ")
             stage("downloading", f"{message}（{counter}）")
             return
+        if "You are sending unauthenticated requests to the HF Hub" in line:
+            if log is not None:
+                log(
+                    "Hugging Face 公开模型可匿名下载；若实际遇到 429 限流，"
+                    "可设置免费的 HF_TOKEN 后重启应用。"
+                )
+            return
         if log is not None:
             log(line)
         # Only the tail is worth keeping: a failure message is printed last,

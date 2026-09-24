@@ -5,20 +5,20 @@ import {
   ChevronDown,
   Circle,
   Download,
+  FolderOpen,
   CircleStop,
   LoaderCircle,
   RotateCcw,
+  X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import {
-  downloadText,
-  formatDuration,
-  summarizeTaskError,
-} from "@/lib/formatters";
+import { desktopApi } from "@/lib/bridge";
+import { formatDuration, summarizeTaskError } from "@/lib/formatters";
 import type { TaskState } from "@/lib/state";
 import type { PipelineStage } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
+import { useToast } from "./ToastProvider";
 
 
 const pipelineStages: PipelineStage[] = [
@@ -50,9 +50,17 @@ export function ProcessingView({
   onRetry,
 }: ProcessingViewProps) {
   const { t } = useLanguage();
+  const { showSuccess } = useToast();
   const [logsOpen, setLogsOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportedLogPath, setExportedLogPath] = useState("");
+  const [exportError, setExportError] = useState("");
   const [now, setNow] = useState(Date.now());
   const logDrawerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    setExportedLogPath("");
+    setExportError("");
+  }, [task.taskId]);
   useEffect(() => {
     if (task.phase !== "running") {
       return;
@@ -87,6 +95,30 @@ export function ProcessingView({
     : task.currentStage
       ? stageLabels[task.currentStage]
       : t.processing.starting;
+  const exportLog = async () => {
+    if (!task.taskId) return;
+    setExportBusy(true);
+    setExportError("");
+    try {
+      const result = await desktopApi.exportTaskLog(task.taskId);
+      if (!result.cancelled && result.path) {
+        setExportedLogPath(result.path);
+        showSuccess(t.processing.logExported, `task-log-exported-${task.taskId}`);
+      }
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : t.processing.logExportFailed);
+    } finally {
+      setExportBusy(false);
+    }
+  };
+  const openExportLocation = async () => {
+    try {
+      await desktopApi.openTaskLogExportLocation();
+      setExportError("");
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : t.processing.logLocationFailed);
+    }
+  };
 
   return (
     <div className="page processing-page">
@@ -145,13 +177,16 @@ export function ProcessingView({
             // A stage the run skipped because its output was already there.
             // The tick alone would claim it just did the work.
             const reused = task.reusedStages.includes(stage) && (done || active);
+            const skipped = task.skippedStages?.includes(stage) ?? false;
             return (
               <li
                 key={stage}
-                className={`${done ? "is-done" : ""}${active ? " is-active" : ""}${reused ? " is-reused" : ""}`}
+                className={`${done ? "is-done" : ""}${active ? " is-active" : ""}${reused ? " is-reused" : ""}${skipped ? " is-skipped" : ""}`}
               >
                 <span className="stage-symbol">
-                  {done || reused ? (
+                  {skipped ? (
+                    <X size={13} />
+                  ) : done || reused ? (
                     <Check size={13} />
                   ) : active ? (
                     <LoaderCircle size={13} className="spin" />
@@ -163,6 +198,7 @@ export function ProcessingView({
                 {reused ? (
                   <small className="stage-note">{t.processing.stageReused}</small>
                 ) : null}
+                {skipped ? <small className="stage-note">{t.processing.stageSkipped}</small> : null}
               </li>
             );
           })}
@@ -204,26 +240,22 @@ export function ProcessingView({
         {logsOpen ? (
           <>
             <div className="log-toolbar">
+              {exportedLogPath ? (
+                <button type="button" className="button button-secondary button-compact" onClick={() => void openExportLocation()}>
+                  <FolderOpen size={13} />{t.processing.openLogLocation}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="button button-secondary button-compact"
-                disabled={!task.logs.length}
-                onClick={() => {
-                  const stamp = new Date()
-                    .toISOString()
-                    .slice(0, 16)
-                    .replace(/[-:]/g, "")
-                    .replace("T", "-");
-                  downloadText(
-                    task.logs.join("\n"),
-                    `finesub-log-${stamp}.txt`,
-                  );
-                }}
+                disabled={!task.taskId || exportBusy}
+                onClick={() => void exportLog()}
               >
                 <Download size={13} />
                 {t.processing.exportLogs}
               </button>
             </div>
+            {exportError ? <p className="routing-error" role="alert">{exportError}</p> : null}
           <div
             ref={logDrawerRef}
             className="log-drawer"

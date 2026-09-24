@@ -11,7 +11,8 @@ import {
 } from "react";
 
 import { formatBytes, formatPercent } from "@/lib/formatters";
-import type { UpdateInstallSnapshot } from "@/lib/types";
+import type { TaskState } from "@/lib/state";
+import type { PipelineStage, Route, UpdateInstallSnapshot } from "@/lib/types";
 
 import { useLanguage } from "./LanguageProvider";
 
@@ -93,6 +94,34 @@ function SuccessToast({
 }
 
 
+function TaskProgressItem({ task }: { task: TaskState }) {
+  const { t } = useLanguage();
+  const stageLabels: Record<PipelineStage, string> = {
+    vocal: t.processing.stages.vocal,
+    aligned: t.processing.stages.aligned,
+    stable: t.processing.stages.stable,
+    "raw-srt": t.processing.stages.rawSrt,
+    "translated-srt": t.processing.stages.translatedSrt,
+    "final-srt": t.processing.stages.finalSrt,
+  };
+
+  return (
+    <div className="toast-item update-progress-toast" role="status" aria-live="polite">
+      <span className="update-progress-ring is-indeterminate" role="progressbar" aria-label={t.processing.runningTitle}>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle className="update-ring-track" cx="12" cy="12" r="9" />
+          <circle className="update-ring-value" cx="12" cy="12" r="9" pathLength="100" />
+        </svg>
+      </span>
+      <span className="update-progress-copy">
+        <strong>{t.processing.runningTitle}</strong>
+        <small>{(task.currentStage && stageLabels[task.currentStage]) || t.processing.starting}</small>
+      </span>
+    </div>
+  );
+}
+
+
 function UpdateProgressItem({ install }: { install: UpdateInstallSnapshot }) {
   const { t } = useLanguage();
   const ready = install.state === "ready";
@@ -148,7 +177,15 @@ function UpdateProgressItem({ install }: { install: UpdateInstallSnapshot }) {
 }
 
 
-export function ToastViewport({ updateInstall }: { updateInstall: UpdateInstallSnapshot | null }) {
+export function ToastViewport({
+  updateInstall,
+  task,
+  route,
+}: {
+  updateInstall: UpdateInstallSnapshot | null;
+  task: TaskState;
+  route: Route;
+}) {
   const context = useContext(ToastContext);
   const { t } = useLanguage();
   const [showCompletedUpdate, setShowCompletedUpdate] = useState(false);
@@ -176,8 +213,9 @@ export function ToastViewport({ updateInstall }: { updateInstall: UpdateInstallS
   const showUpdate =
     updateInstall !== null &&
     (activeUpdate || (updateInstall.state === "ready" && showCompletedUpdate));
+  const showTask = route !== "new-task" && task.phase === "running";
 
-  if (!context.toasts.length && !showUpdate) {
+  if (!context.toasts.length && !showUpdate && !showTask) {
     return null;
   }
 
@@ -192,6 +230,7 @@ export function ToastViewport({ updateInstall }: { updateInstall: UpdateInstallS
           />
         ))}
       </div>
+      {showTask ? <TaskProgressItem task={task} /> : null}
       {showUpdate ? <UpdateProgressItem install={updateInstall} /> : null}
     </aside>
   );

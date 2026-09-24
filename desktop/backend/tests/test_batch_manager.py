@@ -38,6 +38,27 @@ def test_batch_protocol_turns_non_protocol_output_into_a_log() -> None:
     assert event.payload["message"] == "a library banner"
 
 
+def test_batch_protocol_keeps_mixed_language_log_text() -> None:
+    event = BatchWorkerEvent.log("batch-1", "纠错翻译 Translation / café / 日本語 ✅")
+
+    received = parse_batch_event(
+        encode_batch_event(event).encode("utf-8").decode("utf-8"),
+        batch_id="batch-1",
+    )
+
+    assert received == event
+
+
+def test_batch_protocol_recovers_native_windows_tool_output(monkeypatch) -> None:
+    monkeypatch.setattr("locale.getencoding", lambda: "cp936")
+    native_line = "正在创建库 Build library / café\n"
+    received = parse_batch_event(
+        native_line.encode("cp936").decode("utf-8", errors="surrogateescape"),
+        batch_id="batch-1",
+    )
+    assert received.payload["message"] == native_line.rstrip("\n")
+
+
 def test_batch_manager_persists_core_worker_progress_and_owned_outputs(
     tmp_path: Path,
 ) -> None:
@@ -174,6 +195,7 @@ def test_batch_manifest_round_trip_is_core_compatible(
                     "input": str(tmp_path / "视频.mp4"),
                     "output": str(tmp_path / "old.srt"),
                     "model_name": "large-v3",
+                    "llm_source": "auto",
                     "gap_sec": 0.5,
                     "device": "cuda",
                     "gpu_index": 1,
@@ -204,7 +226,10 @@ def test_batch_manifest_round_trip_is_core_compatible(
     assert core_rows[0]["gap"] == 0.5
     assert "input" not in core_rows[0]
     assert "output" not in core_rows[0]
+    assert "llm_source" not in core_rows[0]
+    assert core_rows[0]["_desktop"]["llm_source"] == "auto"
     assert imported.items[0].input == request.items[0].input
+    assert imported.items[0].llm_source == "auto"
     assert imported.items[0].gpu_index == 1
     assert imported.items[0].gpu_name == "Test GPU"
     assert imported.items[0].cleanup_intermediate is True

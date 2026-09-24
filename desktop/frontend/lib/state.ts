@@ -34,6 +34,7 @@ export interface TaskState {
   currentStage: PipelineStage | null;
   /** Stages that were satisfied by an existing artifact instead of running. */
   reusedStages: PipelineStage[];
+  skippedStages?: PipelineStage[];
   statusMessage: string;
   logs: string[];
   outputs: Record<string, string>;
@@ -183,6 +184,7 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
   llm_correction_media: "",
   llm_planning_media: "",
   llm_retrieval: "local",
+  llm_source: "auto",
   llm_difficulty: "quality",
   llm_continuity: "serial",
   llm_parallel_windows: 1,
@@ -212,6 +214,7 @@ const emptyTask = (defaults: Partial<TaskRequest> = {}): TaskState => ({
   taskId: null,
   currentStage: null,
   reusedStages: [],
+  skippedStages: [],
   statusMessage: "",
   logs: [],
   outputs: {},
@@ -235,6 +238,7 @@ function restoreRunningTask(
   // already on disk. Worth keeping apart: on a rerun most of the list is this,
   // and showing it as freshly finished work is a lie about what just happened.
   const reusedStages: PipelineStage[] = [];
+  const skippedStages: PipelineStage[] = [];
   for (const event of snapshot.events ?? []) {
     if (event.type !== "stage") {
       continue;
@@ -243,6 +247,9 @@ function restoreRunningTask(
       currentStage = event.payload.stage as PipelineStage;
       if (event.payload.reused === true && !reusedStages.includes(currentStage)) {
         reusedStages.push(currentStage);
+      }
+      if (event.payload.skipped === true && !skippedStages.includes(currentStage)) {
+        skippedStages.push(currentStage);
       }
     }
     if (typeof event.payload.message === "string") {
@@ -261,6 +268,7 @@ function restoreRunningTask(
     taskId,
     currentStage,
     reusedStages,
+    skippedStages,
     statusMessage,
     logs,
     outputs: snapshot.outputs ?? {},
@@ -476,6 +484,7 @@ export function reduceAppState(
           error: null,
           logs: [],
           outputs: {},
+          skippedStages: [],
         },
       };
     }
@@ -632,6 +641,10 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
       payload.reused === true && stage && !state.task.reusedStages.includes(stage)
         ? [...state.task.reusedStages, stage]
         : state.task.reusedStages;
+    const skipped =
+      payload.skipped === true && stage && !(state.task.skippedStages ?? []).includes(stage)
+        ? [...(state.task.skippedStages ?? []), stage]
+        : state.task.skippedStages ?? [];
     return {
       ...state,
       task: {
@@ -639,6 +652,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
         phase: "running",
         currentStage: stage,
         reusedStages: reused,
+        skippedStages: skipped,
         statusMessage:
           typeof payload.message === "string"
             ? payload.message

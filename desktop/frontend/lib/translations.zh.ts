@@ -467,7 +467,7 @@ export const zh = {
     },
     modelNote: {
       title: "模型如何管理？",
-      description: "Whisper 等模型的权重（语音识别 large-v3-turbo 约 1.6 GB、人声分离 BS-RoFormer 约 0.6 GB、第二模型校验 Qwen3-ASR 约 1.5 GB）由 Yanami Sub 在首次用到时按需下载，统一写入 models 目录；更新应用时不会删除。用不到的阶段不会触发下载。",
+      description: "Whisper 等模型的权重（语音识别 large-v3-turbo 约 1.6 GB、人声分离 BS-RoFormer 约 0.6 GB、第二模型校验 Qwen3-ASR 约 1.5 GB）由 Yanami Sub 在首次用到时按需下载，统一写入 models 目录；更新应用时不会删除。公开模型可匿名下载；若实际遇到 429 限流，可将免费的 HF_TOKEN 设为 Windows 用户环境变量并重启应用。Windows 不支持符号链接时会自动使用普通文件缓存，模型仍可用，但不同版本可能多占磁盘空间；无需管理员权限。",
     },
     sourceNote: {
       title: "下载与镜像策略",
@@ -570,6 +570,12 @@ export const zh = {
       llmInactive: "当前输出为原始字幕，不含纠错翻译阶段。",
       llmEnable: "启用",
       llmRoute: "本任务使用的模型",
+      llmSource: "模型来源",
+      llmSourceAuto: "自动（免费 API 优先，否则本地 Agent）",
+      llmSourceApi: "API 密钥",
+      llmSourceAgent: "本地 Agent",
+      llmSourceManual: "手动选择模型路由",
+      llmSourceHint: "本地 Agent 按列表顺序尝试；全部不可用时保留原始字幕，并标记纠错翻译已跳过。",
       llmRouteAuto: "自动（跟随设置中的模型路由）",
       llmRouteAgent: "本地 Agent",
       llmRouteApi: "API 模型",
@@ -710,6 +716,10 @@ export const zh = {
     currentStage: "当前阶段",
     logs: "日志",
     exportLogs: "导出日志",
+    logExported: "日志已导出",
+    logExportFailed: "导出日志失败，请稍后重试。",
+    openLogLocation: "打开日志位置",
+    logLocationFailed: "无法打开日志位置。",
     failedTitle: "任务未完成",
     runningTitle: "正在生成字幕",
     elapsed: "已用时间",
@@ -720,6 +730,7 @@ export const zh = {
     logAria: "任务运行日志",
     waitingLogs: "等待 worker 输出日志…",
     stageReused: "已有结果",
+    stageSkipped: "已跳过",
     stages: {
       vocal: "人声分离",
       aligned: "语音识别",
@@ -740,6 +751,8 @@ export const zh = {
     summary: "Yanami Sub 已完成本次任务",
     fallbackName: "字幕输出",
     description: "字幕已保存在原媒体所在目录，可以继续编辑或导入剪辑软件。",
+    rawFallback: "所有本地 Agent 未能完成纠错翻译；已保留原始字幕。原始字幕不等于纠错/翻译结果。",
+    rawFallbackBadge: "仅原始字幕",
     openDirectory: "打开输出目录",
     labels: {
       rawSrt: "原始字幕",
@@ -763,6 +776,7 @@ export const zh = {
   },
   // 历史记录页面
   batch: {
+    correctionSkipped: "仅原始字幕",
     title: "批处理队列",
     description: "让核心调度器并行安排下载、语音识别和大模型处理；单项失败不会拖垮整批。",
     sourcesTitle: "输入队列",

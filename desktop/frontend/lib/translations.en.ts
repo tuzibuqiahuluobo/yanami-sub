@@ -469,7 +469,7 @@ export const en: Translations = {
     },
     modelNote: {
       title: "How are models managed?",
-      description: "Model weights -- speech recognition large-v3-turbo ~1.6 GB, BS-RoFormer vocal separation ~0.6 GB, Qwen3-ASR second-model verification ~1.5 GB -- are downloaded by Yanami Sub the first time each is needed and saved to the models directory. They survive app updates, and a stage you never run never fetches its model.",
+      description: "Model weights -- speech recognition large-v3-turbo ~1.6 GB, BS-RoFormer vocal separation ~0.6 GB, Qwen3-ASR second-model verification ~1.5 GB -- are downloaded on first use and kept in the models directory across app updates. Public models can be downloaded anonymously. If HTTP 429 rate limiting actually occurs, set an optional free HF_TOKEN as a Windows user environment variable and restart the app. On Windows without symlink support, regular-file caching still works but multiple revisions may use more disk space; administrator access is not required.",
     },
     sourceNote: {
       title: "Download and mirror strategy",
@@ -572,6 +572,12 @@ export const en: Translations = {
       llmInactive: "Raw subtitles are selected, so this task skips the correction & translation stage.",
       llmEnable: "Enable",
       llmRoute: "Model for this task",
+      llmSource: "Model source",
+      llmSourceAuto: "Automatic (free API, otherwise local Agent)",
+      llmSourceApi: "API key",
+      llmSourceAgent: "Local Agent",
+      llmSourceManual: "Choose a model route manually",
+      llmSourceHint: "Local Agents are tried in list order. If none work, raw subtitles remain and correction is marked skipped.",
       llmRouteAuto: "Automatic (follow the model route in Settings)",
       llmRouteAgent: "Local Agent",
       llmRouteApi: "API model",
@@ -713,6 +719,10 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     currentStage: "Current Stage",
     logs: "Logs",
     exportLogs: "Export logs",
+    logExported: "Log exported",
+    logExportFailed: "Could not export the log. Please try again.",
+    openLogLocation: "Open log location",
+    logLocationFailed: "Could not open the log location.",
     failedTitle: "Task Incomplete",
     runningTitle: "Generating Subtitles",
     elapsed: "Elapsed",
@@ -723,6 +733,7 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     logAria: "Task runtime log",
     waitingLogs: "Waiting for worker output…",
     stageReused: "already done",
+    stageSkipped: "skipped",
     stages: {
       vocal: "Voice Separation",
       aligned: "Speech Recognition",
@@ -743,6 +754,8 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
     summary: "Yanami Sub completed this task",
     fallbackName: "Subtitle Output",
     description: "The subtitle is saved beside the original media and ready for editing or import.",
+    rawFallback: "No local Agent completed correction and translation. Raw subtitles were preserved; they are not a translated result.",
+    rawFallbackBadge: "Raw subtitles only",
     openDirectory: "Open Output Directory",
     labels: {
       rawSrt: "Raw Subtitles",
@@ -766,6 +779,7 @@ e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch
   },
   // History Page
   batch: {
+    correctionSkipped: "Raw subtitles only",
     title: "Batch Queue",
     description: "Let the core scheduler overlap downloads, speech recognition, and LLM work. One failed item never stops the rest.",
     sourcesTitle: "Input Queue",

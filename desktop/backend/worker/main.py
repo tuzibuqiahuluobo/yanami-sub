@@ -31,6 +31,7 @@ from finesub_bootstrap.locks import (
 
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
+from desktop.backend.worker.model_source import source_route
 from desktop.backend.worker.protocol import EventLogWriter, WorkerEvent, encode_event
 
 
@@ -271,6 +272,225 @@ def _routing_override(values: list[str]):
         install_runtime_preferred(previous)
 
 
+def _execute_pipeline(
+    request: TaskRequest,
+    *,
+    stage: str,
+    task_id: str,
+    pipeline: PipelineCallable,
+    knowledge: str | None = None,
+) -> Any:
+    return pipeline(
+        request.input,
+        output_path=_resolve_output_path(request),
+        stage=stage,
+        model_name=request.model_name,
+        device=request.device,
+        language=request.language,
+        gpu_tier=request.gpu_tier,
+        gap_sec=request.gap_sec,
+        separator_sample_rate=request.separator_sample_rate,
+        separate=request.separate,
+        vad_silero_assist=request.vad_silero_assist,
+        qwen_verify=request.qwen_verify,
+        lang_redecode=request.lang_redecode,
+        asr_decode_batch=request.asr_decode_batch,
+        asr_context=request.asr_context,
+        word=request.word,
+        asr_stabilize_profile=request.asr_stabilize_profile,
+        split_length_scale=request.split_length_scale,
+        llm_media=request.llm_media,
+        llm_correction_media=request.llm_correction_media,
+        llm_planning_media=request.llm_planning_media,
+        llm_retrieval=request.llm_retrieval,
+        llm_difficulty=request.llm_difficulty,
+        llm_continuity=request.llm_continuity,
+        llm_parallel_windows=request.llm_parallel_windows,
+        llm_fast=request.llm_fast,
+        llm_output_scale=request.llm_output_scale,
+        llm_video=request.llm_video,
+        extra_info=request.extra_info,
+        extra_style=request.extra_style,
+        task_summary=request.task_summary,
+        style=request.style,
+        style_mode=request.style_mode,
+        download_video_source=request.download_video_source,
+        knowledge=request.knowledge if knowledge is None else knowledge,
+        refined_srt=request.refined_srt,
+        task_id=task_id,
+        postprocess_profile=request.postprocess_profile,
+        max_retries_per_window=request.max_retries_per_window,
+        max_replacements_per_window=request.max_replacements_per_window,
+        resume=request.resume,
+    )
+
+
+def _expected_subtitles(request: TaskRequest) -> tuple[Path, Path] | None:
+    # The desktop and batch managers resolve an explicit output before
+    # launching the worker. Without it, a URL can resolve to a different video
+    # id; guessing an output path could mislabel a completed correction.
+    output = _resolve_output_path(request)
+    if not output:
+        return None
+    final = Path(output).expanduser()
+    if not final.suffix:
+        final = final.with_suffix(".srt")
+    translated = final.with_name(f"{final.stem}-translated.srt")
+    return translated, final
+
+
+def _agent_correction_exhausted(request: TaskRequest, error: Exception) -> bool:
+    """Do not mistake a *later* knowledge failure for failed correction."""
+
+    outputs = _expected_subtitles(request)
+    if outputs is None:
+        return False
+    translated, final = outputs
+    if translated.is_file() or final.is_file():
+        return False
+    if type(error).__name__ == "CapabilityUnavailableError":
+        return True
+    decision = getattr(error, "_harness_route_decision", None)
+    if not isinstance(decision, dict):
+        return False
+    candidates = decision.get("candidates")
+    rows = [item for item in candidates if isinstance(item, dict)] if isinstance(candidates, list) else []
+    return bool(rows) and len(rows) == len(candidates) and all(
+        item.get("reason") not in {"fallback_not_allowed", "permanent_failure"}
+        and item.get("failure_kind") != "permanent"
+        and item.get("decision") != "pending"
+        and item.get("outcome") != "success"
+        for item in rows
+    )
+
+
+def _failed_post_correction_knowledge_update(request: TaskRequest, error: Exception) -> bool:
+    """Only recover a failed optional *post* update after subtitles exist."""
+
+    if request.knowledge != "update" or request.stage not in {"translated-srt", "final-srt"}:
+        return False
+    outputs = _expected_subtitles(request)
+    if outputs is None:
+        return False
+    translated, final = outputs
+    generated = final if request.stage == "final-srt" else translated
+    if not generated.is_file():
+        return False
+    tb = error.__traceback__
+    while tb is not None:
+        if tb.tb_frame.f_code.co_name == "_maybe_knowledge_update":
+            return True
+        tb = tb.tb_next
+    return False
+
+
+def _agent_error_detail(error: Exception) -> str:
+    """Expose a bounded CLI stderr clue without copying whole capsules to UI."""
+
+    attempts = getattr(error, "_harness_execution_attempts", None)
+    if not isinstance(attempts, list):
+        return ""
+    for attempt in reversed(attempts):
+        if isinstance(attempt, dict):
+            vendor_error = str(attempt.get("vendor_error") or "").strip()
+            if vendor_error:
+                return vendor_error[:400]
+        locator = attempt.get("evidence_locator") if isinstance(attempt, dict) else None
+        if not isinstance(locator, dict):
+            continue
+        try:
+            from finesub.llm.agent.agent_paths import resolve_evidence_locator
+
+            stderr = resolve_evidence_locator(locator) / "events" / "stderr.log"
+            if not stderr.is_file():
+                continue
+            with stderr.open("rb") as stream:
+                stream.seek(max(0, stderr.stat().st_size - 4096))
+                lines = stream.read().decode("utf-8", errors="replace").splitlines()
+            detail = next((line.strip() for line in reversed(lines) if line.strip()), "")
+            if detail:
+                return detail[:400]
+        except (OSError, ValueError):
+            continue
+    return ""
+
+
+def _agent_error_message(error: Exception) -> str:
+    message = str(error)
+    detail = _agent_error_detail(error)
+    return f"{message}；Agent 错误详情：{detail}" if detail else message
+
+
+def _route_artifact_log(request: TaskRequest) -> tuple[Path | None, int]:
+    outputs = _expected_subtitles(request)
+    if outputs is None:
+        return None, 0
+    final = outputs[1]
+    base = final.with_suffix("")
+    path = base.with_name(f"{base.name}.llm-artifacts") / "task-artifacts.jsonl"
+    try:
+        return path, path.stat().st_size
+    except OSError:
+        return path, 0
+
+
+def _agent_route_failures(
+    decision: object, attempts: object, log: Callable[[str], None], seen: set[str]
+) -> None:
+    if not isinstance(decision, dict):
+        return
+    candidates = decision.get("candidates")
+    if not isinstance(candidates, list):
+        return
+    attempt_rows = [row for row in attempts if isinstance(row, dict)] if isinstance(attempts, list) else []
+    for candidate in candidates:
+        if not isinstance(candidate, dict):
+            continue
+        failed = candidate.get("outcome") == "failed"
+        unavailable = candidate.get("decision") == "skipped" and candidate.get("reason") in {
+            "backend_unavailable", "provider_disabled", "capability_mismatch"
+        }
+        if not (failed or unavailable):
+            continue
+        target = str(candidate.get("target_id") or "").strip()
+        if not target:
+            continue
+        reason = str(candidate.get("failure_kind") or candidate.get("reason") or "unknown")
+        detail = next(
+            (str(row.get("vendor_error") or "").strip() for row in reversed(attempt_rows)
+             if row.get("target_id") == target and row.get("vendor_error")),
+            str(candidate.get("detail") or "").strip(),
+        )[:400]
+        message = f"本地 Agent {target} 未能使用（{reason}）"
+        if detail:
+            message += f"：{detail}"
+        if message not in seen and len(seen) < 24:
+            seen.add(message)
+            log(message)
+
+
+def _artifact_agent_route_failures(
+    path: Path | None, offset: int, log: Callable[[str], None], seen: set[str]
+) -> None:
+    if path is None:
+        return
+    try:
+        with path.open("rb") as stream:
+            stream.seek(offset if path.stat().st_size >= offset else 0)
+            for line in stream:
+                try:
+                    row = json.loads(line)
+                except ValueError:
+                    continue
+                payload = row.get("payload") if isinstance(row, dict) else None
+                if isinstance(payload, dict):
+                    _agent_route_failures(
+                        payload.get("route_decision"), payload.get("execution_attempts"), log, seen
+                    )
+    except OSError:
+        return
+
+
 def run_request(
     request: TaskRequest,
     *,
@@ -285,7 +505,8 @@ def run_request(
         # not a library's version banner or a progress bar flattened into a
         # file. Verbose detail still reaches the file, as debug events.
         with (
-            _routing_override(request.llm_model),
+            source_route(request) as route,
+            _routing_override(route.models),
             reporting_to(WorkerReporter(task_id, emit)),
             quieted_libraries("normal"),
         ):
@@ -294,50 +515,50 @@ def run_request(
             # with a default of "cuda" this could not tell a choice from a
             # default and would have rejected a bare `cpu` tier.
             check_tier_device_agreement(request.gpu_tier, request.device)
-            paths = pipeline(
-                request.input,
-                output_path=_resolve_output_path(request),
-                stage=request.stage,
-                model_name=request.model_name,
-                device=request.device,
-                language=request.language,
-                gpu_tier=request.gpu_tier,
-                gap_sec=request.gap_sec,
-                separator_sample_rate=request.separator_sample_rate,
-                separate=request.separate,
-                vad_silero_assist=request.vad_silero_assist,
-                qwen_verify=request.qwen_verify,
-                lang_redecode=request.lang_redecode,
-                asr_decode_batch=request.asr_decode_batch,
-                asr_context=request.asr_context,
-                word=request.word,
-                asr_stabilize_profile=request.asr_stabilize_profile,
-                split_length_scale=request.split_length_scale,
-                llm_media=request.llm_media,
-                llm_correction_media=request.llm_correction_media,
-                llm_planning_media=request.llm_planning_media,
-                llm_retrieval=request.llm_retrieval,
-                llm_difficulty=request.llm_difficulty,
-                llm_continuity=request.llm_continuity,
-                llm_parallel_windows=request.llm_parallel_windows,
-                llm_fast=request.llm_fast,
-                llm_output_scale=request.llm_output_scale,
-                llm_video=request.llm_video,
-                extra_info=request.extra_info,
-                extra_style=request.extra_style,
-                task_summary=request.task_summary,
-                style=request.style,
-                style_mode=request.style_mode,
-                download_video_source=request.download_video_source,
-                knowledge=request.knowledge,
-                refined_srt=request.refined_srt,
-                task_id=task_id,
-                postprocess_profile=request.postprocess_profile,
-                max_retries_per_window=request.max_retries_per_window,
-                max_replacements_per_window=request.max_replacements_per_window,
-                resume=request.resume,
-            )
-        outputs = _publish_output(paths, request, task_id=task_id)
+            if route.targets:
+                emit(WorkerEvent.log(task_id, f"模型来源：{route.source}；尝试顺序：{', '.join(route.targets)}"))
+            artifact_log, artifact_offset = _route_artifact_log(request)
+            logged_agent_failures: set[str] = set()
+            effective_stage = "raw-srt" if route.skip_reason else request.stage
+            skip_reason = route.skip_reason
+            try:
+                paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline)
+            except Exception as error:
+                if route.source == "agent":
+                    _agent_route_failures(
+                        getattr(error, "_harness_route_decision", None),
+                        getattr(error, "_harness_execution_attempts", None),
+                        lambda message: emit(WorkerEvent.log(task_id, message)),
+                        logged_agent_failures,
+                    )
+                if _failed_post_correction_knowledge_update(request, error):
+                    emit(WorkerEvent.log(
+                        task_id,
+                        "字幕已生成，但后置知识库更新失败；保留字幕并跳过本次知识库更新："
+                        + _agent_error_message(error),
+                    ))
+                    paths = _execute_pipeline(
+                        request, stage=effective_stage, task_id=task_id,
+                        pipeline=pipeline, knowledge="none",
+                    )
+                elif route.source == "agent" and _agent_correction_exhausted(request, error):
+                    skip_reason = f"所有本地 Agent 均未完成纠错翻译：{_agent_error_message(error)}"
+                    emit(WorkerEvent.log(task_id, skip_reason))
+                    effective_stage = "raw-srt"
+                    paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline)
+                else:
+                    raise
+            if route.source == "agent":
+                _artifact_agent_route_failures(
+                    artifact_log, artifact_offset,
+                    lambda message: emit(WorkerEvent.log(task_id, message)),
+                    logged_agent_failures,
+                )
+            effective_request = request.model_copy(update={"stage": effective_stage})
+            outputs = _publish_output(paths, effective_request, task_id=task_id)
+            if skip_reason:
+                emit(WorkerEvent.log(task_id, skip_reason))
+                emit(WorkerEvent.progress(task_id, stage="translated-srt", message=skip_reason, skipped=True))
         if request.cleanup_intermediate and outputs:
             # `outputs` is empty for the stages that produce no subtitle
             # (`vocal`/`aligned`/`stable`), and with nothing to preserve the
@@ -351,7 +572,7 @@ def run_request(
                 preserve=outputs.values(),
             )
     except Exception as error:
-        emit(WorkerEvent.failed(task_id, str(error)))
+        emit(WorkerEvent.failed(task_id, _agent_error_message(error)))
         raise
     emit(WorkerEvent.completed(task_id, outputs))
     return outputs

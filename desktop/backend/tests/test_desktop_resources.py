@@ -386,8 +386,9 @@ def test_a_task_waits_only_for_its_required_managed_tools(tmp_path: Path) -> Non
 
 
 def test_worker_context_uses_active_ffmpeg_and_user_settings(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch
 ) -> None:
+    monkeypatch.delenv("HF_HUB_DISABLE_SYMLINKS_WARNING", raising=False)
     bootstrap = FakeBootstrap(tmp_path)
     runtime = FakeRuntime(tmp_path)
     service = DesktopResourceService(
@@ -400,6 +401,66 @@ def test_worker_context_uses_active_ffmpeg_and_user_settings(
 
     assert context.environment["GEMINI_FREE"] == "user-key"
     assert context.environment["FFMPEG_BIN"] == str(tmp_path / "ffmpeg" / "bin")
+    assert context.environment["HF_HUB_DISABLE_SYMLINKS_WARNING"] == "1"
+    assert "HF_HUB_DISABLE_SYMLINKS" not in context.environment
+
+
+def test_worker_context_respects_explicit_hub_warning_preference(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HF_HUB_DISABLE_SYMLINKS_WARNING", "0")
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+    )
+
+    assert service.worker_context({}).environment[
+        "HF_HUB_DISABLE_SYMLINKS_WARNING"
+    ] == "0"
+
+
+def test_worker_context_keeps_mixed_language_pipes_utf8(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("PYTHONIOENCODING", "cp1252")
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(tmp_path),
+        runtime=FakeRuntime(tmp_path),
+        system_tool_finders={},
+    )
+    environment = {
+        **os.environ,
+        **service.worker_context({"PYTHONIOENCODING": "cp936"}).environment,
+    }
+    messages = [
+        "下载 Download café",
+        "人声分离 Vocal 日本語",
+        "语音识别 Speech recognition",
+        "字幕稳定化 Stabilization",
+        "原始字幕 Raw subtitles",
+        "纠错翻译 Correction & translation",
+        "最终字幕 Final subtitles ✅",
+    ]
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json, sys\n"
+            "payload = json.loads(sys.stdin.readline())\n"
+            "sys.stdout.write(json.dumps(payload, ensure_ascii=False) + '\\n')\n",
+        ],
+        input=json.dumps(messages, ensure_ascii=False) + "\n",
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=environment,
+        check=True,
+        timeout=10,
+    )
+
+    assert environment["PYTHONIOENCODING"] == "utf-8"
+    assert json.loads(completed.stdout) == messages
 
 
 def test_worker_context_pins_the_knowledge_base_to_user_data(

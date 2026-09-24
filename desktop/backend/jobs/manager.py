@@ -6,6 +6,7 @@ from contextlib import ExitStack, contextmanager
 import logging
 import math
 from pathlib import Path
+import shutil
 import subprocess
 import threading
 import time
@@ -754,6 +755,31 @@ class JobManager:
                 target = self._task_directory(task_id)
                 opener(target)
                 return target
+
+    def export_task_log(self, task_id: str, destination: Path) -> Path:
+        """Copy the complete disk log, including file-only diagnostic events."""
+
+        with self._lock:
+            with self._holding_refreshed_task_paths():
+                validate_task_id(task_id)
+                snapshot = self._require_history(task_id)
+                if self.output_root is None:
+                    raise ValueError("此版本没有可导出的任务日志。")
+                root = Path(self.output_root).resolve()
+                folder = root / task_id
+                names = (
+                    ("task-log.txt.part", "task-log.txt")
+                    if snapshot.state == "running"
+                    else ("task-log.txt", "task-log.txt.part")
+                )
+                for name in names:
+                    source = (folder / name).resolve()
+                    if source.is_relative_to(root) and source.is_file():
+                        target = destination.expanduser().resolve()
+                        if source != target:
+                            shutil.copyfile(source, target)
+                        return target
+                raise ValueError("该任务尚未写出日志，请稍后重试。")
 
     def open_owned_output(
         self, output_path: str, opener: Callable[[Path], None]

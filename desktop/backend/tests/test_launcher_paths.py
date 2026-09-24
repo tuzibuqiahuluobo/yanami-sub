@@ -201,6 +201,8 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "select_batch_files",
         "import_batch_manifest",
         "export_batch_manifest",
+        "export_task_log",
+        "open_task_log_export_location",
         "start_task",
         "cancel_task",
         "retry_task",

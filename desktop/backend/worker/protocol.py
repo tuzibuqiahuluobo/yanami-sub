@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+import locale
 from typing import Any, Literal, TextIO
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -51,6 +52,7 @@ class WorkerEvent(BaseModel):
         stage: str,
         message: str,
         reused: bool = False,
+        skipped: bool = False,
     ) -> "WorkerEvent":
         """Report the stage the run has entered.
 
@@ -59,10 +61,13 @@ class WorkerEvent(BaseModel):
         that a rerun does not claim to have redone work it skipped.
         """
 
+        payload = {"stage": stage, "message": message, "reused": reused}
+        if skipped:
+            payload["skipped"] = True
         return cls(
             type="stage",
             task_id=task_id,
-            payload={"stage": stage, "message": message, "reused": reused},
+            payload=payload,
         )
 
     @classmethod
@@ -130,8 +135,24 @@ def decode_event(line: str) -> WorkerEvent:
     )
 
 
+def decode_worker_stream_text(line: str) -> str:
+    """Recover native-tool output while leaving UTF-8 worker events intact.
+
+    The parent reads the pipe as UTF-8 with ``surrogateescape``. Python event
+    lines decode normally; a Windows compiler may instead emit ANSI-codepage
+    bytes, which must be recovered before they enter a UTF-8 task log or JSON.
+    ``locale.getencoding`` ignores Python's UTF-8 mode and returns that native
+    codepage on Windows.
+    """
+
+    if not any("\udc80" <= char <= "\udcff" for char in line):
+        return line
+    raw = line.encode("utf-8", errors="surrogateescape")
+    return raw.decode(locale.getencoding(), errors="replace")
+
+
 def parse_worker_line(line: str, *, task_id: str) -> WorkerEvent:
-    stripped = line.rstrip("\r\n")
+    stripped = decode_worker_stream_text(line).rstrip("\r\n")
     try:
         event = decode_event(stripped)
     except (KeyError, TypeError, ValueError, json.JSONDecodeError):

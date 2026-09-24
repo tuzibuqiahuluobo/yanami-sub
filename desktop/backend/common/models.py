@@ -209,6 +209,7 @@ class TaskDefaults(BaseModel):
     llm_correction_media: Literal["", "text", "audio", "video"] | None = None
     llm_planning_media: Literal["", "text", "audio", "video"] | None = None
     llm_retrieval: Literal["none", "local", "native"] | None = None
+    llm_source: Literal["auto", "api", "agent", "manual"] | None = None
     llm_difficulty: LLMDifficulty | None = None
     llm_continuity: Literal["serial", "parallel"] | None = None
     llm_parallel_windows: int | None = Field(default=None, ge=1)
@@ -365,6 +366,8 @@ class TaskRequest(DesktopModel):
     llm_correction_media: Literal["", "text", "audio", "video"] = ""
     llm_planning_media: Literal["", "text", "audio", "video"] = ""
     llm_retrieval: Literal["none", "local", "native"] = "local"
+    # Old manifests keep their explicit route. The desktop form opts into auto.
+    llm_source: Literal["auto", "api", "agent", "manual"] = "manual"
     llm_difficulty: LLMDifficulty = "quality"
     llm_continuity: Literal["serial", "parallel"] = "serial"
     llm_parallel_windows: int = Field(default=1, ge=1)
@@ -567,6 +570,7 @@ class BatchRequest(DesktopModel):
         seen: set[str] = set()
         devices: set[tuple[str | None, int | None, str]] = set()
         model_routes: set[tuple[str, ...]] = set()
+        model_sources: set[str] = set()
         for item in self.items:
             source = item.input.casefold()
             if source in seen:
@@ -574,10 +578,13 @@ class BatchRequest(DesktopModel):
             seen.add(source)
             devices.add((item.device, item.gpu_index, item.gpu_name))
             model_routes.add(tuple(item.llm_model))
+            model_sources.add(item.llm_source)
         if len(devices) > 1:
             raise ValueError("all items in one batch must use the same processing device")
         if len(model_routes) > 1:
             raise ValueError("all items in one batch must use the same LLM model overrides")
+        if len(model_sources) > 1:
+            raise ValueError("all items in one batch must use the same model source")
         return self
 
 
@@ -590,6 +597,8 @@ class BatchItemSnapshot(DesktopModel):
     ] = "queued"
     stage: str = ""
     error: str = ""
+    correction_skipped: bool = False
+    skip_reason: str = ""
     outputs: dict[str, str] = Field(default_factory=dict)
 
 

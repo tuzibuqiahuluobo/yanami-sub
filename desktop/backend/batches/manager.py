@@ -52,6 +52,7 @@ _DESKTOP_ROW_FIELDS = {
     "gpu_index",
     "gpu_name",
     "llm_model",
+    "llm_source",
     "name",
 }
 _BATCH_OPTION_FIELDS = {"workers", "asr_queue_size", "retry_failed"}
@@ -392,7 +393,7 @@ class BatchManager:
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
-            errors="replace",
+            errors="surrogateescape",
             bufsize=1,
             env=environment,
             cwd=context.working_directory,

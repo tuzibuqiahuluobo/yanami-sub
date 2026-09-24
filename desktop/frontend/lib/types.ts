@@ -236,6 +236,7 @@ export interface TaskRequest {
   llm_correction_media: "" | "text" | "audio" | "video";
   llm_planning_media: "" | "text" | "audio" | "video";
   llm_retrieval: "none" | "local" | "native";
+  llm_source?: "auto" | "api" | "agent" | "manual";
   llm_difficulty: "quality" | "intermediate" | "efficiency";
   llm_continuity: "serial" | "parallel";
   llm_parallel_windows: number;
@@ -326,6 +327,8 @@ export interface BatchItemSnapshot {
   state: "queued" | "running" | "done" | "failed" | "skipped" | "dropped";
   stage: string;
   error: string;
+  correction_skipped?: boolean;
+  skip_reason?: string;
   outputs: Record<string, string>;
 }
 
@@ -634,6 +637,8 @@ export interface DesktopApi {
   selectBatchFiles(): Promise<{ paths: string[] }>;
   importBatchManifest(): Promise<BatchManifestImportResult>;
   exportBatchManifest(request: BatchRequest): Promise<BatchManifestExportResult>;
+  exportTaskLog(taskId: string): Promise<{ cancelled: boolean; path: string | null }>;
+  openTaskLogExportLocation(): Promise<{ path: string }>;
   startTask(request: Partial<TaskRequest> & { input: string }): Promise<JobSnapshot>;
   cancelTask(taskId: string): Promise<JobSnapshot>;
   retryTask(taskId: string): Promise<JobSnapshot>;

@@ -94,6 +94,21 @@ class SettingsStore:
     def validate_request(self, request) -> BridgeError | None:
         """Validate launch-time capabilities before the worker starts."""
 
+        if request.stage in {"translated-srt", "final-srt"} and request.llm_source != "manual":
+            # The per-task source group is resolved inside the isolated worker;
+            # the shared settings route is not the route this run will use.
+            # Agent mode may intentionally finish with raw subtitles when no
+            # CLI can answer, so it must not be rejected before ASR starts.
+            if request.llm_source == "api":
+                keys = self._read_keys()
+                if not (keys.get("GEMINI_FREE") or keys.get("GEMINI_PAID")):
+                    return BridgeError(
+                        code="api_key_required",
+                        message="请先填写 Gemini API 密钥，或选择自动/本地 Agent。",
+                        action="open_settings",
+                    )
+            return None
+
         stage_error = self.validate_stage(request.stage, request.llm_model)
         if stage_error is not None:
             return stage_error

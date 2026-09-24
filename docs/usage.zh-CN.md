@@ -1,20 +1,20 @@
 # Yanami Sub 中文使用说明
 
-本文面向 `v0.1.0-rc.6.post9`（RC6.9）。字幕处理由固定版本的
+本文面向 `v0.1.0-rc.6.post10`（RC6.10）。字幕处理由固定版本的
 [FineSub v0.5.1](https://github.com/caca2331/finesub/tree/v0.5.1) 提供。
 
 ## 安装与迁移
 
 1. 在 [Yanami Sub Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases)
-   下载 `Yanami-Sub-0.1.0-rc.6.post9-Setup.exe` 和对应的 `.sha256` 文件。
+   下载 `Yanami-Sub-0.1.0-rc.6.post10-Setup.exe` 和对应的 `.sha256` 文件。
 2. 在 PowerShell 中运行以下命令校验安装包：
 
    ```powershell
-   Get-FileHash .\Yanami-Sub-0.1.0-rc.6.post9-Setup.exe -Algorithm SHA256
+   Get-FileHash .\Yanami-Sub-0.1.0-rc.6.post10-Setup.exe -Algorithm SHA256
    ```
 
 3. 将输出与 `.sha256` 文件中的值比较，完全一致后再运行安装器。
-4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC6.9 会沿用原安装记录、
+4. 如果电脑上装有 FineSub Desktop，请先从托盘菜单退出旧程序。RC6.10 会沿用原安装记录、
    覆盖旧版并清理旧名称的可执行文件与快捷方式。
 
 Windows 可能显示 SmartScreen 提示。请只使用本仓库 Release 的安装包，
@@ -48,6 +48,12 @@ Yanami Sub 本身是轻量桌面壳。首次使用某项能力时，它会按需
 4. 选择源语言；不确定时可使用自动检测。
 5. 成品字幕建议填写背景信息，例如主播、节目、游戏和关键专名。
 6. 点击开始并在任务页查看阶段、用时和滚动日志。
+
+成品字幕可在任务设置中选“自动”“API”“本地 Agent”或手动模型路由。自动模式在已填写
+Gemini Free 密钥时优先使用免费 API，否则按设置所列顺序尝试已检测到的本地 Agent。
+可回退的 Agent 故障会继续尝试下一候选，原因写入完整任务日志；若全部不可用，只交付
+原始字幕，纠错翻译显示跳过，不会标作成品。任务页的“导出日志”会保存完整日志，成功后
+可直接打开日志位置。
 
 本地输入完成后，只会把可交付的 `.srt` 发布到源媒体旁。识别音频、对齐数据、运行元数据等
 内部文件保存在受管任务目录，不会散落到源目录。若同名字幕不是 Yanami Sub 创建的，程序会
@@ -118,9 +124,9 @@ Yanami Sub 或 FineSub CLI 实例。
 
 RC3 起使用新的 Yanami Sub 更新清单名称，旧版 FineSub Desktop 不会把它误识别为可自动安装的
 更新。因此从旧名称迁移必须手动运行 Yanami Sub 安装器。RC4 的完整更新器不会保留 Windows
-卸载器，所以 RC4 仍需要手动运行 RC6.9 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
-起每个桌面 Release 都会发布在线更新清单和签名。RC6.8 可在应用内检查 RC6.9 更新；
-若 RC6.6 在打开窗口前就报 WinError 448，则无法点击应用内更新，请直接运行 RC6.9 Setup
+卸载器，所以 RC4 仍需要手动运行 RC6.10 Setup 覆盖安装；RC5 起已修复该保护逻辑，RC5.2
+起每个桌面 Release 都会发布在线更新清单和签名。RC6.9 可在应用内检查 RC6.10 更新；
+若 RC6.6 在打开窗口前就报 WinError 448，则无法点击应用内更新，请直接运行 RC6.10 Setup
 覆盖安装，不必删除用户数据或 Claude Code。
 更早版本若因 GitHub 发布列表异常看不到新版本，也请使用安装器。
 

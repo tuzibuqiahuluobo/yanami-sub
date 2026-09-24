@@ -34,3 +34,22 @@ test("download progress is root-owned instead of an inline Settings bar", () => 
   assert.doesNotMatch(section, /onGetUpdateInstall/);
   assert.doesNotMatch(section, /update-progress-bar/);
 });
+
+
+test("subtitle progress follows the task across pages and reuses completion feedback", () => {
+  const page = readFileSync(
+    new URL("../app/page.tsx", import.meta.url),
+    "utf8",
+  );
+  const toast = readFileSync(
+    new URL("../components/ToastProvider.tsx", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(page, /<ToastViewport updateInstall=\{updateInstall\} task=\{state\.task\} route=\{state\.route\}/);
+  assert.match(toast, /route !== "new-task" && task\.phase === "running"/);
+  assert.match(toast, /<TaskProgressItem task=\{task\}/);
+  assert.match(toast, /t\.processing\.stages\.translatedSrt/);
+  assert.match(toast, /update-progress-ring is-indeterminate/);
+  assert.match(page, /showSuccess\(t\.toast\.taskCompleted/);
+});

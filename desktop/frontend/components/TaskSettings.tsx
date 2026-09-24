@@ -62,6 +62,7 @@ export function TaskSettings({
   const translationSelected = ["translated-srt", "final-srt"].includes(
     request.stage,
   );
+  const source = request.llm_source ?? "auto";
   const hasResearchOverride = request.llm_model.some((value) =>
     value.trimStart().startsWith("research="),
   );
@@ -95,7 +96,7 @@ export function TaskSettings({
   ];
   // Surfaced on the tab itself: the note explaining the missing key lives
   // inside the LLM panel, which the user may not have open.
-  const llmNeedsKey = translationSelected && !capabilities.translation;
+  const llmNeedsKey = translationSelected && source === "manual" && !capabilities.translation;
   const stageLabels: Record<TaskRequest["stage"], string> = {
     vocal: t.processing.stages.vocal,
     aligned: t.processing.stages.aligned,
@@ -138,6 +139,27 @@ export function TaskSettings({
             options={commonOutputOptions}
           />
         </div>
+        {translationSelected ? (
+          <div className="field field-wide">
+            <span>{t.newTask.settings.llmSource}</span>
+            <CustomSelect
+              value={source}
+              disabled={disabled}
+              ariaLabel={t.newTask.settings.llmSource}
+              onChange={(value) => onChange({
+                llm_source: value as TaskRequest["llm_source"],
+                llm_model: [],
+              })}
+              options={[
+                { value: "auto", label: t.newTask.settings.llmSourceAuto },
+                { value: "api", label: t.newTask.settings.llmSourceApi },
+                { value: "agent", label: t.newTask.settings.llmSourceAgent },
+                { value: "manual", label: t.newTask.settings.llmSourceManual },
+              ]}
+            />
+            <small className="field-help">{t.newTask.settings.llmSourceHint}</small>
+          </div>
+        ) : null}
       </div>
 
       <div className="task-tabs" role="tablist">
@@ -222,7 +244,7 @@ export function TaskSettings({
           {/* Values are kept, not cleared, while the stage leaves them unused:
               switching back to final-srt must find them where they were. */}
           <div className="field-grid">
-            <div className="field field-wide task-route-field">
+            {source === "manual" ? <div className="field field-wide task-route-field">
               <span>{t.newTask.settings.llmRoute}</span>
               <CustomSelect
                 value={selectedRoute}
@@ -247,7 +269,7 @@ export function TaskSettings({
                 options={routeOptions}
               />
               <small className="field-help">{t.newTask.settings.llmRouteHint}</small>
-            </div>
+            </div> : null}
             <label className="field field-wide">
               <span>{t.newTask.settings.extraInfo}</span>
               <textarea

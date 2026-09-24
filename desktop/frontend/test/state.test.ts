@@ -166,6 +166,26 @@ test("stages reported as reused are remembered as such", () => {
 });
 
 
+test("an unavailable Agent marks correction skipped rather than completed", () => {
+  const next = reduceAppState(initialState, {
+    type: "workerEvent",
+    event: {
+      type: "stage",
+      task_id: "task-1",
+      timestamp: "2026-09-24T00:00:00Z",
+      payload: {
+        stage: "translated-srt",
+        message: "所有本地 Agent 均未完成纠错翻译",
+        skipped: true,
+      },
+    },
+  });
+
+  assert.deepEqual(next.task.skippedStages, ["translated-srt"]);
+  assert.equal(next.task.reusedStages.includes("translated-srt"), false);
+});
+
+
 test("api_key_required keeps the task editable and opens settings", () => {
   const selected = reduceAppState(initialState, {
     type: "fileSelected",

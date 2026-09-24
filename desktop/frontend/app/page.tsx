@@ -359,7 +359,13 @@ function HomeContent() {
       return;
     }
     completedTaskToasts.current.add(state.task.taskId);
-    showSuccess(t.toast.taskCompleted, `task-completed-${state.task.taskId}`);
+    const rawFallback = ["translated-srt", "final-srt"].includes(state.task.request.stage)
+      && Boolean(state.task.outputs.rawSrt)
+      && !state.task.outputs.translatedSrt
+      && !state.task.outputs.finalSrt;
+    if (!rawFallback) {
+      showSuccess(t.toast.taskCompleted, `task-completed-${state.task.taskId}`);
+    }
   }, [showSuccess, state.task.phase, state.task.taskId, t.toast.taskCompleted]);
 
   const previousResourceStates = useRef<Map<string, string> | null>(null);
@@ -797,7 +803,7 @@ function HomeContent() {
           />
         </AppShell>
       )}
-      <ToastViewport updateInstall={updateInstall} />
+      <ToastViewport updateInstall={updateInstall} task={state.task} route={state.route} />
     </>
   );
 }

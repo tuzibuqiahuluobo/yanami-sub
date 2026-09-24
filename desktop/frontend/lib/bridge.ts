@@ -324,6 +324,12 @@ function previewApi(): DesktopApi {
         count: request.items.length,
       };
     },
+    async exportTaskLog() {
+      return { cancelled: false, path: "D:/Media/yanami-task-log.txt" };
+    },
+    async openTaskLogExportLocation() {
+      return { path: "D:/Media" };
+    },
     async startTask(request) {
       return {
         task_id: "preview-task",
@@ -844,6 +850,7 @@ const requestDefaults: Omit<TaskRequest, "input"> = {
   llm_correction_media: "",
   llm_planning_media: "",
   llm_retrieval: "local",
+  llm_source: "auto",
   llm_difficulty: "quality",
   llm_continuity: "serial",
   llm_parallel_windows: 1,
@@ -908,6 +915,8 @@ function nativeApi(): DesktopApi {
     selectBatchFiles: () => call<{ paths: string[] }>("select_batch_files"),
     importBatchManifest: () => call("import_batch_manifest"),
     exportBatchManifest: (request) => call("export_batch_manifest", request),
+    exportTaskLog: (taskId) => call("export_task_log", taskId),
+    openTaskLogExportLocation: () => call("open_task_log_export_location"),
     startTask: (request) => call<JobSnapshot>("start_task", request),
     cancelTask: (taskId) => call<JobSnapshot>("cancel_task", taskId),
     retryTask: (taskId) => call<JobSnapshot>("retry_task", taskId),

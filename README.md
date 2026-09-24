@@ -12,7 +12,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 ## 快速开始
 
 1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.1.0-rc.6.post9-Setup.exe`。
+   `Yanami-Sub-0.1.0-rc.6.post10-Setup.exe`。
 2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
 3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
 4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
@@ -24,9 +24,10 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 准备 Python 前会在后台检查本机可复用的 64 位 Python 3.12（最长约 12 秒），并明确提供
 “使用本机 Python”“指定解释器”或“下载私有 Python”三种选择。
 
-> `v0.1.0-rc.6.post9`（RC6.9）修复模型下载遇到拒绝连接的代理时无法换路重试的问题，
-> 并在自动选择的官方模型源连接失败后尝试内置国内镜像。现有 RC6.8 可在“应用更新”中升级；
-> RC6.6 若因 WinError 448 无法打开，请下载 RC6.9 安装器覆盖安装，无需卸载或清理数据。
+> `v0.1.0-rc.6.post10`（RC6.10）新增任务与批处理的 API / Agent 来源选择、顺序回退
+> 和失败日志；修复后置知识库更新失败导致已生成字幕被判为失败，并完善完整日志导出。
+> RC6.9 可在“应用更新”中升级；RC6.6 若因 WinError 448 无法打开，请下载 RC6.10
+> 安装器覆盖安装，无需卸载或清理数据。
 > 旧版 FineSub Desktop、RC4 及无法发现更新的旧版本也请使用安装器。
 > 每个桌面 Release 均同时提供在线更新清单和签名。请从本仓库 Release 下载并按页面
 > 提供的 SHA-256 校验。

@@ -21,7 +21,18 @@ from desktop.backend.common.models import (
     BatchRequest,
 )
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
-from desktop.backend.worker.main import _publish_output, _routing_override
+from desktop.backend.worker.main import (
+    _agent_correction_exhausted,
+    _agent_error_message,
+    _agent_route_failures,
+    _artifact_agent_route_failures,
+    _expected_subtitles,
+    _failed_post_correction_knowledge_update,
+    _publish_output,
+    _route_artifact_log,
+    _routing_override,
+)
+from desktop.backend.worker.model_source import source_route
 from desktop.backend.worker.protocol import EventLogWriter
 
 
@@ -38,6 +49,7 @@ def _item_options(
     options["source"] = options.pop("input")
     options.pop("cleanup_intermediate", None)
     options.pop("llm_model", None)
+    options.pop("llm_source", None)
     options["task_id"] = task_id
     options["_batch_workers"] = workers
     return options
@@ -100,18 +112,73 @@ def run_batch_request(
     batch_root.mkdir(parents=True, exist_ok=True)
     workers = request.workers.model_dump(mode="python")
     items = []
-    llm_model = request.items[0].llm_model
-    with _routing_override(llm_model):
+    route_item = next(
+        (item for item in request.items if item.stage in {"translated-srt", "final-srt"}),
+        request.items[0],
+    )
+    skip_reasons: dict[int, str] = {}
+    with source_route(route_item) as route, _routing_override(route.models):
+        if route.targets:
+            emit(BatchWorkerEvent.log(
+                batch_id, f"模型来源：{route.source}；尝试顺序：{', '.join(route.targets)}"
+            ))
         for index, row in enumerate(request.items):
             try:
-                items.append(
-                    build_item(
-                        _item_options(
-                            row, workers, task_id=f"{batch_id}-{index + 1}"
-                        ),
-                        claims=claims,
-                    )
+                effective_row = row
+                if route.skip_reason and row.stage in {"translated-srt", "final-srt"}:
+                    skip_reasons[index] = route.skip_reason
+                    effective_row = row.model_copy(update={"stage": "raw-srt"})
+                item = build_item(
+                    _item_options(
+                        effective_row, workers, task_id=f"{batch_id}-{index + 1}"
+                    ),
+                    claims=claims,
                 )
+                if route.source == "agent" and not route.skip_reason and "llm" in item.stages:
+                    original_llm = item.stages["llm"]
+
+                    def guarded_llm(payload, *, _call=original_llm, _row=row, _index=index):
+                        artifact_log, artifact_offset = _route_artifact_log(_row)
+                        logged_failures: set[str] = set()
+
+                        def log_failure(message: str) -> None:
+                            emit(BatchWorkerEvent.log(batch_id, f"项目 {_index + 1}：{message}"))
+
+                        try:
+                            return _call(payload)
+                        except Exception as error:
+                            _agent_route_failures(
+                                getattr(error, "_harness_route_decision", None),
+                                getattr(error, "_harness_execution_attempts", None),
+                                log_failure, logged_failures,
+                            )
+                            if _failed_post_correction_knowledge_update(_row, error):
+                                emit(BatchWorkerEvent.log(
+                                    batch_id,
+                                    f"项目 {_index + 1} 字幕已生成，后置知识库更新失败并已跳过："
+                                    f"{_agent_error_message(error)}",
+                                ))
+                                return payload
+                            outputs = _expected_subtitles(_row)
+                            if outputs and _agent_correction_exhausted(_row, error):
+                                final = outputs[1]
+                                raw = final.with_name(f"{final.stem}-raw.srt")
+                                if raw.is_file():
+                                    reason = (
+                                        f"项目 {_index + 1} 所有本地 Agent 均未完成纠错翻译；"
+                                        f"保留原始字幕：{_agent_error_message(error)}"
+                                    )
+                                    skip_reasons[_index] = reason
+                                    emit(BatchWorkerEvent.log(batch_id, reason))
+                                    return payload
+                            raise
+                        finally:
+                            _artifact_agent_route_failures(
+                                artifact_log, artifact_offset, log_failure, logged_failures
+                            )
+
+                    item.stages = {**item.stages, "llm": guarded_llm}
+                items.append(item)
             except BaseException as error:  # one malformed/disappeared item may fail alone
                 items.append(_failed_item(row.input, error))
 
@@ -136,6 +203,11 @@ def run_batch_request(
             if index in publish_errors:
                 state = "failed"
                 error = publish_errors[index]
+            correction_skipped = bool(
+                state == "done"
+                and skip_reasons.get(index)
+                and "rawSrt" in published.get(str(index), {})
+            )
             rows.append(
                 BatchItemSnapshot(
                     index=index,
@@ -144,6 +216,8 @@ def run_batch_request(
                     state=state,
                     stage=result.stage,
                     error=error,
+                    correction_skipped=correction_skipped,
+                    skip_reason=skip_reasons[index] if correction_skipped else "",
                     outputs=published.get(str(index), {}),
                 )
             )
@@ -160,6 +234,8 @@ def run_batch_request(
                     continue
                 published.pop(key, None)
                 item_request = request.items[index]
+                if index in skip_reasons:
+                    item_request = item_request.model_copy(update={"stage": "raw-srt"})
                 try:
                     payload = result.payload or {}
                     paths = default_pipeline_paths(
@@ -189,7 +265,7 @@ def run_batch_request(
                 )
             )
 
-    with _routing_override(llm_model):
+    with source_route(route_item) as run_route, _routing_override(run_route.models):
         results = run_batch(
             items,
             workers=workers,

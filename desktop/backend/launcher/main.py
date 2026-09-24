@@ -58,6 +58,8 @@ PUBLIC_BRIDGE_METHODS = (
     "select_batch_files",
     "import_batch_manifest",
     "export_batch_manifest",
+    "export_task_log",
+    "open_task_log_export_location",
     "start_task",
     "cancel_task",
     "retry_task",
@@ -957,6 +959,19 @@ def create_application(
         return str(selected)
 
     bridge.batch_manifest_export_selector = select_batch_manifest_export
+
+    def select_task_log_export() -> str | None:
+        result = window.create_file_dialog(
+            webview.FileDialog.SAVE,
+            save_filename="yanami-task-log.txt",
+            file_types=("文本文件 (*.txt)", "所有文件 (*.*)"),
+        )
+        if not result:
+            return None
+        selected = result[0] if isinstance(result, (list, tuple)) else result
+        return str(selected)
+
+    bridge.task_log_export_selector = select_task_log_export
 
     def select_directory() -> str | None:
         result = window.create_file_dialog(webview.FileDialog.FOLDER)

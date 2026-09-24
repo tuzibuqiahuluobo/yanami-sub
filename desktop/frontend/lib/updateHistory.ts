@@ -17,6 +17,24 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.6.post10",
+    title: { zh: "RC6.10 · 任务恢复与日志", en: "RC6.10 · Task recovery and logs" },
+    notes: {
+      zh: [
+        "新建任务和批处理可选 API、Agent 或自动来源；本地 Agent 按顺序尝试，失败原因写入日志。",
+        "所有 Agent 均不可用时保留原始字幕并标记纠错翻译已跳过；字幕已生成后知识库更新失败不再丢失成品。",
+        "任务日志可完整导出并打开保存位置；处理中切换页面可看到右下角进度提示，改善中英文日志显示。",
+        "精简 Hugging Face 模型下载警告，保留真实下载错误和可选的鉴权提示。",
+      ],
+      en: [
+        "Choose API, Agent, or automatic routing for tasks and batches; local Agents are tried in order with failures logged.",
+        "Keep raw subtitles and mark correction skipped if every Agent is unavailable; a later knowledge-update failure no longer discards generated subtitles.",
+        "Export the complete task log and open its location; see background task progress and improved multilingual logs.",
+        "Clarified Hugging Face download warnings while preserving real errors and optional authentication guidance.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post9",
     title: { zh: "RC6.9 · 模型下载线路恢复", en: "RC6.9 · Model download route recovery" },
     notes: {

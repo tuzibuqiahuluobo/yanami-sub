@@ -774,6 +774,11 @@ class DesktopResourceService:
         # configured value always wins.
         environment = {
             **shared_environment_overrides(self.runtime.paths),
+            # The Hub still uses regular files when Windows cannot create
+            # symlinks; the resource page explains the space tradeoff once.
+            "HF_HUB_DISABLE_SYMLINKS_WARNING": os.environ.get(
+                "HF_HUB_DISABLE_SYMLINKS_WARNING", "1"
+            ),
             # Optional, so it is resolved here rather than gated on: whatever
             # the panel has installed (or the machine already had) is what the
             # worker gets, and nothing at all when there is neither.
@@ -781,6 +786,9 @@ class DesktopResourceService:
                 lambda: self.tool_file("tokcount", "tokcount.exe")
             ),
             **extra_env,
+            # The parent speaks UTF-8 on its pipes. This takes precedence over
+            # an inherited Windows PYTHONIOENCODING=cp936/cp1252 for every worker.
+            "PYTHONIOENCODING": "utf-8",
         }
         git_bin = self.tool_directory("git", "git.exe")
         # yt-dlp is imported, not executed, so it joins PYTHONPATH rather than

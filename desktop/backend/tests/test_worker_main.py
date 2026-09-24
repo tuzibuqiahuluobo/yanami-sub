@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from types import SimpleNamespace
+import json
 
 import pytest
 
@@ -17,6 +18,7 @@ from finesub_bootstrap.locks import (
 
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.worker.main import (
+    _agent_error_message,
     _announcing_this_task,
     run_request,
 )
@@ -240,6 +242,179 @@ def test_worker_applies_and_restores_one_run_model_routing(tmp_path: Path) -> No
 
     assert observed == {"correction-text": "correction-capable"}
     assert runtime_preferred() == before
+
+
+def test_no_available_agent_preserves_raw_subtitles_and_marks_correction_skipped(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from desktop.backend.settings.local_agents import COMMANDS_ENV
+
+    monkeypatch.delenv("GEMINI_FREE", raising=False)
+    monkeypatch.delenv(COMMANDS_ENV, raising=False)
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    paths = _fake_paths(tmp_path)
+    paths.raw_srt.write_text("raw subtitle", encoding="utf-8")
+    stages: list[str] = []
+    events = []
+
+    result = run_request(
+        TaskRequest(input=str(source), stage="final-srt", llm_source="auto"),
+        task_id="task-no-agent",
+        pipeline=lambda _source, **kwargs: stages.append(kwargs["stage"]) or paths,
+        emit=events.append,
+    )
+
+    assert stages == ["raw-srt"]
+    assert "rawSrt" in result and "finalSrt" not in result
+    assert any(event.type == "stage" and event.payload.get("skipped") for event in events)
+
+
+def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from desktop.backend.settings.local_agents import COMMANDS_ENV
+
+    config = tmp_path / "config.toml"
+    config.write_text("[llm]\n", encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    output = tmp_path / "run" / "a.srt"
+    paths = _fake_paths(output.parent)
+    paths.raw_srt.parent.mkdir(parents=True)
+    paths.raw_srt.write_text("raw subtitle", encoding="utf-8")
+    stages: list[str] = []
+    events = []
+
+    def pipeline(_source, **kwargs):
+        stages.append(kwargs["stage"])
+        if kwargs["stage"] == "final-srt":
+            error = RuntimeError("Agent quota exhausted")
+            error._harness_route_decision = {"candidates": [
+                {"decision": "attempted", "outcome": "failed", "failure_kind": "quota"},
+            ]}
+            raise error
+        return paths
+
+    outputs = run_request(
+        TaskRequest(input=str(source), output=str(output), stage="final-srt", llm_source="agent"),
+        task_id="task-agent-exhausted",
+        pipeline=pipeline,
+        emit=events.append,
+    )
+
+    assert stages == ["final-srt", "raw-srt"]
+    assert "rawSrt" in outputs and "finalSrt" not in outputs
+    assert any(event.type == "stage" and event.payload.get("skipped") for event in events)
+    assert any("Agent quota exhausted" in event.payload.get("message", "") for event in events)
+
+
+def test_failed_knowledge_update_keeps_generated_final_subtitles(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from desktop.backend.settings.local_agents import COMMANDS_ENV
+
+    config = tmp_path / "config.toml"
+    config.write_text("[llm]\n", encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    output = tmp_path / "run" / "a.srt"
+    paths = _fake_paths(output.parent)
+    paths.final_srt.parent.mkdir(parents=True)
+    paths.final_srt.write_text("finished subtitle", encoding="utf-8")
+    calls: list[str] = []
+    events = []
+
+    def _maybe_knowledge_update():
+        raise RuntimeError("dsh: QUOTA: Insufficient Balance")
+
+    def pipeline(_source, **kwargs):
+        calls.append(kwargs["knowledge"])
+        if kwargs["knowledge"] == "update":
+            _maybe_knowledge_update()
+        return paths
+
+    outputs = run_request(
+        TaskRequest(input=str(source), output=str(output), stage="final-srt", llm_source="agent"),
+        task_id="task-knowledge-failed",
+        pipeline=pipeline,
+        emit=events.append,
+    )
+
+    assert calls == ["update", "none"]
+    assert Path(outputs["finalSrt"]).read_text(encoding="utf-8") == "finished subtitle"
+    assert not any(event.payload.get("skipped") for event in events)
+    assert any("知识库更新失败" in event.payload.get("message", "") for event in events)
+
+
+def test_successful_agent_fallback_reports_failed_target_in_task_log(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from desktop.backend.settings.local_agents import COMMANDS_ENV
+
+    config = tmp_path / "config.toml"
+    config.write_text("[llm]\n", encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    output = tmp_path / "run" / "a.srt"
+    paths = _fake_paths(output.parent)
+    events = []
+
+    def pipeline(_source, **_kwargs):
+        paths.final_srt.parent.mkdir(parents=True)
+        paths.final_srt.write_text("subtitle", encoding="utf-8")
+        paths.task_artifact_dir.mkdir()
+        record = {"payload": {
+            "route_decision": {"candidates": [
+                {"target_id": "local-dsh-first", "outcome": "failed", "failure_kind": "quota"},
+                {"target_id": "local-dsh-next", "outcome": "success"},
+            ]},
+            "execution_attempts": [{
+                "target_id": "local-dsh-first", "vendor_error": "QUOTA: Insufficient Balance"
+            }],
+        }}
+        (paths.task_artifact_dir / "task-artifacts.jsonl").write_text(
+            json.dumps(record) + "\n", encoding="utf-8"
+        )
+        return paths
+
+    outputs = run_request(
+        TaskRequest(input=str(source), output=str(output), stage="final-srt", llm_source="agent"),
+        task_id="task-agent-fallback", pipeline=pipeline, emit=events.append,
+    )
+
+    assert "finalSrt" in outputs
+    messages = [event.payload.get("message", "") for event in events]
+    assert any("local-dsh-first" in message and "QUOTA: Insufficient Balance" in message
+               for message in messages)
+    assert not any("local-dsh-next 未能使用" in message for message in messages)
+
+
+def test_agent_error_message_includes_bounded_capsule_stderr(tmp_path: Path, monkeypatch) -> None:
+    from finesub.llm.agent import agent_paths
+
+    capsule = tmp_path / "capsule"
+    stderr = capsule / "events" / "stderr.log"
+    stderr.parent.mkdir(parents=True)
+    stderr.write_text("debug line\ndsh: QUOTA: Insufficient Balance\n", encoding="utf-8")
+    monkeypatch.setattr(agent_paths, "resolve_evidence_locator", lambda locator: capsule)
+    error = RuntimeError("dsh exited with status 1")
+    error._harness_execution_attempts = [
+        {"evidence_locator": {"episode_id": "capsule"}},
+    ]
+
+    message = _agent_error_message(error)
+    assert "QUOTA: Insufficient Balance" in message
+    assert "debug line" not in message
+
+    error._harness_execution_attempts = [{"vendor_error": "dsh: QUOTA: Insufficient Balance"}]
+    assert "QUOTA: Insufficient Balance" in _agent_error_message(error)
 
 
 @pytest.mark.parametrize(

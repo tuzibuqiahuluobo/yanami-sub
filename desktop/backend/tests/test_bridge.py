@@ -60,6 +60,11 @@ class FakeJobs:
         opener(target)
         return target
 
+    def export_task_log(self, task_id, destination):
+        assert task_id == "task-1"
+        destination.write_text("complete disk log\n", encoding="utf-8")
+        return destination.resolve()
+
     def open_owned_output(self, output_path, opener):
         path = Path(output_path).expanduser().resolve()
         owned = {
@@ -440,6 +445,43 @@ def test_bridge_imports_and_exports_manifests_only_through_native_dialogs(
     assert exported["data"]["count"] == 1
     assert batches.exported is not None
     assert batches.exported[0] == exported_path.resolve()
+
+
+def test_task_log_export_uses_native_dialog_and_opens_saved_location(
+    tmp_path: Path,
+) -> None:
+    selected = tmp_path / "saved-log.txt"
+    opened: list[Path] = []
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        task_log_export_selector=lambda: str(selected),
+        output_opener=opened.append,
+    )
+
+    exported = bridge.export_task_log("task-1")
+    location = bridge.open_task_log_export_location()
+
+    assert exported == {"ok": True, "data": {"cancelled": False, "path": str(selected.resolve())}}
+    assert selected.read_text("utf-8") == "complete disk log\n"
+    assert location == {"ok": True, "data": {"path": str(tmp_path.resolve())}}
+    assert opened == [tmp_path.resolve()]
+
+
+def test_cancelled_task_log_export_does_not_open_previous_location(
+    tmp_path: Path,
+) -> None:
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        task_log_export_selector=lambda: None,
+    )
+    assert bridge.export_task_log("task-1") == {
+        "ok": True, "data": {"cancelled": True, "path": None},
+    }
+    assert bridge.open_task_log_export_location()["ok"] is False
 
 
 def test_single_task_is_blocked_while_a_batch_is_running(tmp_path: Path) -> None:

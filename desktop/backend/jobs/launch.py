@@ -170,7 +170,10 @@ def spawn_worker(
         stderr=subprocess.STDOUT,
         text=True,
         encoding="utf-8",
-        errors="replace",
+        # Native Windows tools (notably MSVC) may write local-codepage bytes
+        # into the same pipe as the worker's UTF-8 JSONL events. Preserve
+        # undecodable bytes for the protocol reader instead of losing them.
+        errors="surrogateescape",
         bufsize=1,
         env=environment,
         cwd=context.working_directory,

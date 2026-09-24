@@ -6,6 +6,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from desktop.backend.worker.protocol import decode_worker_stream_text
+
 
 BatchEventType = Literal["started", "snapshot", "log", "completed", "failed"]
 
@@ -41,6 +43,7 @@ def encode_batch_event(event: BatchWorkerEvent) -> str:
 
 
 def parse_batch_event(line: str, *, batch_id: str) -> BatchWorkerEvent:
+    line = decode_worker_stream_text(line)
     try:
         body = json.loads(line)
         event = BatchWorkerEvent.model_validate(

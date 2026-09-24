@@ -123,6 +123,50 @@ def test_stage_lines_become_stage_callbacks_and_the_rest_are_logs(
     assert logs == ["downloading checkpoint"]
 
 
+def test_anonymous_hub_notice_is_concise_and_does_not_hide_errors(
+    tmp_path: Path,
+) -> None:
+    factory, _ = _spawn(
+        [
+            "Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.",
+            "httpx.HTTPStatusError: 429 Too Many Requests",
+        ],
+        returncode=1,
+    )
+    logs: list[str] = []
+
+    with pytest.raises(ModelPrefetchFailed, match="429 Too Many Requests"):
+        run_model_prefetch(
+            ["whisper"],
+            context=FakeContext(tmp_path),
+            log=logs.append,
+            process_factory=factory,
+        )
+
+    assert logs == [
+        "Hugging Face 公开模型可匿名下载；若实际遇到 429 限流，可设置免费的 HF_TOKEN 后重启应用。",
+        "httpx.HTTPStatusError: 429 Too Many Requests",
+    ]
+
+
+def test_optional_hub_token_is_passed_without_logging_it(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HF_TOKEN", "test-token-not-for-logs")
+    factory, captured = _spawn(["Whisper 识别模型已就绪"])
+    logs: list[str] = []
+
+    run_model_prefetch(
+        ["whisper"],
+        context=FakeContext(tmp_path),
+        log=logs.append,
+        process_factory=factory,
+    )
+
+    assert captured["env"]["HF_TOKEN"] == "test-token-not-for-logs"
+    assert "test-token-not-for-logs" not in "\n".join(logs)
+
+
 def test_a_failing_prefetch_reports_the_last_thing_it_said(tmp_path: Path) -> None:
     factory, _ = _spawn(
         ["STAGE 1/1 正在获取 Qwen 校验模型", "Qwen 校验模型（qwen-referee）获取失败：OSError: no route"],

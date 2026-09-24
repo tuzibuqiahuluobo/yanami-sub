@@ -14,6 +14,7 @@ import {
   ScrollText,
   Square,
   Trash2,
+  X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -468,9 +469,11 @@ export function BatchQueue({
                 <span className="batch-source-index">{item.index + 1}</span>
                 <div className="batch-item-main">
                   <strong>{item.label}</strong>
-                  <small title={item.input}>{item.error || (item.stage ? `${t.batch.stage}: ${item.stage}` : item.input)}</small>
+                  <small title={item.skip_reason || item.input}>{item.error || item.skip_reason || (item.stage ? `${t.batch.stage}: ${item.stage}` : item.input)}</small>
                 </div>
-                <span className={`resource-label is-${item.state === "done" ? "ready" : item.state === "failed" ? "failed" : "neutral"}`}>{t.batch.itemStates[item.state]}</span>
+                <span className={`resource-label is-${item.correction_skipped ? "advisory" : item.state === "done" ? "ready" : item.state === "failed" ? "failed" : "neutral"}`}>
+                  {item.correction_skipped ? <><X size={12} />{t.batch.correctionSkipped}</> : t.batch.itemStates[item.state]}
+                </span>
                 {Object.entries(item.outputs).map(([name, path]) => (
                   <button type="button" className="icon-button" title={`${name}: ${path}`} key={name} onClick={() => void desktopApi.openBatchOutput(snapshot.batch_id, path)}><ExternalLink size={14} /></button>
                 ))}

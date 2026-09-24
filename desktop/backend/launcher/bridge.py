@@ -125,6 +125,7 @@ class DesktopBridge:
         batch_file_selector: Callable[[], list[str]] | None = None,
         batch_manifest_selector: Callable[[], str | None] | None = None,
         batch_manifest_export_selector: Callable[[], str | None] | None = None,
+        task_log_export_selector: Callable[[], str | None] | None = None,
         directory_selector: Callable[[], str | None] | None = None,
         key_export_selector: Callable[[], str | None] | None = None,
         python_selector: Callable[[], str | None] | None = None,
@@ -149,6 +150,8 @@ class DesktopBridge:
         self.batch_file_selector = batch_file_selector
         self.batch_manifest_selector = batch_manifest_selector
         self.batch_manifest_export_selector = batch_manifest_export_selector
+        self.task_log_export_selector = task_log_export_selector
+        self._last_exported_task_log: Path | None = None
         self.directory_selector = directory_selector
         self.key_export_selector = key_export_selector
         self.python_selector = python_selector
@@ -324,6 +327,30 @@ class DesktopBridge:
             }
 
         return self._guard(export_manifest)
+
+    def export_task_log(self, task_id: str) -> dict[str, Any]:
+        if self.task_log_export_selector is None:
+            return _failure(BridgeError(code="dialog_unavailable", message="当前窗口无法导出日志。"))
+
+        def export_log() -> dict[str, Any]:
+            selected = self.task_log_export_selector()
+            if not selected:
+                return {"cancelled": True, "path": None}
+            target = self.jobs.export_task_log(task_id, Path(selected))
+            self._last_exported_task_log = target
+            return {"cancelled": False, "path": str(target)}
+
+        return self._guard(export_log)
+
+    def open_task_log_export_location(self) -> dict[str, Any]:
+        def open_location() -> dict[str, str]:
+            if self._last_exported_task_log is None:
+                raise ValueError("请先导出日志。")
+            folder = self._last_exported_task_log.parent
+            self.output_opener(folder)
+            return {"path": str(folder)}
+
+        return self._guard(open_location)
 
     def start_task(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
