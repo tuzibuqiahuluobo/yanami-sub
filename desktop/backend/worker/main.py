@@ -339,29 +339,74 @@ def _expected_subtitles(request: TaskRequest) -> tuple[Path, Path] | None:
     return translated, final
 
 
-def _agent_correction_exhausted(request: TaskRequest, error: Exception) -> bool:
-    """Do not mistake a *later* knowledge failure for failed correction."""
+def _raw_subtitle_available(request: TaskRequest) -> bool:
+    """True once the pipeline's pre-correction transcript exists on disk.
+
+    Source-agnostic proof that upstream stages (separation/ASR/stabilize)
+    already succeeded, usable as evidence for API-sourced failures which
+    carry none of the Agent-harness-specific error attributes below.
+    """
+
+    outputs = _expected_subtitles(request)
+    if outputs is None:
+        return False
+    _translated, final = outputs
+    raw = final.with_name(f"{final.stem}-raw.srt")
+    return raw.is_file()
+
+
+def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str) -> bool:
+    """True when only the correction/translation stage failed, for either
+    model source, and it is safe to fall back to the raw subtitle.
+
+    Renamed from `_agent_correction_exhausted`. The previous version only
+    recognized Agent-harness-specific error markers (`CapabilityUnavailableError`,
+    `_harness_route_decision`), so it never matched an API-sourced failure --
+    those always propagated as a hard task failure, contradicting the
+    "保留原始字幕" behavior RC6.10 documents. API errors carry none of those
+    Agent-only attributes, so for `source == "api"` this instead relies on
+    the pipeline's own "-raw.srt" checkpoint (see `_raw_subtitle_available`):
+    if the raw transcript already exists, earlier stages succeeded and only
+    correction/translation failed, which is exactly the case this exists for.
+    """
 
     outputs = _expected_subtitles(request)
     if outputs is None:
         return False
     translated, final = outputs
     if translated.is_file() or final.is_file():
+        return False  # never mask a failure once real output already exists
+
+    matched = type(error).__name__ == "CapabilityUnavailableError"
+    if not matched:
+        decision = getattr(error, "_harness_route_decision", None)
+        if isinstance(decision, dict):
+            candidates = decision.get("candidates")
+            rows = [item for item in candidates if isinstance(item, dict)] if isinstance(candidates, list) else []
+            matched = bool(rows) and len(rows) == len(candidates) and all(
+                item.get("reason") not in {"fallback_not_allowed", "permanent_failure"}
+                and item.get("failure_kind") != "permanent"
+                and item.get("decision") != "pending"
+                and item.get("outcome") != "success"
+                for item in rows
+            )
+    if not matched and source == "api":
+        matched = True  # no Agent-harness attributes to inspect on an API error
+
+    if not matched:
         return False
-    if type(error).__name__ == "CapabilityUnavailableError":
-        return True
-    decision = getattr(error, "_harness_route_decision", None)
-    if not isinstance(decision, dict):
-        return False
-    candidates = decision.get("candidates")
-    rows = [item for item in candidates if isinstance(item, dict)] if isinstance(candidates, list) else []
-    return bool(rows) and len(rows) == len(candidates) and all(
-        item.get("reason") not in {"fallback_not_allowed", "permanent_failure"}
-        and item.get("failure_kind") != "permanent"
-        and item.get("decision") != "pending"
-        and item.get("outcome") != "success"
-        for item in rows
-    )
+    # Batch processing already required this before publishing a raw
+    # fallback; single-task execution did not. Applying it everywhere closes
+    # that gap: never claim "raw subtitle preserved" when there is in fact
+    # no raw file on disk to preserve.
+    return _raw_subtitle_available(request)
+
+
+# Backward-compat alias: keep the old name importable (batch_main.py and any
+# external tooling may still reference it) while call sites move to the
+# source-agnostic `_correction_exhausted`.
+def _agent_correction_exhausted(request: TaskRequest, error: Exception) -> bool:
+    return _correction_exhausted(request, error, source="agent")
 
 
 def _failed_post_correction_knowledge_update(request: TaskRequest, error: Exception) -> bool:
@@ -541,8 +586,12 @@ def run_request(
                         request, stage=effective_stage, task_id=task_id,
                         pipeline=pipeline, knowledge="none",
                     )
-                elif route.source == "agent" and _agent_correction_exhausted(request, error):
-                    skip_reason = f"所有本地 Agent 均未完成纠错翻译：{_agent_error_message(error)}"
+                elif _correction_exhausted(request, error, source=route.source):
+                    skip_reason = (
+                        f"所有本地 Agent 均未完成纠错翻译：{_agent_error_message(error)}"
+                        if route.source == "agent" else
+                        f"纠错翻译失败，已保留原始字幕：{_agent_error_message(error)}"
+                    )
                     emit(WorkerEvent.log(task_id, skip_reason))
                     effective_stage = "raw-srt"
                     paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline)
