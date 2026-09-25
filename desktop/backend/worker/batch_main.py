@@ -22,10 +22,10 @@ from desktop.backend.common.models import (
 )
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.worker.main import (
-    _agent_correction_exhausted,
     _agent_error_message,
     _agent_route_failures,
     _artifact_agent_route_failures,
+    _correction_exhausted,
     _expected_subtitles,
     _failed_post_correction_knowledge_update,
     _publish_output,
@@ -117,6 +117,19 @@ def run_batch_request(
         request.items[0],
     )
     skip_reasons: dict[int, str] = {}
+    # A single `source_route()` call covers item construction *and* the
+    # `run_batch(...)` execution below -- previously this opened two
+    # independent context managers (see the removed second `with` block
+    # further down). Each call to `source_route()`/`_targets()` re-derives
+    # the candidate model list from live state (env vars, detected Agent
+    # tiers), and while the resulting `group_id` is a deterministic hash of
+    # that list, nothing guaranteed the *inputs* stayed identical between
+    # the two calls -- e.g. an Agent detection result or an env var changing
+    # between them could route item construction against one model group
+    # and the actual batch execution against a different, silently
+    # inconsistent one. Reusing a single `route` for both removes that
+    # TOCTOU-style gap entirely instead of relying on the two computations
+    # happening to agree.
     with source_route(route_item) as route, _routing_override(route.models):
         if route.targets:
             emit(BatchWorkerEvent.log(
@@ -134,10 +147,16 @@ def run_batch_request(
                     ),
                     claims=claims,
                 )
-                if route.source == "agent" and not route.skip_reason and "llm" in item.stages:
+                # Was `route.source == "agent" and ...`: an API-sourced item
+                # whose correction call failed at runtime (rate limit,
+                # revoked key, network error, ...) fell straight through to
+                # the scheduler's own retry/failure handling with no chance
+                # to degrade to the raw subtitle, unlike an Agent-sourced
+                # item. The guard now applies uniformly to both sources.
+                if not route.skip_reason and "llm" in item.stages:
                     original_llm = item.stages["llm"]
 
-                    def guarded_llm(payload, *, _call=original_llm, _row=row, _index=index):
+                    def guarded_llm(payload, *, _call=original_llm, _row=row, _index=index, _source=route.source):
                         artifact_log, artifact_offset = _route_artifact_log(_row)
                         logged_failures: set[str] = set()
 
@@ -147,11 +166,12 @@ def run_batch_request(
                         try:
                             return _call(payload)
                         except Exception as error:
-                            _agent_route_failures(
-                                getattr(error, "_harness_route_decision", None),
-                                getattr(error, "_harness_execution_attempts", None),
-                                log_failure, logged_failures,
-                            )
+                            if _source == "agent":
+                                _agent_route_failures(
+                                    getattr(error, "_harness_route_decision", None),
+                                    getattr(error, "_harness_execution_attempts", None),
+                                    log_failure, logged_failures,
+                                )
                             if _failed_post_correction_knowledge_update(_row, error):
                                 emit(BatchWorkerEvent.log(
                                     batch_id,
@@ -159,113 +179,115 @@ def run_batch_request(
                                     f"{_agent_error_message(error)}",
                                 ))
                                 return payload
-                            outputs = _expected_subtitles(_row)
-                            if outputs and _agent_correction_exhausted(_row, error):
-                                final = outputs[1]
-                                raw = final.with_name(f"{final.stem}-raw.srt")
-                                if raw.is_file():
-                                    reason = (
-                                        f"项目 {_index + 1} 所有本地 Agent 均未完成纠错翻译；"
-                                        f"保留原始字幕：{_agent_error_message(error)}"
-                                    )
-                                    skip_reasons[_index] = reason
-                                    emit(BatchWorkerEvent.log(batch_id, reason))
-                                    return payload
+                            if _correction_exhausted(_row, error, source=_source):
+                                reason = (
+                                    f"项目 {_index + 1} 所有本地 Agent 均未完成纠错翻译；"
+                                    f"保留原始字幕：{_agent_error_message(error)}"
+                                    if _source == "agent" else
+                                    f"项目 {_index + 1} 纠错翻译失败，已保留原始字幕："
+                                    f"{_agent_error_message(error)}"
+                                )
+                                skip_reasons[_index] = reason
+                                emit(BatchWorkerEvent.log(batch_id, reason))
+                                return payload
                             raise
                         finally:
-                            _artifact_agent_route_failures(
-                                artifact_log, artifact_offset, log_failure, logged_failures
-                            )
+                            if _source == "agent":
+                                _artifact_agent_route_failures(
+                                    artifact_log, artifact_offset, log_failure, logged_failures
+                                )
 
                     item.stages = {**item.stages, "llm": guarded_llm}
                 items.append(item)
             except BaseException as error:  # one malformed/disappeared item may fail alone
                 items.append(_failed_item(row.input, error))
 
-    published_path = batch_root / "published.json"
-    published = _read_published(published_path)
-    publish_errors: dict[int, str] = {}
-    publication_lock = threading.Lock()
+        published_path = batch_root / "published.json"
+        published = _read_published(published_path)
+        publish_errors: dict[int, str] = {}
+        publication_lock = threading.Lock()
 
-    def save_published() -> None:
-        temporary = published_path.with_name(f".{published_path.name}.{os.getpid()}.tmp")
-        temporary.write_text(
-            json.dumps(published, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-        os.replace(temporary, published_path)
-
-    def snapshots(results) -> list[BatchItemSnapshot]:
-        rows: list[BatchItemSnapshot] = []
-        for index, result in enumerate(results):
-            state = result.view_state
-            error = result.error
-            if index in publish_errors:
-                state = "failed"
-                error = publish_errors[index]
-            correction_skipped = bool(
-                state == "done"
-                and skip_reasons.get(index)
-                and "rawSrt" in published.get(str(index), {})
+        def save_published() -> None:
+            temporary = published_path.with_name(f".{published_path.name}.{os.getpid()}.tmp")
+            temporary.write_text(
+                json.dumps(published, ensure_ascii=False, indent=2),
+                encoding="utf-8",
             )
-            rows.append(
-                BatchItemSnapshot(
-                    index=index,
-                    input=request.items[index].input,
-                    label=items[index].label,
-                    state=state,
-                    stage=result.stage,
-                    error=error,
-                    correction_skipped=correction_skipped,
-                    skip_reason=skip_reasons[index] if correction_skipped else "",
-                    outputs=published.get(str(index), {}),
-                )
-            )
-        return rows
+            os.replace(temporary, published_path)
 
-    def publish(_items, results) -> None:
-        with publication_lock:
+        def snapshots(results) -> list[BatchItemSnapshot]:
+            rows: list[BatchItemSnapshot] = []
             for index, result in enumerate(results):
-                key = str(index)
-                existing = published.get(key, {})
-                if result.status != "done":
-                    continue
-                if existing and all(Path(path).is_file() for path in existing.values()):
-                    continue
-                published.pop(key, None)
-                item_request = request.items[index]
-                if index in skip_reasons:
-                    item_request = item_request.model_copy(update={"stage": "raw-srt"})
-                try:
-                    payload = result.payload or {}
-                    paths = default_pipeline_paths(
-                        payload["audio"], output_path=payload.get("output")
-                    )
-                    outputs = _publish_output(
-                        paths,
-                        item_request,
-                        task_id=f"{batch_id}-{index + 1}",
-                    )
-                    published[key] = outputs
-                    save_published()
-                    if item_request.cleanup_intermediate and outputs:
-                        cleanup_intermediate(
-                            paths.final_srt,
-                            preserve=outputs.values(),
-                        )
-                except Exception as error:  # publishing fails this item, not the batch
-                    publish_errors[index] = f"{type(error).__name__}: {error}"
-            emit(
-                BatchWorkerEvent(
-                    type="snapshot",
-                    batch_id=batch_id,
-                    payload={
-                        "items": [row.model_dump(mode="json") for row in snapshots(results)]
-                    },
+                state = result.view_state
+                error = result.error
+                if index in publish_errors:
+                    state = "failed"
+                    error = publish_errors[index]
+                correction_skipped = bool(
+                    state == "done"
+                    and skip_reasons.get(index)
+                    and "rawSrt" in published.get(str(index), {})
                 )
-            )
+                rows.append(
+                    BatchItemSnapshot(
+                        index=index,
+                        input=request.items[index].input,
+                        label=items[index].label,
+                        state=state,
+                        stage=result.stage,
+                        error=error,
+                        correction_skipped=correction_skipped,
+                        skip_reason=skip_reasons[index] if correction_skipped else "",
+                        outputs=published.get(str(index), {}),
+                    )
+                )
+            return rows
 
-    with source_route(route_item) as run_route, _routing_override(run_route.models):
+        def publish(_items, results) -> None:
+            with publication_lock:
+                for index, result in enumerate(results):
+                    key = str(index)
+                    existing = published.get(key, {})
+                    if result.status != "done":
+                        continue
+                    if existing and all(Path(path).is_file() for path in existing.values()):
+                        continue
+                    published.pop(key, None)
+                    item_request = request.items[index]
+                    if index in skip_reasons:
+                        item_request = item_request.model_copy(update={"stage": "raw-srt"})
+                    try:
+                        payload = result.payload or {}
+                        paths = default_pipeline_paths(
+                            payload["audio"], output_path=payload.get("output")
+                        )
+                        outputs = _publish_output(
+                            paths,
+                            item_request,
+                            task_id=f"{batch_id}-{index + 1}",
+                        )
+                        published[key] = outputs
+                        save_published()
+                        if item_request.cleanup_intermediate and outputs:
+                            cleanup_intermediate(
+                                paths.final_srt,
+                                preserve=outputs.values(),
+                            )
+                    except Exception as error:  # publishing fails this item, not the batch
+                        publish_errors[index] = f"{type(error).__name__}: {error}"
+                emit(
+                    BatchWorkerEvent(
+                        type="snapshot",
+                        batch_id=batch_id,
+                        payload={
+                            "items": [row.model_dump(mode="json") for row in snapshots(results)]
+                        },
+                    )
+                )
+
+        # `run_batch` now executes inside the *same* `source_route()` scope
+        # that built `items` above, instead of a second independent call.
+        # See the comment where this `with` block opens.
         results = run_batch(
             items,
             workers=workers,

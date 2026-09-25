@@ -1,0 +1,7 @@
+lock-version = "1.0"
+created-by = "uv"
+requires-python = ">=3.12"
+[[packages]]
+name = "torch"
+version = "2.11.0"
+archive = { url = "https://mirror.example.org/torch-2.11.0-cp312-win_amd64.whl", hashes = { sha256 = "0000000000000000000000000000000000000000000000000000000000000000" } }

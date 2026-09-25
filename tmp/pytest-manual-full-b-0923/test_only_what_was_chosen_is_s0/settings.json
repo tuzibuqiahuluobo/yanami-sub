@@ -1,0 +1,9 @@
+{
+  "schema": 1,
+  "ui": {
+    "theme": "dark"
+  },
+  "task_defaults": {
+    "gpu_tier": "standard"
+  }
+}

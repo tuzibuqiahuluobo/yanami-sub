@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "ui": {
+    "theme": "dark"
+  },
+  "task_defaults": {
+    "language": "ja",
+    "gpu_tier": "standard"
+  }
+}

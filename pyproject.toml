@@ -55,4 +55,3 @@ exclude = ["desktop.backend.tests*", "desktop.scripts.tests*"]
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["desktop/backend/tests", "desktop/scripts/tests"]
-addopts = "-n 0"

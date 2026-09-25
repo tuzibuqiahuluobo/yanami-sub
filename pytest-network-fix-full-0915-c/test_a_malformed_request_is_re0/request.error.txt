@@ -1,0 +1,10 @@
+Traceback (most recent call last):
+  File "C:\Users\Ikun\Documents\全自动烤肉机的壳\finesub-desktop-migration\desktop\backend\updater_main.py", line 449, in main
+    request = FullUpdateRequest.model_validate_json(
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "G:\python3.12\Lib\site-packages\pydantic\main.py", line 625, in model_validate_json
+    return cls.__pydantic_validator__.validate_json(json_data, strict=strict, context=context)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+pydantic_core._pydantic_core.ValidationError: 1 validation error for FullUpdateRequest
+  Invalid JSON: key must be a string at line 1 column 3 [type=json_invalid, input_value='{ not json', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.9/v/json_invalid

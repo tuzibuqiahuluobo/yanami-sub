@@ -108,3 +108,67 @@ def test_source_group_identity_is_stable_across_retries(monkeypatch) -> None:
         first_group = first.models[0]
     with source_route(request) as second:
         assert second.models == [first_group]
+
+
+def test_auto_source_with_no_key_and_no_agent_yields_raw_fallback_not_error() -> None:
+    """Symmetric with the pre-existing Agent case: 'auto' picked a source on
+    the person's behalf, so an empty candidate list degrades gracefully
+    instead of aborting the task. (Duplicate of
+    test_missing_free_key_and_agent_returns_raw_subtitle_fallback, kept
+    explicit here to pin the "auto => never raise" contract regardless of
+    which source auto happened to resolve to.)
+    """
+
+    request = TaskRequest(input="a.mp4", stage="final-srt", llm_source="auto")
+
+    with source_route(request) as route:
+        assert route.skip_reason
+        assert route.targets == ()
+
+
+def test_explicit_api_source_with_no_key_raises() -> None:
+    """Regression guard for the asymmetry this patch removes: previously an
+    explicit 'api' selection with no usable key/model always raised, while
+    an explicit 'agent' selection with no installed Agent silently degraded
+    to a raw-subtitle skip. Both now raise, because the person explicitly
+    asked for a source that turns out to be unusable -- surfacing that is
+    more useful than quietly delivering an uncorrected transcript.
+    """
+
+    request = TaskRequest(input="a.mp4", stage="final-srt", llm_source="api")
+
+    with pytest.raises(ValueError):
+        with source_route(request):
+            pass
+
+
+def test_explicit_agent_source_with_no_agent_now_raises_like_api_does() -> None:
+    request = TaskRequest(input="a.mp4", stage="final-srt", llm_source="agent")
+
+    with pytest.raises(ValueError):
+        with source_route(request):
+            pass
+
+
+def test_agent_unvetted_tier_excludes_non_correction_targets(monkeypatch) -> None:
+    """LOCAL_CLAUDE has no entry in `packaged_groups`, so it goes through the
+    naming-convention fallback path. Before this patch that path never
+    checked correction capability at all; assert here that a target the
+    fixture's own `correction-capable`/`correction-basic` groups do not list
+    is never selected, even if it would otherwise match the "-native-"
+    heuristic.
+    """
+
+    monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_CLAUDE": ["claude.exe"]}))
+    request = TaskRequest(input="a.mp4", stage="final-srt", llm_source="agent")
+
+    routes = default_model_routes()
+    correction_targets = {
+        target_id
+        for group_name in ("correction-capable", "correction-basic")
+        for target_id in routes.model_groups[group_name].target_ids
+    }
+
+    with source_route(request) as route:
+        assert route.targets  # LOCAL_CLAUDE is still usable for its real targets
+        assert set(route.targets) <= correction_targets

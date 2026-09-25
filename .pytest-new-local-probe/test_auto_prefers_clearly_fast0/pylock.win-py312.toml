@@ -1,0 +1,11 @@
+lock-version = "1.0"
+created-by = "uv"
+requires-python = ">=3.12"
+[[packages]]
+name = "torch"
+version = "2.11.0"
+archive = { url = "https://official.example.org/torch-2.11.0-cp312-win_amd64.whl", hashes = { sha256 = "0000000000000000000000000000000000000000000000000000000000000000" } }
+[[packages]]
+name = "click"
+version = "8.4.2"
+archive = { url = "https://files.pythonhosted.org/click-8.4.2-py3-none-any.whl", hashes = { sha256 = "0000000000000000000000000000000000000000000000000000000000000000" } }

@@ -1,0 +1,21 @@
+finesub==0.5.1
+
+[desktop]
+cryptography
+httpx
+packaging
+pydantic<3,>=2
+Pillow
+pystray~=0.19.5
+pywebview~=6.2.0
+
+[desktop:platform_system == "Windows"]
+tzdata
+
+[dev]
+Pillow
+pyinstaller<7,>=6
+pyinstaller-hooks-contrib>=2026.6
+pytest
+pytest-timeout
+pytest-xdist

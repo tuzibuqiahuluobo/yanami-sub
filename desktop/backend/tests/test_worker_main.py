@@ -311,6 +311,84 @@ def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
     assert any("Agent quota exhausted" in event.payload.get("message", "") for event in events)
 
 
+def test_exhausted_api_correction_preserves_raw_subtitles_and_marks_skip(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """API-sourced regression counterpart to
+    test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip: before
+    this patch, `route.source == "agent"` gated the entire raw-subtitle
+    fallback, so a plain API failure (no `_harness_route_decision`, no
+    `CapabilityUnavailableError` -- API errors never carry those Agent-only
+    attributes) fell straight to `raise` and aborted the task. It must now
+    degrade the same way an Agent exhaustion does, provided the raw
+    transcript already exists on disk.
+    """
+
+    config = tmp_path / "config.toml"
+    config.write_text("[llm]\n", encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    monkeypatch.setenv("GEMINI_FREE", "test-free-key")
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    output = tmp_path / "run" / "a.srt"
+    paths = _fake_paths(output.parent)
+    paths.raw_srt.parent.mkdir(parents=True)
+    paths.raw_srt.write_text("raw subtitle", encoding="utf-8")
+    stages: list[str] = []
+    events = []
+
+    def pipeline(_source, **kwargs):
+        stages.append(kwargs["stage"])
+        if kwargs["stage"] == "final-srt":
+            # A generic API failure: rate limit, revoked key, network error.
+            # Deliberately has none of the `_harness_*` attributes an Agent
+            # error carries, to prove the fallback no longer depends on them.
+            raise RuntimeError("429 Too Many Requests")
+        return paths
+
+    outputs = run_request(
+        TaskRequest(input=str(source), output=str(output), stage="final-srt", llm_source="api"),
+        task_id="task-api-exhausted",
+        pipeline=pipeline,
+        emit=events.append,
+    )
+
+    assert stages == ["final-srt", "raw-srt"]
+    assert "rawSrt" in outputs and "finalSrt" not in outputs
+    assert any(event.type == "stage" and event.payload.get("skipped") for event in events)
+    assert any("429 Too Many Requests" in event.payload.get("message", "") for event in events)
+
+
+def test_api_correction_failure_without_raw_subtitle_still_raises(
+    tmp_path: Path, monkeypatch
+) -> None:
+    """Guardrail on the new fallback: if the pipeline never even produced a
+    raw transcript (upstream stages themselves failed, not just correction),
+    there is nothing to fall back to and the task must still fail loudly
+    rather than silently reporting success with no output.
+    """
+
+    config = tmp_path / "config.toml"
+    config.write_text("[llm]\n", encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    monkeypatch.setenv("GEMINI_FREE", "test-free-key")
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    output = tmp_path / "run" / "a.srt"
+    events = []
+
+    def pipeline(_source, **kwargs):
+        raise RuntimeError("429 Too Many Requests")  # no raw_srt ever written
+
+    with pytest.raises(RuntimeError):
+        run_request(
+            TaskRequest(input=str(source), output=str(output), stage="final-srt", llm_source="api"),
+            task_id="task-api-no-raw",
+            pipeline=pipeline,
+            emit=events.append,
+        )
+
+
 def test_failed_knowledge_update_keeps_generated_final_subtitles(
     tmp_path: Path, monkeypatch
 ) -> None:

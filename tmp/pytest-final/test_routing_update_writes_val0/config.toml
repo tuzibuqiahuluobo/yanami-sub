@@ -1,0 +1,6 @@
+[llm]
+preset = "agy-hybrid"
+local_agent_timeout_seconds = 900
+local_agent_service_tier = "fast"
+local_agent_reasoning_effort = "high"
+local_agent_max_parallel = 3

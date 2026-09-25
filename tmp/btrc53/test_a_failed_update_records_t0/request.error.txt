@@ -1,0 +1,6 @@
+Traceback (most recent call last):
+  File "C:\Users\Ikun\Documents\全自动烤肉机的壳\finesub-desktop-migration\desktop\backend\updater_main.py", line 452, in main
+    apply_full_update(request)
+  File "C:\Users\Ikun\Documents\全自动烤肉机的壳\finesub-desktop-migration\desktop\backend\updater_main.py", line 371, in apply_full_update
+    raise FileNotFoundError(f"Application root does not exist: {target}")
+FileNotFoundError: Application root does not exist: C:\Users\Ikun\Documents\全自动烤肉机的壳\finesub-desktop-migration\tmp\btrc53\test_a_failed_update_records_t0\missing-target
