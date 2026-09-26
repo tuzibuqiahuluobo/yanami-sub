@@ -394,27 +394,16 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
     """True when only the correction/translation stage failed, for either
     model source, and it is safe to fall back to the raw subtitle.
 
-<<<<<<< HEAD
-=======
     RC6.13+: API errors are now checked for permanent failure kinds (invalid
     API key, authentication errors) just like Agent errors, so configuration
     mistakes aren't silently masked as "correction skipped, raw subtitle
     preserved".
 
->>>>>>> codex/rc6-ui-feedback
     Renamed from `_agent_correction_exhausted`. The previous version only
     recognized Agent-harness-specific error markers (`CapabilityUnavailableError`,
     `_harness_route_decision`), so it never matched an API-sourced failure --
     those always propagated as a hard task failure, contradicting the
-<<<<<<< HEAD
-    "保留原始字幕" behavior RC6.10 documents. API errors carry none of those
-    Agent-only attributes, so for `source == "api"` this instead relies on
-    the pipeline's own "-raw.srt" checkpoint (see `_raw_subtitle_available`):
-    if the raw transcript already exists, earlier stages succeeded and only
-    correction/translation failed, which is exactly the case this exists for.
-=======
     "保留原始字幕" behavior RC6.10 documents.
->>>>>>> codex/rc6-ui-feedback
     """
 
     outputs = _expected_subtitles(request)
@@ -437,10 +426,6 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
                 and item.get("outcome") != "success"
                 for item in rows
             )
-<<<<<<< HEAD
-    if not matched and source == "api":
-        matched = True  # no Agent-harness attributes to inspect on an API error
-=======
 
     # RC6.13+: For API source, check for permanent failures instead of
     # blindly accepting any error. Common permanent failures include:
@@ -476,7 +461,6 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
         # For other API errors (transient failures, rate limits, etc.),
         # allow fallback to raw subtitle
         matched = True
->>>>>>> codex/rc6-ui-feedback
 
     if not matched:
         return False
