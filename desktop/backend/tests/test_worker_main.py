@@ -296,6 +296,7 @@ def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
     monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
 
     # Mock agent health check to pass pre-check
+    # Need to mock it in BOTH places it's used: agent_health_check module AND main module
     def mock_check_agent_health():
         return AgentHealthReport(
             statuses=(AgentStatus(tier="LOCAL_DSH", available=True),),
@@ -303,9 +304,12 @@ def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
             source="agent",
         )
 
-    # Mock in the agent_health_check module where it's actually called from
     monkeypatch.setattr(
         "desktop.backend.worker.agent_health_check.check_agent_health",
+        mock_check_agent_health,
+    )
+    monkeypatch.setattr(
+        "desktop.backend.worker.main.check_agent_health",
         mock_check_agent_health,
     )
 
@@ -436,6 +440,7 @@ def test_failed_knowledge_update_keeps_generated_final_subtitles(
     monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
 
     # Mock agent health check to pass pre-check
+    # Need to mock it in BOTH places it's used: agent_health_check module AND main module
     def mock_check_agent_health():
         return AgentHealthReport(
             statuses=(AgentStatus(tier="LOCAL_DSH", available=True),),
@@ -443,9 +448,12 @@ def test_failed_knowledge_update_keeps_generated_final_subtitles(
             source="agent",
         )
 
-    # Mock in the agent_health_check module where it's actually called from
     monkeypatch.setattr(
         "desktop.backend.worker.agent_health_check.check_agent_health",
+        mock_check_agent_health,
+    )
+    monkeypatch.setattr(
+        "desktop.backend.worker.main.check_agent_health",
         mock_check_agent_health,
     )
 
