@@ -56,30 +56,6 @@ def _agent_tiers() -> set[str]:
     return {tier for tier, command in commands.items() if command}
 
 
-<<<<<<< HEAD
-def _correction_capable_targets(routes) -> set[str]:
-    """Every target FineSub itself binds to correction, from either source.
-
-    Centralized so both the API branch and the local-Agent branch of
-    `_targets` apply the *same* capability check. Previously only the API
-    branch filtered against this set; the Agent branch trusted its packaged
-    groups (and a naming-convention heuristic for unvetted tiers) to already
-    be correction-only, which is exactly the assumption that let a
-    search-only model slip into the task model group in the bug RC6.10 was
-    meant to fix. A missing group name resolves to an empty set instead of
-    raising, so a config mismatch degrades to "no targets" rather than
-    crashing the task.
-    """
-
-    missing = [name for name in ("correction-capable", "correction-basic")
-               if name not in routes.model_groups]
-    if missing:
-        logger.warning(
-            "model routing: expected group(s) %s not found in FineSub config; "
-            "treating as zero correction-capable targets", missing,
-        )
-    return {
-=======
 def _meets_correction_floor(routes, target_id: str) -> bool:
     """Check if a target meets the correction quality floor.
 
@@ -118,14 +94,11 @@ def _correction_capable_targets(routes) -> set[str]:
     """
     # For API targets: use the standard correction groups as before
     correction_targets = {
->>>>>>> codex/rc6-ui-feedback
         target_id
         for group_name in ("correction-capable", "correction-basic")
         for target_id in routes.model_groups.get(group_name, _EmptyModelGroup()).target_ids
     }
 
-<<<<<<< HEAD
-=======
     # For all agent targets: add those meeting the quality floor
     # This includes both packaged groups and unvetted tiers
     for target in routes.targets.values():
@@ -133,8 +106,6 @@ def _correction_capable_targets(routes) -> set[str]:
             correction_targets.add(target.id)
 
     return correction_targets
-
->>>>>>> codex/rc6-ui-feedback
 
 def _targets(source: str, *, free_only: bool) -> tuple[str, ...]:
     routes = default_model_routes()
@@ -202,17 +173,11 @@ def _targets(source: str, *, free_only: bool) -> tuple[str, ...]:
                 selected.append(native)
         return tuple(selected)
 
-<<<<<<< HEAD
-    # Only models FineSub itself binds to correction belong in the task-wide
-    # override. Its catalog also contains search-only targets (notably Gemma),
-    # whose small windows make correction preflight reject the entire task.
-=======
     # RC6.13+: Use correction-capable group order instead of catalog order.
     # This ensures models are tried in upstream's preferred order (e.g., 3.7
     # before 3.8 for free tier, as 3.8 uses ~1.5x thinking with no quality gain).
     # Also filters out models below correction quality floor (e.g., 3.5-lite at
     # quality 60 when floor is 70).
->>>>>>> codex/rc6-ui-feedback
     selected: list[str] = []
 
     # Get the ordered list from correction-capable and correction-basic groups
@@ -281,8 +246,7 @@ def _no_targets_route(source: str, *, explicit: bool) -> SourceRoute:
     return SourceRoute(models=[], source=source, skip_reason=reason)
 
 
-<<<<<<< HEAD
-=======
+
 def _check_media_support(routes, targets: tuple[str, ...], media: str) -> bool:
     """Check if any target supports the required media type."""
     if media == "text":
@@ -296,7 +260,7 @@ def _check_media_support(routes, targets: tuple[str, ...], media: str) -> bool:
     return False
 
 
->>>>>>> codex/rc6-ui-feedback
+
 @contextmanager
 def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     """Supply a private route group, never editing the shared config.toml.
@@ -318,11 +282,6 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
         "agent" if auto else request.llm_source
     )
     targets = _targets(source, free_only=auto and source == "api")
-<<<<<<< HEAD
-    if not targets:
-        yield _no_targets_route(source, explicit=not auto)
-        return
-=======
 
     # Enhanced logging: report why no targets are available
     if not targets:
@@ -374,7 +333,7 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
             "纯文本纠错已启用（所选 Agent 不支持音频/视频）。"
             "纠错质量可能低于多模态模式，因为无法利用音频佐证。"
         )
->>>>>>> codex/rc6-ui-feedback
+
 
     # Stable across resume: a random group id would change the routing
     # identity on every retry and invalidate FineSub's correction checkpoints.
