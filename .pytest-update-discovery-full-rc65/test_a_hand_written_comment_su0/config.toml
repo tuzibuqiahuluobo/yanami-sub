@@ -1,6 +1,0 @@
-# keys I care about
-[providers]
-tavily = false
-
-[segmentation]
-length_scale = 1.2

@@ -1,1 +1,0 @@
-{"schemaVersion":1,"tasks":[{"task_id":"old-task","state":"completed","request":{"input":"a.wav","output":"old-task/clip.srt"},"outputs":{"rawSrt":"old-task/clip.srt"},"created_at":1.0,"updated_at":2.0}]}

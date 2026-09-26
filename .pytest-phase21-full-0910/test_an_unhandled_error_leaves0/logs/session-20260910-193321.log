@@ -1,6 +1,0 @@
-19:33:21 startup raised RuntimeError: edgechromium is missing
-Traceback (most recent call last):
-  File "C:\Users\Ikun\Documents\全自动烤肉机的壳\finesub-desktop-migration\desktop\backend\tests\test_session_log.py", line 31, in test_an_unhandled_error_leaves_its_traceback_behind
-    raise RuntimeError("edgechromium is missing")
-RuntimeError: edgechromium is missing
-19:33:21 --- exited with an error ---

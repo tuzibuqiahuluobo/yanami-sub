@@ -2,6 +2,7 @@
 .test-upstream/
 .pytest-tmp/
 .pytest_cache/
+.pytest-*/
 pytest-cache-files-*/
 __pycache__/
 build/
