@@ -303,8 +303,9 @@ def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
             source="agent",
         )
 
+    # Mock in the agent_health_check module where it's actually called from
     monkeypatch.setattr(
-        "desktop.backend.worker.main.check_agent_health",
+        "desktop.backend.worker.agent_health_check.check_agent_health",
         mock_check_agent_health,
     )
 
@@ -442,8 +443,9 @@ def test_failed_knowledge_update_keeps_generated_final_subtitles(
             source="agent",
         )
 
+    # Mock in the agent_health_check module where it's actually called from
     monkeypatch.setattr(
-        "desktop.backend.worker.main.check_agent_health",
+        "desktop.backend.worker.agent_health_check.check_agent_health",
         mock_check_agent_health,
     )
 
