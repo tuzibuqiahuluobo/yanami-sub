@@ -1,0 +1,6 @@
+vocal: 进度 Progress 人声分离 Voice separation / café / 日本語
+aligned: 进度 Progress 语音识别 Recognition / café / 日本語
+stable: 进度 Progress 字幕稳定化 Stabilization / café / 日本語
+raw-srt: 进度 Progress 原始字幕 Raw subtitle / café / 日本語
+translated-srt: 进度 Progress 纠错翻译 Translation / café / 日本語
+final-srt: 进度 Progress 最终字幕 Final subtitle ✅ / café / 日本語

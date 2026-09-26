@@ -31,6 +31,10 @@ from finesub_bootstrap.locks import (
 
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
+from desktop.backend.worker.agent_health_check import (
+    check_agent_health,
+    validate_source_availability,
+)
 from desktop.backend.worker.model_source import source_route
 from desktop.backend.worker.protocol import EventLogWriter, WorkerEvent, encode_event
 
@@ -141,6 +145,8 @@ def _claimed_outputs() -> set[Path]:
 
     A machine whose index cannot be read yields nothing, which errs towards
     writing a new name rather than overwriting a stranger's subtitle.
+
+    RC6.13+: Returns dict mapping Path to (size, mtime) tuple for verification.
     """
 
     from finesub.paths import resolve_managed_app_paths
@@ -152,33 +158,62 @@ def _claimed_outputs() -> set[Path]:
     # location every front end shares.
     app_paths = resolve_managed_app_paths()
     if app_paths is None:
-        return set()
-    claimed: set[Path] = set()
+        return {}
+    claimed: dict[Path, tuple[int, float]] = {}
     for entry in task_index.read(
         app_paths.user_data / "tasks.json", app_paths.tasks
     ):
         outputs = entry.get("outputs")
         if not isinstance(outputs, dict):
             continue
-        for value in outputs.values():
+        metadata = entry.get("output_metadata", {})
+        for key, value in outputs.items():
             if isinstance(value, str) and value:
-                claimed.add(Path(value).expanduser().resolve())
+                path = Path(value).expanduser().resolve()
+                # Store size and mtime for verification
+                meta = metadata.get(key, {}) if isinstance(metadata, dict) else {}
+                size = meta.get("size", 0) if isinstance(meta, dict) else 0
+                mtime = meta.get("mtime", 0.0) if isinstance(meta, dict) else 0.0
+                claimed[path] = (size, mtime)
     return claimed
 
 
+def _file_unchanged(path: Path, expected_size: int, expected_mtime: float) -> bool:
+    """Check if file matches expected size and mtime (not user-modified)."""
+    try:
+        stat = path.stat()
+        # Allow small mtime drift (filesystem precision varies)
+        return stat.st_size == expected_size and abs(stat.st_mtime - expected_mtime) < 2.0
+    except OSError:
+        return False
+
+
 def _unclaimed_destination(destination: Path) -> Path:
-    """`destination`, or a free name beside it when a stranger holds that one."""
+    """`destination`, or a free name beside it when a stranger holds that one.
+
+    RC6.13+: If destination exists and is claimed but has been modified by the
+    user (different size or mtime), treat it as unclaimed to avoid data loss.
+    """
 
     if not destination.exists():
         return destination
     claimed = _claimed_outputs()
     if destination in claimed:
-        return destination
+        size, mtime = claimed[destination]
+        # Only reuse if file is unchanged since we wrote it
+        if _file_unchanged(destination, size, mtime):
+            return destination
+        # File was modified by user - don't overwrite
     candidate = destination.with_name(
         f"{destination.stem}.finesub{destination.suffix}"
     )
     serial = 2
-    while candidate.exists() and candidate not in claimed:
+    while candidate.exists():
+        # Check if this candidate is also claimed and unchanged
+        if candidate in claimed:
+            size, mtime = claimed[candidate]
+            if _file_unchanged(candidate, size, mtime):
+                return candidate
         candidate = destination.with_name(
             f"{destination.stem}.finesub.{serial}{destination.suffix}"
         )
@@ -359,15 +394,27 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
     """True when only the correction/translation stage failed, for either
     model source, and it is safe to fall back to the raw subtitle.
 
+<<<<<<< HEAD
+=======
+    RC6.13+: API errors are now checked for permanent failure kinds (invalid
+    API key, authentication errors) just like Agent errors, so configuration
+    mistakes aren't silently masked as "correction skipped, raw subtitle
+    preserved".
+
+>>>>>>> codex/rc6-ui-feedback
     Renamed from `_agent_correction_exhausted`. The previous version only
     recognized Agent-harness-specific error markers (`CapabilityUnavailableError`,
     `_harness_route_decision`), so it never matched an API-sourced failure --
     those always propagated as a hard task failure, contradicting the
+<<<<<<< HEAD
     "保留原始字幕" behavior RC6.10 documents. API errors carry none of those
     Agent-only attributes, so for `source == "api"` this instead relies on
     the pipeline's own "-raw.srt" checkpoint (see `_raw_subtitle_available`):
     if the raw transcript already exists, earlier stages succeeded and only
     correction/translation failed, which is exactly the case this exists for.
+=======
+    "保留原始字幕" behavior RC6.10 documents.
+>>>>>>> codex/rc6-ui-feedback
     """
 
     outputs = _expected_subtitles(request)
@@ -390,8 +437,46 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
                 and item.get("outcome") != "success"
                 for item in rows
             )
+<<<<<<< HEAD
     if not matched and source == "api":
         matched = True  # no Agent-harness attributes to inspect on an API error
+=======
+
+    # RC6.13+: For API source, check for permanent failures instead of
+    # blindly accepting any error. Common permanent failures include:
+    # - Invalid API key (authentication errors)
+    # - API key without required permissions
+    # - Malformed requests (should not happen, but if they do, should fail loudly)
+    if not matched and source == "api":
+        # Check if this looks like a permanent configuration error
+        error_str = str(error).lower()
+        error_type = type(error).__name__
+
+        # Permanent failure indicators (should NOT be masked)
+        permanent_indicators = [
+            "invalid api key",
+            "invalid_api_key",
+            "authentication",
+            "unauthorized",
+            "forbidden",
+            "permission denied",
+            "api key not found",
+            "invalid key",
+        ]
+
+        if any(indicator in error_str for indicator in permanent_indicators):
+            # This is a configuration error - fail loudly, don't mask it
+            return False
+
+        # Check harness failure_kind if available (works for both API and Agent)
+        failure_kind = getattr(error, "failure_kind", None)
+        if failure_kind == "permanent":
+            return False
+
+        # For other API errors (transient failures, rate limits, etc.),
+        # allow fallback to raw subtitle
+        matched = True
+>>>>>>> codex/rc6-ui-feedback
 
     if not matched:
         return False
@@ -506,9 +591,24 @@ def _agent_route_failures(
              if row.get("target_id") == target and row.get("vendor_error")),
             str(candidate.get("detail") or "").strip(),
         )[:400]
+
+        # Build a user-friendly message with actionable guidance
         message = f"本地 Agent {target} 未能使用（{reason}）"
         if detail:
             message += f"：{detail}"
+
+        # Add actionable guidance based on reason
+        if reason == "quota":
+            message += "\n  → 建议：请充值 API 配额后重试"
+        elif reason == "provider_disabled":
+            message += "\n  → 建议：请在设置中检查该 Agent 是否被禁用，或重新运行健康检查"
+        elif reason == "transient":
+            message += "\n  → 建议：临时错误，可能是网络问题或服务暂时不可用，请稍后重试"
+        elif reason == "backend_unavailable":
+            message += "\n  → 建议：Agent 后端不可用，请检查 Agent 是否正确安装和配置"
+        elif reason == "capability_mismatch":
+            message += "\n  → 建议：Agent 不支持当前任务所需的能力（如音频处理），请选择其他 Agent 或调整任务设置"
+
         if message not in seen and len(seen) < 24:
             seen.add(message)
             log(message)
@@ -544,6 +644,49 @@ def run_request(
     emit: Emit,
 ) -> dict[str, str]:
     emit(WorkerEvent.started(task_id))
+
+    # Pre-check: validate model source availability before expensive ASR stages
+    if request.stage in {"translated-srt", "final-srt"} and request.llm_source != "manual":
+        emit(WorkerEvent.log(task_id, "正在检查模型源可用性..."))
+
+        # Perform agent health check for agent/auto modes
+        should_check_agents = request.llm_source in {"agent", "auto"}
+        is_available, error_message = validate_source_availability(
+            request.llm_source,
+            check_agents=should_check_agents,
+        )
+
+        if not is_available:
+            emit(WorkerEvent.log(task_id, f"模型源检查失败：{error_message}"))
+            emit(WorkerEvent.failed(task_id, error_message))
+            raise ValueError(error_message)
+
+        # Log detailed health report for agent mode
+        if should_check_agents:
+            report = check_agent_health()
+            if report.statuses:
+                summary = report.format_summary()
+                emit(WorkerEvent.log(task_id, f"Agent 健康检查：{summary}"))
+
+                # Log detailed status for each unavailable agent
+                for status in report.statuses:
+                    if not status.available:
+                        detail_msg = f"Agent {status.tier} 不可用"
+                        if status.reason:
+                            detail_msg += f"（{status.reason}）"
+                        if status.detail:
+                            detail_msg += f"：{status.detail}"
+                        emit(WorkerEvent.log(task_id, detail_msg))
+
+                # If no agents available at all, fail early
+                if not report.any_available:
+                    error_msg = (
+                        "所有配置的本地 Agent 均不可用。"
+                        "请在设置中检查 Agent 配置，或选择使用 API 模式。"
+                    )
+                    emit(WorkerEvent.log(task_id, error_msg))
+                    emit(WorkerEvent.failed(task_id, error_msg))
+                    raise ValueError(error_msg)
 
     try:
         # "normal": the drawer and the task log get the pipeline's own report,

@@ -1,0 +1,6 @@
+[providers]
+tavily = false
+exa = true
+
+[chunking]
+x = 1

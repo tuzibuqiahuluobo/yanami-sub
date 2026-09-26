@@ -1,0 +1,8 @@
+# my notes -- do not lose these
+[providers]
+gemini_free = true   # the only one I use
+tavily = true
+exa = false
+
+[segmentation]
+# shorter subtitles for the lecture recordings

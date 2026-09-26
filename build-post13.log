@@ -1,0 +1,154 @@
+
+added 34 packages, and audited 35 packages in 40s
+
+5 packages are looking for funding
+  run `npm fund` for details
+
+4 vulnerabilities (1 moderate, 2 high, 1 critical)
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> yanami-sub-frontend@0.1.0-rc.6.post10 test
+> node --import tsx --test test/*.test.ts
+
+✔ the workspace pane does not capture the fixed dialog (140.1414ms)
+✔ a fixed overlay inside the scrolling pane still tracks the viewport (2512.8044ms)
+✔ the diagnostics chips separate blockers from optional rows (12.3128ms)
+✔ the weights notice follows the real model state (8.2109ms)
+✔ pipelineModelsReady says no when the row is absent (0.3507ms)
+✔ the diagnostics payload carries the model locations actually in use (2.2278ms)
+✔ the LLM panel re-reads keys written from outside the app (4.3765ms)
+✔ the task form exposes Agent and API model selection (6.2833ms)
+✔ every output stage the dropdown offers is one the pipeline has (3.7065ms)
+✔ a finished task leaves the workspace when the sidebar navigates (4.4663ms)
+✔ error envelopes preserve bridge code and action (1.2216ms)
+✔ browser preview fallback is deterministic (1.4397ms)
+✔ browser preview exposes update check and release page (0.396ms)
+✔ browser preview exposes the batch scheduler contract (0.8447ms)
+✔ browser preview round-trips a static batch manifest (0.3505ms)
+✔ browser preview exposes the knowledge workspace contract (14.9957ms)
+✔ browser preview exposes key export and storage maintenance (3.4059ms)
+✔ desktop API uses the native Python bridge by default (0.6827ms)
+✔ desktop API exposes a distinct minimize-to-tray action (0.5489ms)
+✔ desktop API exposes a real native restart action (0.4514ms)
+✔ installUpdate forwards kind and version to the native bridge (0.513ms)
+✔ browser preview refuses to install rather than pretending to (0.611ms)
+✔ custom select exposes complete keyboard navigation hooks (1.7327ms)
+✔ missing translation key is neutral capability copy (1.8302ms)
+✔ bytes and progress never display NaN (0.2205ms)
+✔ duration remains compact for long tasks (0.1603ms)
+✔ update summary distinguishes app and full packages (0.1607ms)
+✔ URL sources are recognised the same way the backend recognises them (0.1571ms)
+✔ output names are rejected exactly where the backend rejects them (0.1577ms)
+✔ task errors are concise while preserving the raw detail for a tooltip (0.3378ms)
+✔ the moving pill the sidebar renders is the one the stylesheet drives (124.2204ms)
+✔ motion can be turned off, by the user and by the system (146.5921ms)
+✔ theme-coloured switchers share the animation preference gate (157.2434ms)
+✔ the routing catalog has an accessible two-way reveal (144.9171ms)
+✔ highlighted form controls share the rounded control token (120.4176ms)
+✔ a first run starts with the light theme (0.9419ms)
+✔ form focus uses one subtle themed halo while buttons keep keyboard focus (83.8739ms)
+✔ the animations stay native to the platform (4.577ms)
+✔ a value survives in the mirror for the next synchronous read (2.0983ms)
+✔ settings.json wins over the mirror when the bridge answers (0.7706ms)
+✔ null clears a setting instead of storing a default (0.3234ms)
+✔ the five legacy keys move once and are then gone (1.6399ms)
+✔ a legacy key never overwrites what settings.json already knows (0.2474ms)
+✔ a failed durable write leaves the legacy keys for the next start (0.2313ms)
+✔ an unparseable legacy value is dropped rather than carried forward (0.1902ms)
+✔ translation mode discloses API processing (4.6447ms)
+✔ a machine with one GPU stores nothing and reads back automatic (3.6923ms)
+✔ a chosen card survives a round trip, name and all (0.5883ms)
+✔ nonsense in storage reads as automatic rather than as card NaN (0.1604ms)
+✔ a card that is no longer present is reported stale (0.1525ms)
+✔ a different card in the same slot is stale here too (0.0974ms)
+✔ a probe that has not answered yet never calls a choice stale (0.0791ms)
+✔ automatic puts no device on the wire (0.2125ms)
+✔ Python setup checks locally before offering a download (9.9037ms)
+✔ Python preflight choices are localized and explain interpreter reuse (0.1935ms)
+✔ tokcount has exact download metadata and localized copy (0.7958ms)
+✔ optional on-demand tools never block a task (2.8056ms)
+✔ a missing required resource still blocks (0.2282ms)
+✔ installing a dependency immediately unblocks its resource (0.1522ms)
+✔ the newest completed recognition run for the same input is offered (1.0862ms)
+✔ runs that cannot seed an LLM pass are not offered (0.1763ms)
+✔ bootstrap restores an active worker task and its progress (2.2503ms)
+✔ task polling adds work started outside the current renderer (0.3827ms)
+✔ a resource refresh replaces optimistic install state (0.2313ms)
+✔ stages reported as reused are remembered as such (0.4615ms)
+✔ an unavailable Agent marks correction skipped rather than completed (0.2127ms)
+✔ api_key_required keeps the task editable and opens settings (0.143ms)
+✔ a route mismatch stays beside the task model selector (0.1483ms)
+✔ completed event exposes subtitle actions (0.1342ms)
+✔ runtime_required keeps task editable and opens resources (0.133ms)
+✔ log history stays bounded (0.5821ms)
+✔ resource install snapshots keep progress and failure visible (0.2912ms)
+✔ new tasks keep intermediates and derive their own name (0.2173ms)
+✔ a machine with no completed task is treated as a first run (0.2243ms)
+✔ reusing a recognition run pins its directory and switches to final-srt (0.1848ms)
+✔ selecting a file clears a pinned output directory (0.0913ms)
+✔ a rejection about the running task must not tear the running task down (0.2424ms)
+✔ remembered options survive starting a new task (0.1805ms)
+✔ a null in stored defaults never overwrites a real default (0.0907ms)
+✔ every file in app/styles is imported, and in one order (3.7053ms)
+✔ knowledge status and maintenance actions fit their real state (2.1791ms)
+✔ dark resource surfaces stay neutral and the installation log stays dark (3570.9627ms)
+✔ completed tasks expose subtitles only and prefer the final result (0.9158ms)
+✔ an explicitly requested expert stage is available without becoming a subtitle (0.1624ms)
+✔ success toasts are bounded, dismissible and announced without taking focus (1.9456ms)
+✔ the update download is a circular lower-right status with a checked finish (32.6796ms)
+✔ explicit successful operations route through the shared toast (11.5168ms)
+✔ five font-size levels increase computed sizes across primary UI (17945.0929ms)
+✔ the complete UI uses Windows system fonts at readable sizes (1.9734ms)
+✔ the UI does not bundle web fonts (0.3945ms)
+✔ Yanami Sub metadata and title bar use the supplied icon (0.2098ms)
+✔ character themes include the requested Marisa and Yanami palettes (0.2597ms)
+✔ an available startup update opens an in-app announcement (2.8536ms)
+✔ do not show again controls the same automatic-check preference as Settings (1.4577ms)
+✔ history stays bundled and unrendered until the user loads it (1.1184ms)
+✔ a ready update restarts app patches but only exits for full updates (3.7837ms)
+✔ download progress is root-owned instead of an inline Settings bar (2.9183ms)
+✔ subtitle progress follows the task across pages and reuses completion feedback (0.996ms)
+ℹ tests 98
+ℹ suites 0
+ℹ pass 98
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 20779.6263
+
+> yanami-sub-frontend@0.1.0-rc.6.post10 typecheck
+> tsc --noEmit
+
+
+> yanami-sub-frontend@0.1.0-rc.6.post10 build
+> next build --webpack
+
+▲ Next.js 16.2.11 (webpack)
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 1486ms
+  Running TypeScript ...
+  Finished TypeScript in 4.7s ...
+  Collecting page data using 4 workers ...
+  Generating static pages using 4 workers (0/3) ...
+✓ Generating static pages using 4 workers (3/3) in 2.6s
+  Finalizing page optimization ...
+  Collecting build traces ...
+
+Route (app)
+┌ ○ /
+└ ○ /_not-found
+
+
+○  (Static)  prerendered as static content
+
+Static WebView export verified: C:\Users\Ikun\Documents\ȫ�Զ�������Ŀ�\finesub-desktop-migration\desktop\frontend\out\index.html
+Yanami Sub frontend ready: C:\Users\Ikun\Documents\ȫ�Զ�������Ŀ�\finesub-desktop-migration\desktop\frontend\out\index.html
+Yanami Sub onedir package: C:\Users\Ikun\AppData\Local\Temp\yanami-sub-build\0.1.0-rc.6.post13\Yanami Sub.dist
+Yanami Sub Windows build completed: C:\Users\Ikun\AppData\Local\Temp\yanami-sub-build\0.1.0-rc.6.post13\Yanami Sub.dist
+C:\Users\Ikun\Documents\ȫ�Զ�������Ŀ�\finesub-desktop-migration\dist\release\yanami-sub-update-manifest.json

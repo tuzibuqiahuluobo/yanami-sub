@@ -201,13 +201,21 @@ def _windows_drive_roots() -> list[Path]:
 
 
 def _source_roots(environ: Mapping[str, str]) -> list[Path]:
+    """Safe source checkout discovery limited to user directories.
+
+    RC6.13+: Removed drive-root scanning (X:\deepseek-harness) to prevent
+    security issue where arbitrary bin.js at drive roots could be executed.
+    Only checks user-controlled directories now.
+    """
     home = Path(environ.get("USERPROFILE") or Path.home())
     roots: list[Path] = []
     for parent in (home, home / "Documents", home / "source" / "repos"):
         roots.append(parent / "deepseek-harness")
-    # Bounded, name-specific drive-root lookup. It finds installations such as
-    # G:\deepseek-harness without recursively walking every user's disks.
-    roots.extend(root / "deepseek-harness" for root in _windows_drive_roots())
+    # RC6.13+: Removed _windows_drive_roots() scan for security.
+    # Drive roots (C:\, D:\, etc.) are writable by other users and network
+    # shares, allowing code execution via planted bin.js files.
+    # Users with non-standard install locations should use Settings to
+    # specify the path explicitly.
     return roots
 
 

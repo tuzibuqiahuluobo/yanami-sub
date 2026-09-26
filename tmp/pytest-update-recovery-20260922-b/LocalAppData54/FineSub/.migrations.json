@@ -1,0 +1,10 @@
+{
+  "installs": {
+    "c:\\users\\ikun\\documents\\全自动烤肉机的壳\\finesub-desktop-migration\\tmp\\pytest-update-recovery-20260922-b\\test_development_services_run_0\\finesub": [
+      "0001-knowledge-out-of-app-versions",
+      "0002-user-data-to-managed-location",
+      "0003-tasks-out-of-user-data",
+      "0004-protect-env-keys"
+    ]
+  }
+}
