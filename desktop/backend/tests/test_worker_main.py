@@ -247,9 +247,17 @@ def test_worker_applies_and_restores_one_run_model_routing(tmp_path: Path) -> No
 def test_no_available_agent_preserves_raw_subtitles_and_marks_correction_skipped(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """RC6.13+: Pre-check now fails fast when no agents/API keys are available.
+
+    This test now verifies that the pre-check correctly detects the missing
+    configuration and raises ValueError with a helpful error message, rather
+    than silently degrading to raw subtitles after expensive ASR stages.
+    """
     from desktop.backend.settings.local_agents import COMMANDS_ENV
 
     monkeypatch.delenv("GEMINI_FREE", raising=False)
+    monkeypatch.delenv("GEMINI_PAID", raising=False)
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv(COMMANDS_ENV, raising=False)
     source = tmp_path / "a.wav"
     source.write_bytes(b"audio")
@@ -258,27 +266,48 @@ def test_no_available_agent_preserves_raw_subtitles_and_marks_correction_skipped
     stages: list[str] = []
     events = []
 
-    result = run_request(
-        TaskRequest(input=str(source), stage="final-srt", llm_source="auto"),
-        task_id="task-no-agent",
-        pipeline=lambda _source, **kwargs: stages.append(kwargs["stage"]) or paths,
-        emit=events.append,
-    )
+    # RC6.13+: Should fail fast with pre-check error
+    with pytest.raises(ValueError, match="未配置任何本地 Agent"):
+        run_request(
+            TaskRequest(input=str(source), stage="final-srt", llm_source="auto"),
+            task_id="task-no-agent",
+            pipeline=lambda _source, **kwargs: stages.append(kwargs["stage"]) or paths,
+            emit=events.append,
+        )
 
-    assert stages == ["raw-srt"]
-    assert "rawSrt" in result and "finalSrt" not in result
-    assert any(event.type == "stage" and event.payload.get("skipped") for event in events)
+    # Pipeline should not have been called at all (pre-check failed)
+    assert stages == []
 
 
 def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """RC6.13+: Pre-check validates agent executables exist before running.
+
+    This test now mocks the health check to pass, then verifies that runtime
+    quota exhaustion still falls back to raw subtitles gracefully.
+    """
     from desktop.backend.settings.local_agents import COMMANDS_ENV
+    from desktop.backend.worker.agent_health_check import AgentHealthReport, AgentStatus
 
     config = tmp_path / "config.toml"
     config.write_text("[llm]\n", encoding="utf-8")
     monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
     monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
+
+    # Mock agent health check to pass pre-check
+    def mock_check_agent_health():
+        return AgentHealthReport(
+            statuses=(AgentStatus(tier="LOCAL_DSH", available=True),),
+            any_available=True,
+            source="agent",
+        )
+
+    monkeypatch.setattr(
+        "desktop.backend.worker.main.check_agent_health",
+        mock_check_agent_health,
+    )
+
     source = tmp_path / "a.wav"
     source.write_bytes(b"audio")
     output = tmp_path / "run" / "a.srt"
@@ -392,12 +421,32 @@ def test_api_correction_failure_without_raw_subtitle_still_raises(
 def test_failed_knowledge_update_keeps_generated_final_subtitles(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """RC6.13+: Pre-check validates agent executables exist before running.
+
+    This test now mocks the health check to pass, then verifies that a failed
+    knowledge update doesn't discard the already-generated final subtitles.
+    """
     from desktop.backend.settings.local_agents import COMMANDS_ENV
+    from desktop.backend.worker.agent_health_check import AgentHealthReport, AgentStatus
 
     config = tmp_path / "config.toml"
     config.write_text("[llm]\n", encoding="utf-8")
     monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
     monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
+
+    # Mock agent health check to pass pre-check
+    def mock_check_agent_health():
+        return AgentHealthReport(
+            statuses=(AgentStatus(tier="LOCAL_DSH", available=True),),
+            any_available=True,
+            source="agent",
+        )
+
+    monkeypatch.setattr(
+        "desktop.backend.worker.main.check_agent_health",
+        mock_check_agent_health,
+    )
+
     source = tmp_path / "a.wav"
     source.write_bytes(b"audio")
     output = tmp_path / "run" / "a.srt"
