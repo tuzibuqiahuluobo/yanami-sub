@@ -491,12 +491,32 @@ def test_failed_knowledge_update_keeps_generated_final_subtitles(
 def test_successful_agent_fallback_reports_failed_target_in_task_log(
     tmp_path: Path, monkeypatch
 ) -> None:
+    """RC6.13+: Mock agent health check to pass pre-validation."""
     from desktop.backend.settings.local_agents import COMMANDS_ENV
+    from desktop.backend.worker.agent_health_check import AgentHealthReport, AgentStatus
 
     config = tmp_path / "config.toml"
     config.write_text("[llm]\n", encoding="utf-8")
     monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
     monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"]}))
+
+    # Mock agent health check to pass pre-check
+    def mock_check_agent_health():
+        return AgentHealthReport(
+            statuses=(AgentStatus(tier="LOCAL_DSH", available=True),),
+            any_available=True,
+            source="agent",
+        )
+
+    monkeypatch.setattr(
+        "desktop.backend.worker.agent_health_check.check_agent_health",
+        mock_check_agent_health,
+    )
+    monkeypatch.setattr(
+        "desktop.backend.worker.main.check_agent_health",
+        mock_check_agent_health,
+    )
+
     source = tmp_path / "a.wav"
     source.write_bytes(b"audio")
     output = tmp_path / "run" / "a.srt"
