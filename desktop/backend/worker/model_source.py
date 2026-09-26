@@ -56,53 +56,54 @@ def _agent_tiers() -> set[str]:
     return {tier for tier, command in commands.items() if command}
 
 
-def _correction_capable_targets(routes) -> set[str]:
-    """Every target FineSub itself binds to correction, from either source.
+def _meets_correction_floor(routes, target_id: str) -> bool:
+    """Check if a target meets the correction quality floor.
 
-    Centralized so both the API branch and the local-Agent branch of
-    `_targets` apply the *same* capability check. Previously only the API
-    branch filtered against this set; the Agent branch trusted its packaged
-    groups (and a naming-convention heuristic for unvetted tiers) to already
-    be correction-only, which is exactly the assumption that let a
-    search-only model slip into the task model group in the bug RC6.10 was
-    meant to fix. A missing group name resolves to an empty set instead of
-    raising, so a config mismatch degrades to "no targets" rather than
-    crashing the task.
-
-    RC6.11+: Also includes targets from local agent capability groups
-    (dsh-capable, agy-only-capable, workbuddy-capable) since these are
-    verified correction-capable models that the upstream finesub config
-    hasn't yet added to the correction-capable/correction-basic groups.
+    Uses FineSub's quality_score mechanism instead of group membership.
+    This allows any target (including Claude Code, Codex, and future agents)
+    to qualify for correction as long as it meets the quality threshold,
+    without requiring explicit inclusion in correction-capable groups.
     """
-
-    missing = [name for name in ("correction-capable", "correction-basic")
-               if name not in routes.model_groups]
-    if missing:
+    task_groups = getattr(routes, "task_groups", {})
+    correction_group = task_groups.get("correction-text")
+    if correction_group is None:
         logger.warning(
-            "model routing: expected group(s) %s not found in FineSub config; "
-            "treating as zero correction-capable targets", missing,
+            "model routing: correction-text task group not found; "
+            "falling back to quality_score >= 70"
         )
+        floor = 70
+    else:
+        floor = getattr(correction_group, "floor_score", 70)
 
-    # Get correction targets from the standard groups
+    target = routes.target_fact(target_id)
+    quality = getattr(target, "quality_score", 0)
+    return quality >= floor
+
+
+def _correction_capable_targets(routes) -> set[str]:
+    """Every target that meets correction quality requirements.
+
+    RC6.13+: Changed from group membership check to quality_score check.
+    This fixes the issue where Claude Code, Codex, and other unvetted agents
+    were excluded because they weren't in correction-capable/correction-basic
+    groups, even though they meet the quality threshold.
+
+    For packaged agent groups (AGY, DSH, WorkBuddy), we trust the upstream
+    group membership and don't re-filter. For unvetted tiers and API targets,
+    we use the quality floor check.
+    """
+    # For API targets: use the standard correction groups as before
     correction_targets = {
         target_id
         for group_name in ("correction-capable", "correction-basic")
         for target_id in routes.model_groups.get(group_name, _EmptyModelGroup()).target_ids
     }
 
-    # RC6.11+: Add local agent targets from their packaged capability groups
-    # These are correction-capable but not yet included in the upstream
-    # finesub correction groups due to configuration mismatch
-    local_agent_groups = ("dsh-capable", "dsh-basic", "agy-only-capable",
-                          "workbuddy-capable", "workbuddy-basic")
-    for group_name in local_agent_groups:
-        group = routes.model_groups.get(group_name)
-        if group:
-            correction_targets.update(group.target_ids)
-            logger.debug(
-                "model routing: added %d targets from %s to correction-capable set",
-                len(group.target_ids), group_name
-            )
+    # For all agent targets: add those meeting the quality floor
+    # This includes both packaged groups and unvetted tiers
+    for target in routes.targets.values():
+        if target.backend == "local_agent" and _meets_correction_floor(routes, target.id):
+            correction_targets.add(target.id)
 
     return correction_targets
 
@@ -173,23 +174,42 @@ def _targets(source: str, *, free_only: bool) -> tuple[str, ...]:
                 selected.append(native)
         return tuple(selected)
 
-    # Only models FineSub itself binds to correction belong in the task-wide
-    # override. Its catalog also contains search-only targets (notably Gemma),
-    # whose small windows make correction preflight reject the entire task.
+    # RC6.13+: Use correction-capable group order instead of catalog order.
+    # This ensures models are tried in upstream's preferred order (e.g., 3.7
+    # before 3.8 for free tier, as 3.8 uses ~1.5x thinking with no quality gain).
+    # Also filters out models below correction quality floor (e.g., 3.5-lite at
+    # quality 60 when floor is 70).
     selected: list[str] = []
-    for target in routes.targets.values():
-        if target.id not in correction_targets or target.backend in {
-            "local_agent", "conversational_agent"
-        }:
+
+    # Get the ordered list from correction-capable and correction-basic groups
+    capable_group = routes.model_groups.get("correction-capable", _EmptyModelGroup())
+    basic_group = routes.model_groups.get("correction-basic", _EmptyModelGroup())
+
+    # Use group order (capable first, then basic), but filter by availability
+    ordered_targets = list(capable_group.target_ids) + list(basic_group.target_ids)
+
+    for target_id in ordered_targets:
+        if target_id not in correction_targets:
             continue
-        fact = routes.target_fact(target.id)
+        target = routes.targets.get(target_id)
+        if target is None or target.backend in {"local_agent", "conversational_agent"}:
+            continue
+        fact = routes.target_fact(target_id)
         if free_only and fact.provider_tier != "GEMINI_FREE":
             continue
-        provider = routes.provider_for_target(target.id)
+        # Check if model meets correction quality floor
+        if not _meets_correction_floor(routes, target_id):
+            logger.debug(
+                "model routing: API target %s below correction floor, skipping",
+                target_id
+            )
+            continue
+        provider = routes.provider_for_target(target_id)
         key_name = provider.key_env or target.enabled_by
         if key_name and not os.environ.get(key_name, "").strip():
             continue
-        selected.append(target.id)
+        selected.append(target_id)
+
     return tuple(selected)
 
 
@@ -227,9 +247,28 @@ def _no_targets_route(source: str, *, explicit: bool) -> SourceRoute:
     return SourceRoute(models=[], source=source, skip_reason=reason)
 
 
+def _check_media_support(routes, targets: tuple[str, ...], media: str) -> bool:
+    """Check if any target supports the required media type."""
+    if media == "text":
+        return True  # All targets support text
+    for target_id in targets:
+        target = routes.target_fact(target_id)
+        if media == "audio" and getattr(target, "supports_audio", False):
+            return True
+        if media == "video" and getattr(target, "supports_video", False):
+            return True
+    return False
+
+
 @contextmanager
 def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
-    """Supply a private route group, never editing the shared config.toml."""
+    """Supply a private route group, never editing the shared config.toml.
+
+    RC6.13+: When using agent source and selected targets don't support the
+    requested media type (audio/video), automatically downgrade correction
+    and planning media to 'text' to allow text-only agents (DSH, WorkBuddy,
+    Claude Code, Codex) to work.
+    """
 
     if request.stage not in {"translated-srt", "final-srt"} or request.llm_source == "manual":
         yield SourceRoute(models=request.llm_model, source="manual")
@@ -242,9 +281,57 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
         "agent" if auto else request.llm_source
     )
     targets = _targets(source, free_only=auto and source == "api")
+
+    # Enhanced logging: report why no targets are available
     if not targets:
+        if source == "agent":
+            logger.warning(
+                "No agent targets available. Check that agents are configured "
+                "and enabled in settings. COMMANDS_ENV: %s",
+                os.environ.get(COMMANDS_ENV, "{}"),
+            )
+        else:
+            logger.warning(
+                "No API targets available. Check API keys. "
+                "GEMINI_FREE: %s, GEMINI_PAID: %s",
+                "configured" if os.environ.get("GEMINI_FREE") else "missing",
+                "configured" if os.environ.get("GEMINI_PAID") else "missing",
+            )
         yield _no_targets_route(source, explicit=not auto)
         return
+
+    # RC6.13+: Auto-downgrade media to text for text-only agents
+    # Check if targets support the requested media type
+    routes = default_model_routes()
+    correction_media = request.llm_correction_media or request.llm_media
+    planning_media = request.llm_planning_media or request.llm_media
+
+    media_downgraded = False
+    if source == "agent":
+        # Check if any target supports the required media
+        if correction_media in ("audio", "video") and not _check_media_support(routes, targets, correction_media):
+            logger.info(
+                "Media auto-downgrade: selected agents don't support %s for correction, "
+                "downgrading to text (agents: %s)",
+                correction_media, ", ".join(targets)
+            )
+            correction_media = "text"
+            media_downgraded = True
+
+        if planning_media in ("audio", "video") and not _check_media_support(routes, targets, planning_media):
+            logger.info(
+                "Media auto-downgrade: selected agents don't support %s for planning, "
+                "downgrading to text (agents: %s)",
+                planning_media, ", ".join(targets)
+            )
+            planning_media = "text"
+            media_downgraded = True
+
+    if media_downgraded:
+        logger.warning(
+            "纯文本纠错已启用（所选 Agent 不支持音频/视频）。"
+            "纠错质量可能低于多模态模式，因为无法利用音频佐证。"
+        )
 
     # Stable across resume: a random group id would change the routing
     # identity on every retry and invalidate FineSub's correction checkpoints.
@@ -256,10 +343,21 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
         task_config = Path(directory) / "config.toml"
         if shared_path is not None:
             shutil.copy2(shared_path, task_config)
-        update_config_file(
-            task_config,
-            {"llm": {"execution_policy": "agent-only" if source == "agent" else "api-only"}},
-        )
+
+        # Build config updates
+        config_updates = {
+            "llm": {
+                "execution_policy": "agent-only" if source == "agent" else "api-only"
+            }
+        }
+
+        # Apply media downgrades if needed
+        if media_downgraded:
+            config_updates["llm"]["correction_media"] = correction_media
+            config_updates["llm"]["planning_media"] = planning_media
+
+        update_config_file(task_config, config_updates)
+
         with task_config.open("a", encoding="utf-8") as handle:
             handle.write(
                 f"\n[llm.model_groups.{group_id}]\n"
@@ -269,6 +367,11 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
             os.environ["FINESUB_CONFIG_FILE"] = str(task_config)
             clear_config_cache()
             default_model_routes.cache_clear()
+            logger.info(
+                "Model routing: source=%s, targets=%s, group_id=%s%s",
+                source, targets, group_id,
+                f", media downgraded to text" if media_downgraded else ""
+            )
             yield SourceRoute(models=[group_id], source=source, targets=targets)
         finally:
             if previous is None:

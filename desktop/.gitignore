@@ -19,3 +19,15 @@ backend/tests/.tmp-*/
 **/dist/
 **/build/
 installer/output/
+
+# RC6.13+: Prevent accidental commits of temporary files, test artifacts,
+# and user-specific content (Issue #5)
+tmp/
+output/
+out/
+deliverables/
+.pytest-*/
+findings.md
+release-key.pem
+.env
+

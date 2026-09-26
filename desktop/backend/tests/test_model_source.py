@@ -152,23 +152,26 @@ def test_explicit_agent_source_with_no_agent_now_raises_like_api_does() -> None:
 
 def test_agent_unvetted_tier_excludes_non_correction_targets(monkeypatch) -> None:
     """LOCAL_CLAUDE has no entry in `packaged_groups`, so it goes through the
-    naming-convention fallback path. Before this patch that path never
-    checked correction capability at all; assert here that a target the
-    fixture's own `correction-capable`/`correction-basic` groups do not list
-    is never selected, even if it would otherwise match the "-native-"
-    heuristic.
+    quality-floor check path.
+
+    RC6.13+: Changed from group membership check to quality_score >= floor.
+    Assert that targets meeting the quality threshold are selected, regardless
+    of whether they're in correction-capable/correction-basic groups.
     """
 
     monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_CLAUDE": ["claude.exe"]}))
     request = TaskRequest(input="a.mp4", stage="final-srt", llm_source="agent")
 
     routes = default_model_routes()
-    correction_targets = {
-        target_id
-        for group_name in ("correction-capable", "correction-basic")
-        for target_id in routes.model_groups[group_name].target_ids
-    }
+    task_groups = getattr(routes, "task_groups", {})
+    correction_group = task_groups.get("correction-text")
+    floor = getattr(correction_group, "floor_score", 70) if correction_group else 70
 
     with source_route(request) as route:
         assert route.targets  # LOCAL_CLAUDE is still usable for its real targets
-        assert set(route.targets) <= correction_targets
+        # All selected targets should meet the quality floor
+        for target_id in route.targets:
+            target = routes.target_fact(target_id)
+            quality = getattr(target, "quality_score", 0)
+            assert quality >= floor, f"Target {target_id} quality {quality} below floor {floor}"
+

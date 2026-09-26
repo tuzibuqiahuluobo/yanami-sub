@@ -819,7 +819,11 @@ def create_application(
     session = session or SessionLog.disabled()
     root = resolve_application_root()
     paths = resolve_application_paths(root)
-    development_url = os.environ.get("YANAMI_SUB_DEV_URL")
+    # RC6.13+: Only respect YANAMI_SUB_DEV_URL in non-frozen builds.
+    # In frozen production builds (sys.frozen), ignore the environment variable
+    # to prevent local privilege escalation in multi-user scenarios.
+    frozen = getattr(sys, "frozen", False)
+    development_url = None if frozen else os.environ.get("YANAMI_SUB_DEV_URL")
     development = bool(development_url)
     installer = AppInstaller(paths)
     if not development:
