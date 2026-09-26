@@ -3,6 +3,7 @@
 .pytest-tmp/
 .pytest_cache/
 .pytest-*/
+pytest-*/
 pytest-cache-files-*/
 __pycache__/
 build/
@@ -10,3 +11,22 @@ dist/
 *.spec
 .release-secrets/
 .release-build/
+
+# Build logs
+build*.log
+*.log
+
+# Next.js
+.next/
+desktop/frontend/.next/
+
+# Python cache
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.tox/
+
+# OS files
+.DS_Store
+Thumbs.db
