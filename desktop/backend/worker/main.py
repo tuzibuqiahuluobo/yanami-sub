@@ -35,7 +35,7 @@ from desktop.backend.worker.agent_health_check import (
     check_agent_health,
     validate_source_availability,
 )
-from desktop.backend.worker.model_source import source_route
+from desktop.backend.worker.model_source import SourceRoute, source_route
 from desktop.backend.worker.protocol import EventLogWriter, WorkerEvent, encode_event
 
 
@@ -314,6 +314,7 @@ def _execute_pipeline(
     task_id: str,
     pipeline: PipelineCallable,
     knowledge: str | None = None,
+    route: SourceRoute | None = None,
 ) -> Any:
     return pipeline(
         request.input,
@@ -335,8 +336,8 @@ def _execute_pipeline(
         asr_stabilize_profile=request.asr_stabilize_profile,
         split_length_scale=request.split_length_scale,
         llm_media=request.llm_media,
-        llm_correction_media=request.llm_correction_media,
-        llm_planning_media=request.llm_planning_media,
+        llm_correction_media=route.correction_media if route is not None else request.llm_correction_media,
+        llm_planning_media=route.planning_media if route is not None else request.llm_planning_media,
         llm_retrieval=request.llm_retrieval,
         llm_difficulty=request.llm_difficulty,
         llm_continuity=request.llm_continuity,
@@ -629,23 +630,24 @@ def run_request(
 ) -> dict[str, str]:
     emit(WorkerEvent.started(task_id))
 
-    # Pre-check: validate model source availability before expensive ASR stages
+    # Auto mode must not be blocked by an unrelated Agent probe when the free
+    # API is selected. With no source, auto can still produce raw subtitles.
     if request.stage in {"translated-srt", "final-srt"} and request.llm_source != "manual":
         emit(WorkerEvent.log(task_id, "正在检查模型源可用性..."))
-
-        # Perform agent health check for agent/auto modes
-        should_check_agents = request.llm_source in {"agent", "auto"}
-        is_available, error_message = validate_source_availability(
-            request.llm_source,
-            check_agents=should_check_agents,
+        selected_source = (
+            "api" if request.llm_source == "auto" and os.environ.get("GEMINI_FREE", "").strip()
+            else "agent" if request.llm_source == "auto" else request.llm_source
         )
+        should_check_agents = selected_source == "agent"
+        if request.llm_source != "auto":
+            is_available, error_message = validate_source_availability(
+                selected_source, check_agents=False,
+            )
+            if not is_available:
+                emit(WorkerEvent.log(task_id, f"模型源检查失败：{error_message}"))
+                emit(WorkerEvent.failed(task_id, error_message))
+                raise ValueError(error_message)
 
-        if not is_available:
-            emit(WorkerEvent.log(task_id, f"模型源检查失败：{error_message}"))
-            emit(WorkerEvent.failed(task_id, error_message))
-            raise ValueError(error_message)
-
-        # Log detailed health report for agent mode
         if should_check_agents:
             report = check_agent_health()
             if report.statuses:
@@ -662,8 +664,9 @@ def run_request(
                             detail_msg += f"：{status.detail}"
                         emit(WorkerEvent.log(task_id, detail_msg))
 
-                # If no agents available at all, fail early
-                if not report.any_available:
+                # Explicit Agent selection is a configuration request; auto
+                # selection is allowed to keep the raw subtitle instead.
+                if request.llm_source == "agent" and not report.any_available:
                     error_msg = (
                         "所有配置的本地 Agent 均不可用。"
                         "请在设置中检查 Agent 配置，或选择使用 API 模式。"
@@ -694,7 +697,7 @@ def run_request(
             effective_stage = "raw-srt" if route.skip_reason else request.stage
             skip_reason = route.skip_reason
             try:
-                paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline)
+                paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline, route=route)
             except Exception as error:
                 if route.source == "agent":
                     _agent_route_failures(
@@ -711,7 +714,7 @@ def run_request(
                     ))
                     paths = _execute_pipeline(
                         request, stage=effective_stage, task_id=task_id,
-                        pipeline=pipeline, knowledge="none",
+                        pipeline=pipeline, knowledge="none", route=route,
                     )
                 elif _correction_exhausted(request, error, source=route.source):
                     skip_reason = (
@@ -721,7 +724,7 @@ def run_request(
                     )
                     emit(WorkerEvent.log(task_id, skip_reason))
                     effective_stage = "raw-srt"
-                    paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline)
+                    paths = _execute_pipeline(request, stage=effective_stage, task_id=task_id, pipeline=pipeline, route=route)
                 else:
                     raise
             if route.source == "agent":

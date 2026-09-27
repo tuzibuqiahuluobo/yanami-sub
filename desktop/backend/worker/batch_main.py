@@ -138,6 +138,11 @@ def run_batch_request(
         for index, row in enumerate(request.items):
             try:
                 effective_row = row
+                if row.stage in {"translated-srt", "final-srt"} and route.source == "agent":
+                    effective_row = row.model_copy(update={
+                        "llm_correction_media": route.correction_media,
+                        "llm_planning_media": route.planning_media,
+                    })
                 if route.skip_reason and row.stage in {"translated-srt", "final-srt"}:
                     skip_reasons[index] = route.skip_reason
                     effective_row = row.model_copy(update={"stage": "raw-srt"})

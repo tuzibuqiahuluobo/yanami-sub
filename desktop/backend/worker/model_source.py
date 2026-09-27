@@ -29,6 +29,8 @@ class SourceRoute:
     source: str
     targets: tuple[str, ...] = ()
     skip_reason: str = ""
+    correction_media: str = ""
+    planning_media: str = ""
 
 
 @dataclass(frozen=True)
@@ -248,16 +250,17 @@ def _no_targets_route(source: str, *, explicit: bool) -> SourceRoute:
 
 
 def _check_media_support(routes, targets: tuple[str, ...], media: str) -> bool:
-    """Check if any target supports the required media type."""
+    """Every fallback candidate must support the selected media."""
     if media == "text":
-        return True  # All targets support text
-    for target_id in targets:
-        target = routes.target_fact(target_id)
-        if media == "audio" and getattr(target, "supports_audio", False):
-            return True
-        if media == "video" and getattr(target, "supports_video", False):
-            return True
-    return False
+        return True
+    return bool(targets) and all(
+        (
+            getattr(routes.target_fact(target_id), "supports_audio", False)
+            if media == "audio" else
+            getattr(routes.target_fact(target_id), "supports_video", False)
+        )
+        for target_id in targets
+    )
 
 
 
@@ -272,7 +275,11 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     """
 
     if request.stage not in {"translated-srt", "final-srt"} or request.llm_source == "manual":
-        yield SourceRoute(models=request.llm_model, source="manual")
+        yield SourceRoute(
+            models=request.llm_model, source="manual",
+            correction_media=request.llm_correction_media,
+            planning_media=request.llm_planning_media,
+        )
         return
 
     free_key = bool(os.environ.get("GEMINI_FREE", "").strip())
@@ -301,15 +308,14 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
         yield _no_targets_route(source, explicit=not auto)
         return
 
-    # RC6.13+: Auto-downgrade media to text for text-only agents
-    # Check if targets support the requested media type
+    # Keep the whole ordered fallback group callable. A single multimodal
+    # target does not make later text-only agents multimodal.
     routes = default_model_routes()
     correction_media = request.llm_correction_media or request.llm_media
     planning_media = request.llm_planning_media or request.llm_media
 
     media_downgraded = False
     if source == "agent":
-        # Check if any target supports the required media
         if correction_media in ("audio", "video") and not _check_media_support(routes, targets, correction_media):
             logger.info(
                 "Media auto-downgrade: selected agents don't support %s for correction, "
@@ -374,7 +380,11 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
                 source, targets, group_id,
                 f", media downgraded to text" if media_downgraded else ""
             )
-            yield SourceRoute(models=[group_id], source=source, targets=targets)
+            yield SourceRoute(
+                models=[group_id], source=source, targets=targets,
+                correction_media=correction_media,
+                planning_media=planning_media,
+            )
         finally:
             if previous is None:
                 os.environ.pop("FINESUB_CONFIG_FILE", None)
