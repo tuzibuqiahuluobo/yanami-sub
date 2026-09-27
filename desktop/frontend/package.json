@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
-    "next": "^16.0.0",
+    "next": "^16.3.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -21,9 +21,5 @@
     "playwright-core": "^1.62.1",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"
-  },
-  "overrides": {
-    "postcss": "8.5.18",
-    "sharp": "0.35.0"
   }
 }
