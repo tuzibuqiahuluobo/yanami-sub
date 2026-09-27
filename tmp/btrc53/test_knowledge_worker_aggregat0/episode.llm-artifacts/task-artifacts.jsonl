@@ -1,1 +1,0 @@
-{"kind": "research_task_feedback", "payload": {"feedback": "{\"knowledge_hints\": [{\"category\": \"common\", \"entry\": \"FineSub\", \"direction\": \"append_lines\", \"focus\": \"术语\"}], \"asr_corrections\": [\"Fine Sub → FineSub\"], \"uncertainties\": [\"版本号\"]}"}}

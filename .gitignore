@@ -11,6 +11,15 @@ dist/
 *.spec
 .release-secrets/
 .release-build/
+tmp/
+output/
+out/
+deliverables/
+pytest-*/
+yanami_sub.egg-info/
+findings.md
+progress.md
+task_plan.md
 
 # Build logs
 build*.log

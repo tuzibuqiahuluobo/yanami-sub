@@ -1,4 +1,0 @@
-[llm]
-preset = "agy-hybrid"
-local_agent_timeout_seconds = 900
-local_agent_max_parallel = 2

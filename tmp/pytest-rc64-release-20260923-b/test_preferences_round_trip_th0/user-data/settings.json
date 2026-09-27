@@ -1,9 +1,0 @@
-{
-  "schema": 1,
-  "ui": {
-    "language": "en"
-  },
-  "task_defaults": {
-    "gpu_tier": "standard"
-  }
-}

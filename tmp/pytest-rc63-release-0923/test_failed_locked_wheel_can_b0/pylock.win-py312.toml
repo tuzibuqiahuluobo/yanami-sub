@@ -1,7 +1,0 @@
-lock-version = "1.0"
-created-by = "uv"
-requires-python = ">=3.12"
-[[packages]]
-name = "ctranslate2"
-version = "4.8.1"
-archive = { url = "https://github.com/caca2331/finesub/releases/download/ct2/ctranslate2-4.8.1+finesub0.4.0.cu128-cp312-cp312-win_amd64.whl", hashes = { sha256 = "171998538cc332d9ef4a0f6fcdca4580d138209f429d7c6e9c4ae2013f562994" } }

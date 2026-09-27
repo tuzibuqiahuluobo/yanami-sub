@@ -1,5 +1,0 @@
-[providers]
-tavily = false
-
-[[extra]]
-tavily = true

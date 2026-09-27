@@ -1,5 +1,0 @@
-[segmentation]
-length_scale = 0.9
-
-[providers]
-tavily = false
