@@ -17,6 +17,24 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.7.post3",
+    title: { zh: "RC7.3 · Agent 路径与状态", en: "RC7.3 · Agent paths and status" },
+    notes: {
+      zh: [
+        "本地 Agent 就绪检测会预填发现的 CLI 路径；自选路径列表默认收起，仍需手动保存。",
+        "左下角分别显示翻译与本地 Agent 就绪状态，不再把 Agent 可用误写成 Gemini 已连接。",
+        "输出名称提示默认生成原文件名.srt；若同名字幕不能安全覆盖，仍会使用带后缀的文件名。",
+        "RC7.3 修改了启动器中的探测接口，应用内更新使用完整包。",
+      ],
+      en: [
+        "Readiness checks prefill discovered CLI paths; the custom path list starts collapsed and still requires explicit save.",
+        "The sidebar separates translation and local Agent readiness instead of labeling Agent availability as a Gemini connection.",
+        "The output name hints at original filename.srt; name collisions still use a safe suffix.",
+        "RC7.3 updates the launcher probe interface, so in-app updates use the full package.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.7.post2",
     title: { zh: "RC7.2 · 任务路由与操作体验", en: "RC7.2 · Task routing and usability" },
     notes: {

@@ -117,6 +117,7 @@ export interface LocalAgentStatus {
   available: boolean;
   version: string;
   detail: string;
+  detected_path: string;
 }
 
 export interface ResourceStatus {

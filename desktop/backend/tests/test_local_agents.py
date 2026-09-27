@@ -175,6 +175,19 @@ def test_explicit_dsh_rejects_unknown_script_and_missing_node(tmp_path: Path) ->
         validated_dsh_path(str(checkout), {"PATH": ""})
 
 
+def test_discovered_npm_dsh_entry_can_be_saved(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    node = bin_dir / "node.exe"
+    node.write_bytes(b"node")
+    entry = tmp_path / "node_modules" / "@deepseek-ai" / "dsh" / "lib" / "bin.js"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("", encoding="utf-8")
+    saved, command = validated_agent_path("LOCAL_DSH", str(entry), {"PATH": str(bin_dir)})
+    assert saved == str(entry.resolve())
+    assert command == (str(node.resolve()), str(entry.resolve()))
+
+
 @pytest.mark.parametrize(
     ("tier", "filename"),
     [("LOCAL_AGY", "agy.exe"), ("LOCAL_CODEX", "codex.exe"),

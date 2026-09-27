@@ -948,6 +948,21 @@ def test_a_name_with_a_separator_is_rejected() -> None:
         TaskRequest(input="a.wav", name="nested/name")
 
 
+def test_unnamed_final_subtitle_uses_source_filename(tmp_path: Path) -> None:
+    from desktop.backend.worker.main import _publish_output
+
+    source = tmp_path / "原文件名.mp4"
+    source.write_bytes(b"video")
+    paths = _fake_paths(tmp_path / "run")
+    paths.final_srt.parent.mkdir(parents=True)
+    paths.final_srt.write_text("subtitle", encoding="utf-8")
+
+    result = _publish_output(paths, TaskRequest(input=str(source), stage="final-srt"), task_id="task-default-name")
+
+    assert result == {"finalSrt": str(tmp_path / "原文件名.srt")}
+    assert (tmp_path / "原文件名.srt").read_text(encoding="utf-8") == "subtitle"
+
+
 def _publish_beside(source_file: Path, *, task_id: str, run_dir: Path) -> dict[str, str]:
     paths = _fake_paths(run_dir)
     paths.final_srt.parent.mkdir(parents=True, exist_ok=True)

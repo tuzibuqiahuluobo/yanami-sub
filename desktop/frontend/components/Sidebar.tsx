@@ -14,6 +14,7 @@ import {
 import { isInstallActive } from "@/lib/resources";
 import type {
   CapabilityState,
+  LocalAgentStatus,
   ResourceInstallSnapshot,
   Route,
 } from "@/lib/types";
@@ -24,6 +25,8 @@ import { useLanguage } from "./LanguageProvider";
 interface SidebarProps {
   route: Route;
   capabilities: CapabilityState;
+  geminiConfigured: boolean;
+  agentStatuses: LocalAgentStatus[] | null;
   resourceInstalls: ResourceInstallSnapshot[];
   appVersion: string;
   /** The startup check found a release; the settings page has the details. */
@@ -35,6 +38,8 @@ interface SidebarProps {
 export function Sidebar({
   route,
   capabilities,
+  geminiConfigured,
+  agentStatuses,
   resourceInstalls,
   appVersion,
   updateAvailable,
@@ -60,6 +65,7 @@ export function Sidebar({
   );
 
   const activeInstalls = resourceInstalls.filter(isInstallActive);
+  const agentReady = agentStatuses?.some((agent) => agent.status === "ready" && agent.available && agent.models.length > 0) ?? false;
   const activeInstall = activeInstalls[0];
   const activeTotal = activeInstalls.reduce(
     (total, install) => total + install.total,
@@ -149,10 +155,16 @@ export function Sidebar({
               {capabilities.translation ? t.sidebar.translationReady : t.sidebar.localOnly}
             </strong>
             <span>
-              {capabilities.translation
+              {geminiConfigured
                 ? t.sidebar.geminiConnected
-                : t.sidebar.translationOptional}
+                : t.sidebar.geminiNotConfigured}
             </span>
+          </div>
+        </div>
+        <div className="sidebar-capability">
+          <span className={`status-dot ${agentReady ? "is-ready" : "is-neutral"}`} />
+          <div>
+            <strong>{agentReady ? t.sidebar.localAgentConnected : agentStatuses ? t.sidebar.localAgentUnavailable : t.sidebar.localAgentPending}</strong>
           </div>
         </div>
         <div className="sidebar-version">

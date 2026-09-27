@@ -172,6 +172,7 @@ class LocalAgentStatus(DesktopModel):
     available: bool = False
     version: str = ""
     detail: str = ""
+    detected_path: str = ""
 
 
 class TaskDefaults(BaseModel):

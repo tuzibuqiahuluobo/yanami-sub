@@ -346,6 +346,13 @@ export function TaskSettings({
             <span>{t.newTask.settings.outputName}</span>
             <input
               value={request.name}
+              placeholder={request.stage === "final-srt"
+                ? t.newTask.settings.outputNamePlaceholder
+                : request.stage === "raw-srt"
+                  ? t.newTask.settings.outputNameRawPlaceholder
+                  : request.stage === "translated-srt"
+                    ? t.newTask.settings.outputNameTranslatedPlaceholder
+                    : t.newTask.settings.outputNameStemPlaceholder}
               disabled={disabled}
               onChange={(event) => {
                 const value = event.target.value;

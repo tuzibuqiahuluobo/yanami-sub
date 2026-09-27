@@ -658,8 +658,8 @@ function previewApi(): DesktopApi {
         ),
       };
       return [
-        { provider_tier: "LOCAL_CODEX", driver: "codex", models: ["gpt-5.6"], quota_pools: ["LOCAL_CODEX"], status: "ready" as const, available: true, version: "codex-cli preview", detail: "" },
-        { provider_tier: "LOCAL_AGY", driver: "agy", models: ["gemini-3.7-flash"], quota_pools: ["AGY_GEMINI"], status: "missing" as const, available: false, version: "", detail: "agy is not installed" },
+        { provider_tier: "LOCAL_CODEX", driver: "codex", models: ["gpt-5.6"], quota_pools: ["LOCAL_CODEX"], status: "ready" as const, available: true, version: "codex-cli preview", detail: "", detected_path: "C:\\Tools\\codex.exe" },
+        { provider_tier: "LOCAL_AGY", driver: "agy", models: ["gemini-3.7-flash"], quota_pools: ["AGY_GEMINI"], status: "missing" as const, available: false, version: "", detail: "agy is not installed", detected_path: "" },
       ];
     },
     async deleteTaskRecord(taskId) {

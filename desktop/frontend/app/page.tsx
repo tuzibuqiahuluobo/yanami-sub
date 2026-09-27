@@ -39,6 +39,7 @@ import {
 import type {
   ApiProvider,
   BridgeError,
+  LocalAgentStatus,
   Route,
   RoutingUpdate,
   TaskRequest,
@@ -97,6 +98,9 @@ function HomeContent() {
   const [state, dispatch] = useReducer(reduceAppState, initialState);
   const [busy, setBusy] = useState(false);
   const [bootstrapError, setBootstrapError] = useState<BridgeError | null>(null);
+  const [agentStatuses, setAgentStatuses] = useState<LocalAgentStatus[] | null>(null);
+  const startupAgentProbeFired = useRef(false);
+  const agentProbeGeneration = useRef(0);
   const eventCursor = useRef(0);
   const { t } = useLanguage();
   const { showSuccess } = useToast();
@@ -212,6 +216,25 @@ function HomeContent() {
     })();
   }, []);
 
+  const probeAgents = useCallback(async () => {
+    const generation = ++agentProbeGeneration.current;
+    let statuses: LocalAgentStatus[];
+    try {
+      statuses = await desktopApi.probeLocalAgents();
+    } catch (error) {
+      if (generation === agentProbeGeneration.current) setAgentStatuses([]);
+      throw error;
+    }
+    if (generation !== agentProbeGeneration.current) return statuses;
+    setAgentStatuses(statuses);
+    try {
+      dispatch({ type: "routingChanged", routing: await desktopApi.getRoutingSettings() });
+    } catch {
+      // CLI readiness is still valid when the routing refresh is unavailable.
+    }
+    return statuses;
+  }, []);
+
   const loadBootstrap = useCallback(async () => {
     setBootstrapError(null);
     try {
@@ -222,10 +245,14 @@ function HomeContent() {
       setAutoUpdateCheck(uiValue<boolean>("autoUpdateCheck", true));
       dispatch({ type: "bootstrapLoaded", payload });
       maybeCheckForUpdates();
+      if (!startupAgentProbeFired.current) {
+        startupAgentProbeFired.current = true;
+        void probeAgents().catch(() => undefined);
+      }
     } catch (error) {
       setBootstrapError(toBridgeError(error));
     }
-  }, [maybeCheckForUpdates]);
+  }, [maybeCheckForUpdates, probeAgents]);
 
   useEffect(() => {
     void loadBootstrap();
@@ -720,13 +747,11 @@ function HomeContent() {
           const routing = await desktopApi.deleteProviderKey(providerId);
           dispatch({ type: "routingChanged", routing });
         }}
-        onProbeLocalAgents={async () => {
-          const statuses = await desktopApi.probeLocalAgents();
-          dispatch({
-            type: "routingChanged",
-            routing: await desktopApi.getRoutingSettings(),
-          });
-          return statuses;
+        onProbeLocalAgents={probeAgents}
+        agentStatuses={agentStatuses}
+        onAgentPathsChanged={() => {
+          agentProbeGeneration.current += 1;
+          setAgentStatuses(null);
         }}
         onUseRawSubtitle={() => {
           dispatch({
@@ -813,6 +838,7 @@ function HomeContent() {
       ) : (
         <AppShell
           state={state}
+          agentStatuses={agentStatuses}
           api={desktopApi}
           onNavigate={(route: Route) => {
             if (route !== "settings") setSettingsFocus(null);

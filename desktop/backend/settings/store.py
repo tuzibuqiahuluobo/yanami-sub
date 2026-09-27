@@ -727,7 +727,8 @@ class SettingsStore:
         statuses: list[LocalAgentStatus] = []
         for tier, row in sorted(grouped.items()):
             fact = routes.target_fact(first_target[tier])
-            command_detail = " ".join(commands.get(tier, ()))
+            command = commands.get(tier, ())
+            command_detail = " ".join(command)
             try:
                 driver = driver_for_provider_tier(
                     execution,
@@ -772,6 +773,7 @@ class SettingsStore:
                         available=ready,
                         version=probe.version,
                         detail=detail,
+                        detected_path=command[-1] if command else "",
                     )
                 )
             except Exception as error:

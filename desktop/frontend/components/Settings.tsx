@@ -77,6 +77,8 @@ interface SettingsProps extends UpdateSectionProps {
   onSaveProviderKey: (providerId: string, value: string) => Promise<void>;
   onDeleteProviderKey: (providerId: string) => Promise<void>;
   onProbeLocalAgents: () => Promise<LocalAgentStatus[]>;
+  agentStatuses: LocalAgentStatus[] | null;
+  onAgentPathsChanged: () => void;
   onSaveSharedSettings: (values: SharedSettings) => Promise<void>;
   onUseRawSubtitle: () => void;
   onRescanGpus: () => Promise<unknown>;
@@ -97,6 +99,8 @@ export function Settings({
   onSaveProviderKey,
   onDeleteProviderKey,
   onProbeLocalAgents,
+  agentStatuses,
+  onAgentPathsChanged,
   onSaveSharedSettings,
   onUseRawSubtitle,
   onRescanGpus,
@@ -179,16 +183,27 @@ export function Settings({
   const [routingBusy, setRoutingBusy] = useState(false);
   const [routingError, setRoutingError] = useState("");
   const [agentProbeBusy, setAgentProbeBusy] = useState(false);
-  const [agentStatuses, setAgentStatuses] = useState<LocalAgentStatus[] | null>(null);
+  const [agentPathsOpen, setAgentPathsOpen] = useState(false);
   const [agentPaths, setAgentPaths] = useState<Record<string, string>>({});
   const [agentPathBusy, setAgentPathBusy] = useState("");
   const [agentPathError, setAgentPathError] = useState<Record<string, string>>({});
   const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"];
   useEffect(() => {
-    void desktopApi.getAgentPaths().then((saved) => setAgentPaths(saved.paths)).catch(() => undefined);
+    void desktopApi.getAgentPaths().then((saved) => setAgentPaths((current) => ({ ...current, ...Object.fromEntries(Object.entries(saved.paths).filter(([, path]) => path)) }))).catch(() => undefined);
   }, []);
   useEffect(() => {
+    if (!agentStatuses) return;
+    setAgentPaths((current) => {
+      const next = { ...current };
+      for (const agent of agentStatuses) {
+        if (!next[agent.provider_tier] && agent.detected_path) next[agent.provider_tier] = agent.detected_path;
+      }
+      return next;
+    });
+  }, [agentStatuses]);
+  useEffect(() => {
     if (!focusTarget) return;
+    if (focusTarget === "agents") setAgentPathsOpen(true);
     const id = focusTarget === "agents" ? "settings-agent-paths" :
       focusTarget === "routing" ? "settings-routing" : `api-key-${focusTarget}`;
     const frame = window.requestAnimationFrame(() => {
@@ -204,7 +219,7 @@ export function Settings({
     try {
       const saved = await desktopApi.setAgentPath(tier, path);
       setAgentPaths((current) => ({ ...current, [tier]: saved.path }));
-      setAgentStatuses(null);
+      onAgentPathsChanged();
       showSuccess(t.toast.saved, `agent-path-saved-${tier}`);
     } catch (error) {
       setAgentPathError((current) => ({ ...current, [tier]: error instanceof Error ? error.message : t.settings.routing.dshPathFailed }));
@@ -828,8 +843,12 @@ export function Settings({
             </div>
 
             <div className="agent-diagnostics" id="settings-agent-paths" tabIndex={-1}>
-              <h3>{t.settings.routing.dshPath}</h3>
+              <button type="button" className="agent-path-toggle" aria-expanded={agentPathsOpen} aria-controls="agent-path-list" onClick={() => setAgentPathsOpen((open) => !open)}>
+                <span>{t.settings.routing.dshPath}</span><ChevronDown size={16} aria-hidden="true" className={agentPathsOpen ? "is-open" : ""} />
+              </button>
+              <div id="agent-path-list" className="agent-path-list" hidden={!agentPathsOpen}>
               <p className="field-help">{t.settings.routing.dshPathHint}</p>
+              {agentStatuses?.some((agent) => agent.detected_path) ? <p className="field-help">{t.settings.routing.detectedPathHint}</p> : null}
               {agentTiers.map((tier) => <div className="agent-path-card" key={tier}>
                 <label className="field">
                   <span>{tier.replace(/^LOCAL_/, "")}</span>
@@ -847,6 +866,7 @@ export function Settings({
                 </div>
                 {agentPathError[tier] ? <p className="routing-error" role="alert">{agentPathError[tier]}</p> : null}
               </div>)}
+              </div>
               <div className="settings-section-heading compact">
                 <div>
                   <h3>{t.settings.routing.agents}</h3>
@@ -860,7 +880,7 @@ export function Settings({
                     setAgentProbeBusy(true);
                     setRoutingError("");
                     try {
-                      setAgentStatuses(await onProbeLocalAgents());
+                      await onProbeLocalAgents();
                     } catch (error) {
                       setRoutingError(error instanceof Error ? error.message : t.settings.routing.probeFailed);
                     } finally {

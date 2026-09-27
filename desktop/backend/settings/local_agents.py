@@ -226,10 +226,12 @@ def validated_dsh_path(value: str, environ: Mapping[str, str] | None = None) -> 
             return str(selected), (str(selected),)
         elif tuple(part.lower() for part in selected.parts[-4:]) == ("apps", "cli", "lib", "bin.js"):
             entry = selected
+        elif tuple(part.lower() for part in selected.parts[-5:]) == ("node_modules", "@deepseek-ai", "dsh", "lib", "bin.js"):
+            entry = selected
         else:
-            raise ValueError("请选择 deepseek-harness 根目录、其 apps/cli/lib/bin.js 或 dsh.exe。")
+            raise ValueError("请选择 deepseek-harness 根目录、其 CLI 脚本、受支持的 npm DSH CLI 或 dsh.exe。")
         if not entry.is_file():
-            raise ValueError("该目录缺少 apps/cli/lib/bin.js。")
+            raise ValueError("该目录缺少受支持的 DSH CLI 脚本。")
         node = _node(environ or os.environ)
         if node is None:
             raise ValueError("已找到 DSH，但未找到 node.exe；请安装 Node.js 并重试。")
