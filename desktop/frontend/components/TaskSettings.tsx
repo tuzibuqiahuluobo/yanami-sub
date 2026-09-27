@@ -6,6 +6,7 @@ import { useState } from "react";
 import { invalidOutputName } from "@/lib/formatters";
 import { runInterfaceTransition } from "@/lib/viewTransition";
 import type {
+  ApiProvider,
   CapabilityState,
   GpuTier,
   RoutingSettings,
@@ -20,9 +21,11 @@ interface TaskSettingsProps {
   request: Omit<TaskRequest, "input">;
   capabilities: CapabilityState;
   routing?: RoutingSettings;
+  apiKeys?: Record<ApiProvider, "configured" | "missing">;
   disabled?: boolean;
   batchMode?: boolean;
   onChange: (changes: Partial<Omit<TaskRequest, "input">>) => void;
+  onOpenSettings?: (target: ApiProvider | "agents" | "routing") => void;
 }
 
 
@@ -47,9 +50,11 @@ export function TaskSettings({
   request,
   capabilities,
   routing,
+  apiKeys,
   disabled,
   batchMode = false,
   onChange,
+  onOpenSettings,
 }: TaskSettingsProps) {
   const { t } = useLanguage();
   const [tab, setTab] = useState<SettingsTab>("speech");
@@ -63,6 +68,7 @@ export function TaskSettings({
     request.stage,
   );
   const source = request.llm_source ?? "auto";
+  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"] as const;
   const hasResearchOverride = request.llm_model.some((value) =>
     value.trimStart().startsWith("research="),
   );
@@ -96,7 +102,8 @@ export function TaskSettings({
   ];
   // Surfaced on the tab itself: the note explaining the missing key lives
   // inside the LLM panel, which the user may not have open.
-  const llmNeedsKey = translationSelected && source === "manual" && !capabilities.translation;
+  const llmNeedsKey = translationSelected && source === "api" &&
+    apiKeys?.gemini_free !== "configured" && apiKeys?.gemini_paid !== "configured";
   const stageLabels: Record<TaskRequest["stage"], string> = {
     vocal: t.processing.stages.vocal,
     aligned: t.processing.stages.aligned,
@@ -146,10 +153,17 @@ export function TaskSettings({
               value={source}
               disabled={disabled}
               ariaLabel={t.newTask.settings.llmSource}
-              onChange={(value) => onChange({
-                llm_source: value as TaskRequest["llm_source"],
-                llm_model: [],
-              })}
+              onChange={(value) => {
+                onChange({
+                  llm_source: value as TaskRequest["llm_source"],
+                  llm_agent: "",
+                  llm_model: [],
+                });
+                if (value !== "auto") selectTab("llm");
+                if (value === "api" && apiKeys?.gemini_free !== "configured" && apiKeys?.gemini_paid !== "configured") {
+                  onOpenSettings?.("gemini_free");
+                }
+              }}
               options={[
                 { value: "auto", label: t.newTask.settings.llmSourceAuto },
                 { value: "api", label: t.newTask.settings.llmSourceApi },
@@ -239,11 +253,32 @@ export function TaskSettings({
             </div>
           ) : null}
           {llmNeedsKey ? (
-            <div className="inline-note">{t.newTask.apiKeyError}</div>
+            <div className="inline-note tab-note">
+              <span>{t.newTask.apiKeyError}</span>
+              {onOpenSettings ? <button type="button" className="button button-secondary button-compact" onClick={() => onOpenSettings("gemini_free")}>{t.newTask.openKeyField}</button> : null}
+            </div>
           ) : null}
           {/* Values are kept, not cleared, while the stage leaves them unused:
               switching back to final-srt must find them where they were. */}
           <div className="field-grid">
+            {source === "agent" ? <div className="field field-wide task-route-field">
+              <span>{t.newTask.settings.agentChoice}</span>
+              <CustomSelect
+                value={request.llm_agent ?? ""}
+                disabled={disabled || !translationSelected}
+                ariaLabel={t.newTask.settings.agentChoice}
+                onChange={(value) => onChange({ llm_agent: value as TaskRequest["llm_agent"] })}
+                options={[
+                  { value: "", label: t.newTask.settings.agentChoiceAuto },
+                  ...agentTiers.map((tier) => ({
+                    value: tier,
+                    label: `${tier.replace(/^LOCAL_/, "")} · ${routing?.targets.some((target) => target.provider_tier === tier && target.available) ? t.newTask.settings.llmRouteReady : t.newTask.settings.llmRouteAgentUnavailable}`,
+                  })),
+                ]}
+              />
+              <small className="field-help">{t.newTask.settings.agentChoiceHint}</small>
+              {onOpenSettings ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
+            </div> : null}
             {source === "manual" ? <div className="field field-wide task-route-field">
               <span>{t.newTask.settings.llmRoute}</span>
               <CustomSelect

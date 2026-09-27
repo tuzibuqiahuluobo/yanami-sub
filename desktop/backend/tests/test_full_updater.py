@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import hashlib
 import json
 import os
 
@@ -23,14 +24,23 @@ def _write_app_version(version_dir: Path, version: str) -> None:
     2026-08-30 P2).
     """
 
-    bodies = {
-        "pyproject.toml": "[project]",
-        "app-manifest.json": f'{{"version":"{version}","platform":"windows-x64"}}',
-    }
+    bodies = {"pyproject.toml": "[project]"}
+    files = {}
     for relative in REQUIRED_APP_FILES:
+        if relative == "app-manifest.json":
+            continue
+        files[relative] = bodies.get(relative, "new").encode("utf-8")
         path = version_dir / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(bodies.get(relative, "new"), encoding="utf-8")
+        path.write_bytes(files[relative])
+    (version_dir / "app-manifest.json").write_text(json.dumps({
+        "version": version,
+        "platform": "windows-x64",
+        "files": {
+            name: {"size": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+            for name, body in files.items()
+        },
+    }), encoding="utf-8")
 
 
 def test_default_preserved_list_keeps_the_installed_marker(

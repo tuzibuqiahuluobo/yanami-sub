@@ -368,6 +368,9 @@ class TaskRequest(DesktopModel):
     llm_retrieval: Literal["none", "local", "native"] = "local"
     # Old manifests keep their explicit route. The desktop form opts into auto.
     llm_source: Literal["auto", "api", "agent", "manual"] = "manual"
+    # Empty tries all detected Agents; a tier confines this one task (or batch)
+    # to that CLI while retaining its own ordered model fallbacks.
+    llm_agent: Literal["", "LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"] = ""
     llm_difficulty: LLMDifficulty = "quality"
     llm_continuity: Literal["serial", "parallel"] = "serial"
     llm_parallel_windows: int = Field(default=1, ge=1)
@@ -571,6 +574,7 @@ class BatchRequest(DesktopModel):
         devices: set[tuple[str | None, int | None, str]] = set()
         model_routes: set[tuple[str, ...]] = set()
         model_sources: set[str] = set()
+        agent_tiers: set[str] = set()
         for item in self.items:
             source = item.input.casefold()
             if source in seen:
@@ -579,12 +583,15 @@ class BatchRequest(DesktopModel):
             devices.add((item.device, item.gpu_index, item.gpu_name))
             model_routes.add(tuple(item.llm_model))
             model_sources.add(item.llm_source)
+            agent_tiers.add(item.llm_agent)
         if len(devices) > 1:
             raise ValueError("all items in one batch must use the same processing device")
         if len(model_routes) > 1:
             raise ValueError("all items in one batch must use the same LLM model overrides")
         if len(model_sources) > 1:
             raise ValueError("all items in one batch must use the same model source")
+        if len(agent_tiers) > 1:
+            raise ValueError("all items in one batch must use the same selected Agent")
         return self
 
 

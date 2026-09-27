@@ -19,9 +19,19 @@ from desktop.backend.updates.manifest import UpdateManifest
 #: other file in the contract merely has to exist.
 _APP_FILE_BODIES = {
     "pyproject.toml": b"[project]\nname='finesub'\nversion='1.1.0'\n",
-    "app-manifest.json": b'{"version":"1.1.0","platform":"windows-x64"}',
     "desktop/frontend/out/index.html": b"<html></html>",
 }
+
+
+def _app_manifest(files: dict[str, bytes]) -> bytes:
+    return json.dumps({
+        "version": "1.1.0",
+        "platform": "windows-x64",
+        "files": {
+            name: {"size": len(body), "sha256": hashlib.sha256(body).hexdigest()}
+            for name, body in files.items() if name != "app-manifest.json"
+        },
+    }).encode("utf-8")
 
 
 def app_files(**overrides: bytes) -> dict[str, bytes]:
@@ -37,6 +47,7 @@ def app_files(**overrides: bytes) -> dict[str, bytes]:
         for name in installer_module.REQUIRED_APP_FILES
     }
     files.update(overrides)
+    files["app-manifest.json"] = _app_manifest(files)
     return files
 
 
@@ -57,7 +68,7 @@ def _update_archive(
         files.pop("desktop/frontend/out/index.html")
     if not include_pyproject:
         files.pop("pyproject.toml")
-    files["app-manifest.json"] = b'{"version":"1.1.0","platform":"windows-x64"}'
+    files["app-manifest.json"] = _app_manifest(files)
     with ZipFile(path, "w") as archive:
         for name, body in files.items():
             archive.writestr(name, body)
@@ -121,18 +132,19 @@ def test_hashed_app_manifest_detects_a_same_size_edit_and_missing_module(tmp_pat
         validate_app_directory(version_root, version="1.1.0")
 
 
-def test_rc71_rejects_a_manifest_without_integrity_hashes(tmp_path: Path) -> None:
-    version_root = tmp_path / "0.1.0-rc.7.post1"
+@pytest.mark.parametrize("version", ["0.1.0-rc.7.post1", "0.1.0-rc.7.post2", "0.1.0-rc.8"])
+def test_rc71_and_later_reject_a_manifest_without_integrity_hashes(tmp_path: Path, version: str) -> None:
+    version_root = tmp_path / version
     for name, content in app_files().items():
         target = version_root / name
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(content)
     (version_root / "app-manifest.json").write_text(
-        json.dumps({"version": "0.1.0-rc.7.post1", "platform": "windows-x64"}),
+        json.dumps({"version": version, "platform": "windows-x64"}),
         encoding="utf-8",
     )
     with pytest.raises(ValueError, match="per-file"):
-        validate_app_directory(version_root, version="0.1.0-rc.7.post1")
+        validate_app_directory(version_root, version=version)
 
 
 def test_app_install_switches_pointer_only_after_validation(tmp_path: Path) -> None:

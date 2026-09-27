@@ -24,6 +24,7 @@ import threading
 
 
 COMMANDS_ENV = "YANAMI_SUB_LOCAL_AGENT_COMMANDS"
+LOCAL_AGENT_TIERS = ("LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY")
 _PATCH_MARKER = "_yanami_sub_command_overrides"
 _ERROR_MODE_LOCK = threading.Lock()
 LOGGER = logging.getLogger(__name__)
@@ -237,11 +238,54 @@ def validated_dsh_path(value: str, environ: Mapping[str, str] | None = None) -> 
         raise ValueError(f"无法访问所选 DSH 路径：{error}") from error
 
 
+def validated_agent_path(
+    tier: str, value: str, environ: Mapping[str, str] | None = None,
+) -> tuple[str, tuple[str, ...]]:
+    """Resolve an explicitly selected supported CLI without invoking a shell."""
+
+    if tier not in LOCAL_AGENT_TIERS:
+        raise ValueError("不支持的本地 Agent。")
+    if tier == "LOCAL_DSH":
+        return validated_dsh_path(value, environ)
+    if not value.strip():
+        raise ValueError("请选择 Agent 安装目录或可执行文件。")
+    names = {
+        "LOCAL_AGY": ("agy.exe",),
+        "LOCAL_CLAUDE": ("claude.exe", "cli.js"),
+        "LOCAL_CODEX": ("codex.exe",),
+        "LOCAL_WORKBUDDY": ("codebuddy.exe", "codebuddy"),
+    }[tier]
+    try:
+        selected = Path(value.strip().strip('"')).expanduser().resolve(strict=True)
+        if selected.is_dir():
+            candidates = [selected / name for name in names]
+            candidates += [selected / "bin" / name for name in names]
+            if tier == "LOCAL_CLAUDE":
+                candidates.append(selected / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js")
+            if tier == "LOCAL_WORKBUDDY":
+                candidates.append(selected / "resources" / "app.asar.unpacked" / "cli" / "bin" / "codebuddy")
+            entry = next((candidate for candidate in candidates if candidate.is_file()), None)
+        else:
+            entry = selected if selected.is_file() and selected.name.lower() in names else None
+        if entry is None:
+            raise ValueError(f"所选路径中未找到 {tier.removeprefix('LOCAL_')} 的受支持 CLI。")
+        entry = entry.resolve(strict=True)
+        if entry.suffix.lower() == ".exe":
+            return str(selected), (str(entry),)
+        node = _node(environ or os.environ)
+        if node is None:
+            raise ValueError("已找到 Agent CLI，但未找到 node.exe；请安装 Node.js 并重试。")
+        return str(selected), (str(node), str(entry))
+    except OSError as error:
+        raise ValueError(f"无法访问所选 Agent 路径：{error}") from error
+
+
 def discover_local_agent_commands(
     *,
     environ: dict[str, str] | None = None,
     source_roots: Iterable[Path] | None = None,
     preferred_dsh_path: str = "",
+    preferred_paths: Mapping[str, str] | None = None,
 ) -> dict[str, tuple[str, ...]]:
     """Resolve supported agents to shell-free commands without launching any."""
 
@@ -313,6 +357,13 @@ def discover_local_agent_commands(
         workbuddy_command = _workbuddy_command(target, path_directories, node)
         if workbuddy_command is not None:
             commands["LOCAL_WORKBUDDY"] = workbuddy_command
+    for tier, path in (preferred_paths or {}).items():
+        if tier not in LOCAL_AGENT_TIERS or not isinstance(path, str) or not path.strip():
+            continue
+        try:
+            _, commands[tier] = validated_agent_path(tier, path, target)
+        except ValueError as error:
+            LOGGER.warning("saved %s path is unavailable; using automatic discovery: %s", tier, error)
     return commands
 
 
@@ -355,17 +406,27 @@ def install_local_agent_command_overrides() -> dict[str, tuple[str, ...]]:
 
 def configure_local_agents(user_data: Path | None = None) -> dict[str, tuple[str, ...]]:
     preferred_dsh_path = ""
+    preferred_paths: dict[str, str] = {}
     if user_data is not None:
         from desktop.backend.settings.preferences import PreferencesStore
 
-        saved = PreferencesStore(user_data).load().ui.get("dshPath")
+        ui = PreferencesStore(user_data).load().ui
+        saved = ui.get("dshPath")
         if isinstance(saved, str):
             preferred_dsh_path = saved
+        raw_paths = ui.get("agentPaths")
+        if isinstance(raw_paths, dict):
+            preferred_paths = {
+                tier: path for tier, path in raw_paths.items()
+                if tier in LOCAL_AGENT_TIERS and isinstance(path, str)
+            }
     try:
-        commands = (
-            discover_local_agent_commands(preferred_dsh_path=preferred_dsh_path)
-            if preferred_dsh_path else discover_local_agent_commands()
-        )
+        options = {}
+        if preferred_dsh_path:
+            options["preferred_dsh_path"] = preferred_dsh_path
+        if preferred_paths:
+            options["preferred_paths"] = preferred_paths
+        commands = discover_local_agent_commands(**options)
     except OSError:
         # Optional Agent discovery must not prevent the desktop from opening.
         commands = {}

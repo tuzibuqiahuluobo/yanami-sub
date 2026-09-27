@@ -21,6 +21,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
 import { readProcessingDevice, requestDeviceFields } from "@/lib/processingDevice";
 import type {
+  ApiProvider,
   BatchItemRequest,
   BatchRequest,
   BatchSnapshot,
@@ -40,6 +41,8 @@ interface BatchQueueProps {
   routing?: RoutingSettings;
   onRequestChange: (changes: Partial<Omit<TaskRequest, "input">>) => void;
   onOpenResources: () => void;
+  apiKeys: Record<ApiProvider, "configured" | "missing">;
+  onOpenSettings: (target: ApiProvider | "agents" | "routing") => void;
 }
 
 
@@ -62,6 +65,8 @@ export function BatchQueue({
   routing,
   onRequestChange,
   onOpenResources,
+  apiKeys,
+  onOpenSettings,
 }: BatchQueueProps) {
   const { t } = useLanguage();
   const { showSuccess } = useToast();
@@ -70,7 +75,7 @@ export function BatchQueue({
   const [snapshot, setSnapshot] = useState<BatchSnapshot | null>(null);
   const [history, setHistory] = useState<BatchSnapshot[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<{ message: string; action?: string | null } | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string; action?: string | null } | null>(null);
   const [workers, setWorkers] = useState({ download: 2, asr: 1, llm: 2 });
   const [asrQueueSize, setAsrQueueSize] = useState(4);
   const [retryFailed, setRetryFailed] = useState(1);
@@ -273,8 +278,12 @@ export function BatchQueue({
       setSnapshot(await desktopApi.startBatch(payload));
       void refreshHistory();
     } catch (caught) {
+      if (caught instanceof BridgeCallError && caught.code === "api_key_required") onOpenSettings("gemini_free");
+      else if (caught instanceof BridgeCallError && caught.action === "open_agents") onOpenSettings("agents");
+      else if (caught instanceof BridgeCallError && caught.action === "open_settings") onOpenSettings("routing");
       setError({
         message: caught instanceof Error ? caught.message : t.batch.errors.start,
+        code: caught instanceof BridgeCallError ? caught.code : undefined,
         action: caught instanceof BridgeCallError ? caught.action : null,
       });
     } finally {
@@ -399,8 +408,10 @@ export function BatchQueue({
               request={request}
               capabilities={capabilities}
               routing={routing}
+              apiKeys={apiKeys}
               disabled={busy}
               batchMode
+              onOpenSettings={onOpenSettings}
               onChange={(changes) => {
                 onRequestChange(changes);
                 setItems((current) => current.map((item) => ({ ...item, ...changes })));
@@ -430,6 +441,9 @@ export function BatchQueue({
               <div className="error-banner" role="alert">
                 <strong>{error.message}</strong>
                 {error.action === "open_resources" ? <button type="button" className="text-button" onClick={onOpenResources}>{t.batch.openResources}</button> : null}
+                {error.code === "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("gemini_free")}>{t.newTask.openKeyField}</button> : null}
+                {error.action === "open_settings" && error.code !== "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("routing")}>{t.settings.routing.title}</button> : null}
+                {error.action === "open_agents" ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
               </div>
             ) : null}
 

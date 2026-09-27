@@ -88,6 +88,7 @@ def test_batch_worker_uses_core_scheduler_and_isolates_a_bad_item(
     assert scheduler_calls[0]["retry_failed"] == 2
     assert all("llm_model" not in options for options in built_options)
     assert all("llm_source" not in options for options in built_options)
+    assert all("llm_agent" not in options for options in built_options)
     assert route_seen == {"correction-text": "correction-capable"}
     assert scheduler_calls[0]["status_path"] == tmp_path / "batch" / "batch-status.jsonl"
     assert events[-1].type == "completed"

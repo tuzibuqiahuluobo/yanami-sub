@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from pathlib import PurePosixPath
 import re
+from packaging.version import Version
 
 from pydantic import BaseModel, ConfigDict
 
@@ -51,8 +52,8 @@ def validate_app_directory(
         raise ValueError("App archive platform does not match update manifest")
     files = body.get("files")
     if files is None:
-        if version == "0.1.0-rc.7.post1":
-            raise ValueError("RC7.1 app manifest requires per-file integrity hashes")
+        if version is not None and Version(version) >= Version("0.1.0rc7.post1"):
+            raise ValueError("RC7.1+ app manifest requires per-file integrity hashes")
         return  # legacy snapshots predate per-file digests
     if not isinstance(files, dict) or not files or len(files) > 20_000:
         raise ValueError("App integrity file list is invalid")

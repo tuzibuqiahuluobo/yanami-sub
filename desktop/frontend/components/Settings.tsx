@@ -61,6 +61,8 @@ import { useToast } from "./ToastProvider";
 /** The update panel keeps its own props; this page only passes them through. */
 interface SettingsProps extends UpdateSectionProps {
   state: AppState;
+  focusTarget?: ApiProvider | "agents" | "routing" | null;
+  focusSequence?: number;
   appearance: AppearanceSettings;
   onAppearanceChange: (changes: Partial<AppearanceSettings>) => void;
   onSaveKey: (
@@ -82,6 +84,8 @@ interface SettingsProps extends UpdateSectionProps {
 
 export function Settings({
   state,
+  focusTarget,
+  focusSequence,
   appearance: appearanceProp,
   onAppearanceChange,
   onSaveKey,
@@ -176,24 +180,36 @@ export function Settings({
   const [routingError, setRoutingError] = useState("");
   const [agentProbeBusy, setAgentProbeBusy] = useState(false);
   const [agentStatuses, setAgentStatuses] = useState<LocalAgentStatus[] | null>(null);
-  const [dshPath, setDshPath] = useState("");
-  const [dshPathBusy, setDshPathBusy] = useState(false);
-  const [dshPathError, setDshPathError] = useState("");
+  const [agentPaths, setAgentPaths] = useState<Record<string, string>>({});
+  const [agentPathBusy, setAgentPathBusy] = useState("");
+  const [agentPathError, setAgentPathError] = useState<Record<string, string>>({});
+  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"];
   useEffect(() => {
-    void desktopApi.getDshPath().then((saved) => setDshPath(saved.path)).catch(() => undefined);
+    void desktopApi.getAgentPaths().then((saved) => setAgentPaths(saved.paths)).catch(() => undefined);
   }, []);
-  const saveDshPath = async (path: string) => {
-    setDshPathBusy(true);
-    setDshPathError("");
+  useEffect(() => {
+    if (!focusTarget) return;
+    const id = focusTarget === "agents" ? "settings-agent-paths" :
+      focusTarget === "routing" ? "settings-routing" : `api-key-${focusTarget}`;
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.getElementById(id);
+      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      element?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusTarget, focusSequence]);
+  const saveAgentPath = async (tier: string, path: string) => {
+    setAgentPathBusy(tier);
+    setAgentPathError((current) => ({ ...current, [tier]: "" }));
     try {
-      const saved = await desktopApi.setDshPath(path);
-      setDshPath(saved.path);
+      const saved = await desktopApi.setAgentPath(tier, path);
+      setAgentPaths((current) => ({ ...current, [tier]: saved.path }));
       setAgentStatuses(null);
-      showSuccess(t.toast.saved, "dsh-path-saved");
+      showSuccess(t.toast.saved, `agent-path-saved-${tier}`);
     } catch (error) {
-      setDshPathError(error instanceof Error ? error.message : t.settings.routing.dshPathFailed);
+      setAgentPathError((current) => ({ ...current, [tier]: error instanceof Error ? error.message : t.settings.routing.dshPathFailed }));
     } finally {
-      setDshPathBusy(false);
+      setAgentPathBusy("");
     }
   };
   useEffect(() => {
@@ -445,6 +461,7 @@ export function Settings({
 
         <div className="api-key-list">
           <ApiKeyField
+            inputId="api-key-gemini_free"
             label={t.settings.translation.freeKeyLabel}
             description={t.settings.translation.geminiFree}
             placeholder={t.settings.translation.poolPlaceholder}
@@ -458,6 +475,7 @@ export function Settings({
             onOpenOfficial={onOpenExternalUrl}
           />
           <ApiKeyField
+            inputId="api-key-gemini_paid"
             label={t.settings.translation.paidKeyLabel}
             description={t.settings.translation.geminiPaid}
             placeholder={t.settings.translation.poolPlaceholder}
@@ -471,9 +489,10 @@ export function Settings({
             onOpenOfficial={onOpenExternalUrl}
           />
           <ApiKeyField
+            inputId="api-key-exa"
             label="Exa"
             description={t.settings.translation.exa}
-            placeholder="exa-…"
+            placeholder={t.settings.translation.poolPlaceholder}
             status={state.settings.api_keys.exa}
             onSave={(value) => onSaveKey("exa", value)}
             onDelete={() => onDeleteKey("exa")}
@@ -484,9 +503,10 @@ export function Settings({
             onOpenOfficial={onOpenExternalUrl}
           />
           <ApiKeyField
+            inputId="api-key-tavily"
             label="Tavily"
             description={t.settings.translation.tavily}
-            placeholder="tvly-…"
+            placeholder={t.settings.translation.poolPlaceholder}
             status={state.settings.api_keys.tavily}
             onSave={(value) => onSaveKey("tavily", value)}
             onDelete={() => onDeleteKey("tavily")}
@@ -633,7 +653,7 @@ export function Settings({
         </div>
       </section>
 
-      <section className="settings-section routing-settings">
+      <section className="settings-section routing-settings" id="settings-routing" tabIndex={-1}>
         <div className="settings-section-heading">
           <div>
             <h2>{t.settings.routing.title}</h2>
@@ -807,25 +827,26 @@ export function Settings({
               </div>
             </div>
 
-            <div className="agent-diagnostics">
-              <div className="agent-path-card">
+            <div className="agent-diagnostics" id="settings-agent-paths" tabIndex={-1}>
+              <h3>{t.settings.routing.dshPath}</h3>
+              <p className="field-help">{t.settings.routing.dshPathHint}</p>
+              {agentTiers.map((tier) => <div className="agent-path-card" key={tier}>
                 <label className="field">
-                  <span>{t.settings.routing.dshPath}</span>
+                  <span>{tier.replace(/^LOCAL_/, "")}</span>
                   <input
-                    value={dshPath}
-                    onChange={(event) => setDshPath(event.target.value)}
+                    value={agentPaths[tier] ?? ""}
+                    onChange={(event) => setAgentPaths((current) => ({ ...current, [tier]: event.target.value }))}
                     placeholder={t.settings.routing.dshPathPlaceholder}
                     spellCheck={false}
-                    disabled={dshPathBusy}
+                    disabled={Boolean(agentPathBusy)}
                   />
                 </label>
-                <p className="field-help">{t.settings.routing.dshPathHint}</p>
                 <div className="agent-path-actions">
-                  <button type="button" className="button button-secondary button-compact" disabled={dshPathBusy} onClick={() => void saveDshPath(dshPath)}>{t.settings.routing.dshPathSave}</button>
-                  <button type="button" className="button button-secondary button-compact" disabled={dshPathBusy || !dshPath} onClick={() => void saveDshPath("")}>{t.settings.routing.dshPathClear}</button>
+                  <button type="button" className="button button-secondary button-compact" disabled={Boolean(agentPathBusy)} onClick={() => void saveAgentPath(tier, agentPaths[tier] ?? "")}>{t.settings.routing.dshPathSave}</button>
+                  <button type="button" className="button button-secondary button-compact" disabled={Boolean(agentPathBusy) || !agentPaths[tier]} onClick={() => void saveAgentPath(tier, "")}>{t.settings.routing.dshPathClear}</button>
                 </div>
-                {dshPathError ? <p className="routing-error" role="alert">{dshPathError}</p> : null}
-              </div>
+                {agentPathError[tier] ? <p className="routing-error" role="alert">{agentPathError[tier]}</p> : null}
+              </div>)}
               <div className="settings-section-heading compact">
                 <div>
                   <h3>{t.settings.routing.agents}</h3>
@@ -857,6 +878,7 @@ export function Settings({
                       <div><strong>{agent.provider_tier}</strong><small>{agent.driver || agent.models.join(", ")}</small></div>
                       <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{t.settings.routing.agentStatus[agent.status]}</span>
                       <small title={agent.detail}>{agent.version || agent.detail}</small>
+                      {agent.status !== "ready" ? <small className="agent-status-help">{agent.status === "missing" ? t.settings.routing.agentMissingHelp : t.settings.routing.agentBrokenHelp}</small> : null}
                     </div>
                   ))}
                 </div>

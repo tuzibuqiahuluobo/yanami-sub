@@ -12,6 +12,7 @@ export interface ConfirmDialogConfig {
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
+  allowRemember?: boolean;
 }
 
 interface ConfirmDialogProps {
@@ -76,7 +77,7 @@ export function ConfirmDialog({
   }, [open]);
 
   const handleConfirm = useCallback(() => {
-    if (remember && !isConfirmRemembered(config.id)) {
+    if (config.allowRemember !== false && remember && !isConfirmRemembered(config.id)) {
       saveUi({ dismissedConfirms: [...dismissed(), config.id] });
     }
     onConfirm();
@@ -91,14 +92,14 @@ export function ConfirmDialog({
       <div className="dialog-card" onClick={(e) => e.stopPropagation()}>
         <h3>{config.title}</h3>
         <p>{config.message}</p>
-        <label className="dialog-remember">
+        {config.allowRemember !== false ? <label className="dialog-remember">
           <input
             type="checkbox"
             checked={remember}
             onChange={(e) => setRemember(e.target.checked)}
           />
           {t.confirm.remember}
-        </label>
+        </label> : null}
         <div className="dialog-actions">
           <button
             type="button"

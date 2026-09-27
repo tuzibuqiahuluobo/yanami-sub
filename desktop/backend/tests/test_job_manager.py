@@ -1294,6 +1294,35 @@ def test_export_task_log_copies_complete_disk_file(tmp_path) -> None:
         manager.export_task_log("../other", destination)
 
 
+def test_delete_record_only_removes_history_not_task_files(tmp_path) -> None:
+    manager = _completed_manager(tmp_path)
+    task = manager.start(TaskRequest(input=str(tmp_path / "a.wav")))
+    _settle(manager)
+    artifact = manager.task_directory(task.task_id) / "subtitle.srt"
+    artifact.write_text("kept", encoding="utf-8")
+
+    manager.delete_record(task.task_id)
+
+    assert manager.history() == []
+    assert manager.snapshot() is None
+    assert json.loads((tmp_path / "tasks.json").read_text("utf-8"))["tasks"] == []
+    assert artifact.read_text("utf-8") == "kept"
+    with pytest.raises(JobNotFound):
+        manager.delete_record(task.task_id)
+
+
+def test_running_record_cannot_be_deleted(tmp_path) -> None:
+    manager = JobManager(
+        python_executable="python.exe", worker_env={},
+        process_factory=lambda *args, **kwargs: FakeProcess(),
+        terminate_process_tree=lambda child: None,
+        history_path=tmp_path / "tasks.json", output_root=tmp_path / "tasks",
+    )
+    task = manager.start(TaskRequest(input=str(tmp_path / "a.wav")))
+    with pytest.raises(JobAlreadyRunning):
+        manager.delete_record(task.task_id)
+
+
 def test_running_task_log_export_prefers_live_part_over_previous_attempt(
     tmp_path,
 ) -> None:

@@ -50,6 +50,7 @@ def _item_options(
     options.pop("cleanup_intermediate", None)
     options.pop("llm_model", None)
     options.pop("llm_source", None)
+    options.pop("llm_agent", None)
     options["task_id"] = task_id
     options["_batch_workers"] = workers
     return options

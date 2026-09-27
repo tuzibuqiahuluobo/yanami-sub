@@ -81,6 +81,17 @@ test("browser preview exposes the batch scheduler contract", async () => {
   assert.equal((await api.listBatches()).length, 1);
 });
 
+test("browser preview keeps custom Agent paths separate by tier", async () => {
+  const api = createDesktopApi({ preview: true });
+  assert.equal((await api.getAgentPaths()).paths.LOCAL_DSH, "");
+  await api.setAgentPath("LOCAL_DSH", "G:/deepseek-harness");
+  await api.setAgentPath("LOCAL_CLAUDE", "G:/claude-code/cli.js");
+  const paths = (await api.getAgentPaths()).paths;
+  assert.equal(paths.LOCAL_DSH, "G:/deepseek-harness");
+  assert.equal(paths.LOCAL_CLAUDE, "G:/claude-code/cli.js");
+  assert.equal(paths.LOCAL_CODEX, "");
+});
+
 
 test("browser preview round-trips a static batch manifest", async () => {
   const api = createDesktopApi({ preview: true });

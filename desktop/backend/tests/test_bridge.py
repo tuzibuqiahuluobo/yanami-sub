@@ -258,6 +258,18 @@ def _bridge(tmp_path: Path) -> tuple[DesktopBridge, FakeJobs]:
     return bridge, jobs
 
 
+def test_agent_paths_are_saved_per_tier_and_invalid_choices_are_rejected(tmp_path: Path) -> None:
+    bridge, _jobs = _bridge(tmp_path)
+    cli = tmp_path / "codex.exe"
+    cli.write_bytes(b"exe")
+
+    assert bridge.set_agent_path("LOCAL_CODEX", str(cli))["ok"] is True
+    assert bridge.get_agent_paths()["data"]["paths"]["LOCAL_CODEX"] == str(cli.resolve())
+    assert bridge.get_agent_paths()["data"]["paths"]["LOCAL_DSH"] == ""
+    assert bridge.set_agent_path("LOCAL_CLAUDE", str(cli))["error"]["code"] == "invalid_request"
+    assert bridge.set_agent_path("UNKNOWN", str(cli))["error"]["code"] == "invalid_request"
+
+
 def test_health_requires_an_explicit_rendered_frontend_ack(tmp_path: Path) -> None:
     bridge, _jobs = _bridge(tmp_path)
     confirmed: list[bool] = []

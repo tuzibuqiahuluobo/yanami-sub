@@ -13,6 +13,7 @@ from desktop.backend.settings.local_agents import (
     discover_local_agent_commands,
     install_local_agent_command_overrides,
     validated_dsh_path,
+    validated_agent_path,
 )
 
 
@@ -172,3 +173,37 @@ def test_explicit_dsh_rejects_unknown_script_and_missing_node(tmp_path: Path) ->
     entry.write_text("", encoding="utf-8")
     with pytest.raises(ValueError, match="node.exe"):
         validated_dsh_path(str(checkout), {"PATH": ""})
+
+
+@pytest.mark.parametrize(
+    ("tier", "filename"),
+    [("LOCAL_AGY", "agy.exe"), ("LOCAL_CODEX", "codex.exe"),
+     ("LOCAL_CLAUDE", "claude.exe"), ("LOCAL_WORKBUDDY", "codebuddy.exe")],
+)
+def test_each_agent_accepts_its_own_explicit_installation(tmp_path: Path, tier: str, filename: str) -> None:
+    root = tmp_path / tier
+    root.mkdir()
+    executable = root / filename
+    executable.write_bytes(b"exe")
+    saved, command = validated_agent_path(tier, str(root), {"PATH": ""})
+    assert saved == str(root.resolve())
+    assert command == (str(executable.resolve()),)
+    with pytest.raises(ValueError):
+        validated_agent_path(tier, str(tmp_path), {"PATH": ""})
+
+
+def test_explicit_claude_script_requires_node_and_does_not_accept_arbitrary_js(tmp_path: Path) -> None:
+    package = tmp_path / "node_modules" / "@anthropic-ai" / "claude-code"
+    package.mkdir(parents=True)
+    entry = package / "cli.js"
+    entry.write_text("", encoding="utf-8")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    (bin_dir / "node.exe").write_bytes(b"node")
+    saved, command = validated_agent_path("LOCAL_CLAUDE", str(entry), {"PATH": str(bin_dir)})
+    assert saved == str(entry.resolve())
+    assert command[1] == str(entry.resolve())
+    with pytest.raises(ValueError, match="node.exe"):
+        validated_agent_path("LOCAL_CLAUDE", str(entry), {"PATH": ""})
+    with pytest.raises(ValueError):
+        validated_agent_path("LOCAL_CODEX", str(entry), {"PATH": str(bin_dir)})

@@ -91,7 +91,8 @@ export type AppAction =
       settings: SharedSettings;
       configPath?: string;
     }
-  | { type: "resetTask" };
+  | { type: "resetTask" }
+  | { type: "historyRecordDeleted"; taskId: string };
 
 
 /**
@@ -623,6 +624,12 @@ export function reduceAppState(
       };
     case "resetTask":
       return { ...state, route: "new-task", task: emptyTask(state.taskDefaults) };
+    case "historyRecordDeleted":
+      return {
+        ...state,
+        history: state.history.filter((row) => (row.task_id ?? row.taskId) !== action.taskId),
+        task: state.task.taskId === action.taskId ? emptyTask(state.taskDefaults) : state.task,
+      };
     default:
       return state;
   }

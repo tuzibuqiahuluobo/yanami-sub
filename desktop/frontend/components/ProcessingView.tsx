@@ -4,8 +4,6 @@ import {
   Check,
   ChevronDown,
   Circle,
-  Download,
-  FolderOpen,
   CircleStop,
   LoaderCircle,
   RotateCcw,
@@ -13,12 +11,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
-import { desktopApi } from "@/lib/bridge";
 import { formatDuration, summarizeTaskError } from "@/lib/formatters";
 import type { TaskState } from "@/lib/state";
 import type { PipelineStage } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
-import { useToast } from "./ToastProvider";
 
 
 const pipelineStages: PipelineStage[] = [
@@ -39,6 +35,7 @@ interface ProcessingViewProps {
   modelsReady?: boolean;
   onCancel: () => void;
   onRetry: () => void;
+  onBackToNewTask: () => void;
 }
 
 
@@ -48,19 +45,12 @@ export function ProcessingView({
   modelsReady,
   onCancel,
   onRetry,
+  onBackToNewTask,
 }: ProcessingViewProps) {
   const { t } = useLanguage();
-  const { showSuccess } = useToast();
   const [logsOpen, setLogsOpen] = useState(false);
-  const [exportBusy, setExportBusy] = useState(false);
-  const [exportedLogPath, setExportedLogPath] = useState("");
-  const [exportError, setExportError] = useState("");
   const [now, setNow] = useState(Date.now());
   const logDrawerRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    setExportedLogPath("");
-    setExportError("");
-  }, [task.taskId]);
   useEffect(() => {
     if (task.phase !== "running") {
       return;
@@ -97,31 +87,6 @@ export function ProcessingView({
       : t.processing.starting;
   const stageProgress = task.phase === "running" && task.stageProgress?.stage === task.currentStage
     ? task.stageProgress : null;
-  const exportLog = async () => {
-    if (!task.taskId) return;
-    setExportBusy(true);
-    setExportError("");
-    try {
-      const result = await desktopApi.exportTaskLog(task.taskId);
-      if (!result.cancelled && result.path) {
-        setExportedLogPath(result.path);
-        showSuccess(t.processing.logExported, `task-log-exported-${task.taskId}`);
-      }
-    } catch (error) {
-      setExportError(error instanceof Error ? error.message : t.processing.logExportFailed);
-    } finally {
-      setExportBusy(false);
-    }
-  };
-  const openExportLocation = async () => {
-    try {
-      await desktopApi.openTaskLogExportLocation();
-      setExportError("");
-    } catch (error) {
-      setExportError(error instanceof Error ? error.message : t.processing.logLocationFailed);
-    }
-  };
-
   return (
     <div className="page processing-page">
       <header className="page-header">
@@ -245,14 +210,15 @@ export function ProcessingView({
             />
           </button>
           {task.phase === "failed" ? (
-            <button
-              type="button"
-              className="button button-primary"
-              onClick={onRetry}
-            >
-              <RotateCcw size={14} />
-              {t.processing.retry}
-            </button>
+            <div className="processing-error-actions">
+              <button type="button" className="button button-secondary" onClick={onBackToNewTask}>
+                {t.processing.backToNewTask}
+              </button>
+              <button type="button" className="button button-primary" onClick={onRetry}>
+                <RotateCcw size={14} />
+                {t.processing.retry}
+              </button>
+            </div>
           ) : (
             <button
               type="button"
@@ -266,24 +232,6 @@ export function ProcessingView({
         </div>
 
         {logsOpen ? (
-          <>
-            <div className="log-toolbar">
-              {exportedLogPath ? (
-                <button type="button" className="button button-secondary button-compact" onClick={() => void openExportLocation()}>
-                  <FolderOpen size={13} />{t.processing.openLogLocation}
-                </button>
-              ) : null}
-              <button
-                type="button"
-                className="button button-secondary button-compact"
-                disabled={!task.taskId || exportBusy}
-                onClick={() => void exportLog()}
-              >
-                <Download size={13} />
-                {t.processing.exportLogs}
-              </button>
-            </div>
-            {exportError ? <p className="routing-error" role="alert">{exportError}</p> : null}
           <div
             ref={logDrawerRef}
             className="log-drawer"
@@ -299,7 +247,6 @@ export function ProcessingView({
               <span>{t.processing.waitingLogs}</span>
             )}
           </div>
-          </>
         ) : null}
       </section>
     </div>

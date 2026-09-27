@@ -6,7 +6,7 @@ import { invalidOutputName, summarizeTaskError } from "@/lib/formatters";
 import { blockingResources } from "@/lib/resources";
 import { reusableAsrTask } from "@/lib/reuse";
 import type { AppState } from "@/lib/state";
-import type { JobSnapshot, TaskRequest } from "@/lib/types";
+import type { ApiProvider, JobSnapshot, TaskRequest } from "@/lib/types";
 
 import { DropZone } from "./DropZone";
 import { EnvironmentPanel } from "./EnvironmentPanel";
@@ -27,6 +27,7 @@ interface NewTaskProps {
   onReuse: (snapshot: JobSnapshot) => void;
   onInstallResource: (resourceId: string) => void;
   onOpenResources: () => void;
+  onOpenSettings: (target: ApiProvider | "agents" | "routing") => void;
   onStart: () => void;
 }
 
@@ -41,6 +42,7 @@ export function NewTask({
   onReuse,
   onInstallResource,
   onOpenResources,
+  onOpenSettings,
   onStart,
 }: NewTaskProps) {
   const { t } = useLanguage();
@@ -124,8 +126,10 @@ export function NewTask({
             request={state.task.request}
             capabilities={state.capabilities}
             routing={state.routing}
+            apiKeys={state.settings.api_keys}
             disabled={busy}
             onChange={onRequestChange}
+            onOpenSettings={onOpenSettings}
           />
 
           {reusePinned ? (
@@ -160,7 +164,9 @@ export function NewTask({
                 {summarizeTaskError(state.task.error.message)}
               </strong>
               {state.task.error.code === "api_key_required" ? (
-                <span>{t.newTask.apiKeyError}</span>
+                <button type="button" className="text-button" onClick={() => onOpenSettings("gemini_free")}>{t.newTask.openKeyField}</button>
+              ) : state.task.error.action === "open_agents" ? (
+                <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button>
               ) : state.task.error.code === "route_unavailable" ? (
                 <span>{t.newTask.routeError}</span>
               ) : null}

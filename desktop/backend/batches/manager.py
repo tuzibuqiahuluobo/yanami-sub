@@ -53,6 +53,7 @@ _DESKTOP_ROW_FIELDS = {
     "gpu_name",
     "llm_model",
     "llm_source",
+    "llm_agent",
     "name",
 }
 _BATCH_OPTION_FIELDS = {"workers", "asr_queue_size", "retry_failed"}

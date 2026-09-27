@@ -662,12 +662,29 @@ function previewApi(): DesktopApi {
         { provider_tier: "LOCAL_AGY", driver: "agy", models: ["gemini-3.7-flash"], quota_pools: ["AGY_GEMINI"], status: "missing" as const, available: false, version: "", detail: "agy is not installed" },
       ];
     },
+    async deleteTaskRecord(taskId) {
+      return { task_id: taskId };
+    },
     async confirmAppHealth() { return null; },
     async getDshPath() {
       return { path: String(preferences.ui.dshPath ?? "") };
     },
     async setDshPath(path) {
       preferences.ui = { ...preferences.ui, dshPath: path };
+      return { path };
+    },
+    async getAgentPaths() {
+      return { paths: {
+        LOCAL_AGY: "", LOCAL_CLAUDE: "", LOCAL_CODEX: "", LOCAL_WORKBUDDY: "",
+        ...(preferences.ui.agentPaths as Record<string, string> ?? {}),
+        LOCAL_DSH: String((preferences.ui.agentPaths as Record<string, string> | undefined)?.LOCAL_DSH ?? preferences.ui.dshPath ?? ""),
+      } };
+    },
+    async setAgentPath(tier, path) {
+      const paths = { ...((preferences.ui.agentPaths as Record<string, string> | undefined) ?? {}) };
+      if (path) paths[tier] = path;
+      else delete paths[tier];
+      preferences.ui = { ...preferences.ui, agentPaths: paths };
       return { path };
     },
     async relocateData(reset = false) {
@@ -932,6 +949,7 @@ function nativeApi(): DesktopApi {
     resumeTask: (taskId) => call<JobSnapshot>("resume_task", taskId),
     deleteTaskIntermediates: (taskId) =>
       call<JobSnapshot>("delete_task_intermediates", taskId),
+    deleteTaskRecord: (taskId) => call("delete_task_record", taskId),
     getTaskSnapshot: () => call<JobSnapshot | null>("get_task_snapshot"),
     listTasks: () => call<JobSnapshot[]>("list_tasks"),
     pollEvents: (cursor) => call("poll_events", cursor),
@@ -998,6 +1016,8 @@ function nativeApi(): DesktopApi {
     probeLocalAgents: () => call("probe_local_agents"),
     getDshPath: () => call("get_dsh_path"),
     setDshPath: (path) => call("set_dsh_path", path),
+    getAgentPaths: () => call("get_agent_paths"),
+    setAgentPath: (tier, path) => call("set_agent_path", tier, path),
     getKnowledgeSnapshot: () => call("get_knowledge_snapshot"),
     getKnowledgeEntry: (name, rev = null) =>
       call("get_knowledge_entry", name, rev),

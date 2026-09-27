@@ -179,6 +179,19 @@ test("stages reported as reused are remembered as such", () => {
   assert.equal(next.task.currentStage, "stable");
 });
 
+test("deleting a history record removes only that row and clears its open task", () => {
+  const runningElsewhere = { task_id: "keep", state: "completed" as const, events: [], updated_at: 20 };
+  const removed = { task_id: "remove", state: "failed" as const, events: [], updated_at: 21 };
+  const state = reduceAppState(initialState, { type: "tasksLoaded", tasks: [removed, runningElsewhere] });
+  const next = reduceAppState({ ...state, task: { ...state.task, taskId: "remove", phase: "failed" } }, {
+    type: "historyRecordDeleted", taskId: "remove",
+  });
+
+  assert.deepEqual(next.history.map((row) => row.task_id), ["keep"]);
+  assert.equal(next.task.phase, "empty");
+  assert.equal(next.task.taskId, null);
+});
+
 
 test("stage progress is scoped to its stage and cleared when task ends", () => {
   const event = (type: "stage" | "progress" | "completed", payload: Record<string, unknown>) => ({

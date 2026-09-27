@@ -18,6 +18,7 @@ import { useToast } from "./ToastProvider";
 
 
 interface ApiKeyFieldProps {
+  inputId?: string;
   label: string;
   description: string;
   status: "configured" | "missing";
@@ -36,6 +37,7 @@ interface ApiKeyFieldProps {
 
 
 export function ApiKeyField({
+  inputId,
   label,
   description,
   status,
@@ -114,12 +116,13 @@ export function ApiKeyField({
       <div className="api-key-controls">
         <div className="secret-input">
           <input
+            id={inputId}
             type={visible ? "text" : "password"}
             value={value}
             placeholder={
               status === "configured" ? t.apiKey.replace : placeholder
             }
-            autoComplete="off"
+            autoComplete="new-password"
             spellCheck={false}
             onChange={(event) => setValue(event.target.value)}
           />

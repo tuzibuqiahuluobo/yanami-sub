@@ -58,6 +58,29 @@ def _agent_tiers() -> set[str]:
     return {tier for tier, command in commands.items() if command}
 
 
+def _install_transport_fallback() -> None:
+    """FineSub 0.5.1 treats a closed HTTP connection as a permanent error.
+
+    A proxy/server closing before a response is a transport failure, not an
+    invalid key or prompt. Classifying only these concrete httpx exceptions
+    as retryable lets the existing ordered route move to its next candidate.
+    This process-local compatibility shim is shared by single and batch jobs.
+    """
+
+    import httpx
+    from finesub.llm import client
+
+    original = client.is_retryable_provider_error
+    if getattr(original, "_yanami_transport_fallback", False):
+        return
+
+    def retryable(error: BaseException) -> bool:
+        return isinstance(error, (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError)) or original(error)
+
+    retryable._yanami_transport_fallback = True  # type: ignore[attr-defined]
+    client.is_retryable_provider_error = retryable
+
+
 def _meets_correction_floor(routes, target_id: str) -> bool:
     """Check if a target meets the correction quality floor.
 
@@ -109,12 +132,14 @@ def _correction_capable_targets(routes) -> set[str]:
 
     return correction_targets
 
-def _targets(source: str, *, free_only: bool) -> tuple[str, ...]:
+def _targets(source: str, *, free_only: bool, selected_agent: str = "") -> tuple[str, ...]:
     routes = default_model_routes()
     correction_targets = _correction_capable_targets(routes)
 
     if source == "agent":
         tiers = _agent_tiers()
+        if selected_agent:
+            tiers &= {selected_agent}
         # Settings lists agents by tier. Keep each CLI's vetted packaged
         # fallback group intact (including its media/search variants) before
         # moving to the next CLI. A single first-listed model can be unavailable
@@ -274,6 +299,7 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     Claude Code, Codex) to work.
     """
 
+    _install_transport_fallback()
     if request.stage not in {"translated-srt", "final-srt"} or request.llm_source == "manual":
         yield SourceRoute(
             models=request.llm_model, source="manual",
@@ -288,7 +314,10 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
         "api" if auto and free_key else
         "agent" if auto else request.llm_source
     )
-    targets = _targets(source, free_only=auto and source == "api")
+    targets = _targets(
+        source, free_only=auto and source == "api",
+        selected_agent=request.llm_agent if source == "agent" else "",
+    )
 
     # Enhanced logging: report why no targets are available
     if not targets:

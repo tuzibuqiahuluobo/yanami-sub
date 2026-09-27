@@ -127,6 +127,12 @@
   padding-right: 34px;
 }
 
+/* WebView2 supplies its own password reveal button; keep only our localized one. */
+.secret-input input::-ms-reveal,
+.secret-input input::-ms-clear {
+  display: none;
+}
+
 .secret-input button {
   position: absolute;
   top: 3px;
@@ -663,6 +669,11 @@
   font-size: 0.72rem;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.agent-status-row .agent-status-help {
+  grid-column: 1 / -1;
+  white-space: normal;
 }
 
 .update-section {

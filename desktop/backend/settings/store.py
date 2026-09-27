@@ -107,6 +107,12 @@ class SettingsStore:
                         message="请先填写 Gemini API 密钥，或选择自动/本地 Agent。",
                         action="open_settings",
                     )
+            if request.llm_source == "agent" and request.llm_agent and request.llm_agent not in self._configured_agent_tiers():
+                return BridgeError(
+                    code="route_unavailable",
+                    message=f"{request.llm_agent} 尚未检测到。请检查安装路径、CLI 版本和登录状态后重新检测。",
+                    action="open_agents",
+                )
             return None
 
         stage_error = self.validate_stage(request.stage, request.llm_model)

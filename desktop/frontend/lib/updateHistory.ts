@@ -17,6 +17,24 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.7.post2",
+    title: { zh: "RC7.2 · 任务路由与操作体验", en: "RC7.2 · Task routing and usability" },
+    notes: {
+      zh: [
+        "新建任务与批处理均可指定某个本地 Agent；连接异常可继续尝试后续模型候选。",
+        "历史记录可长按删除记录（不删除字幕文件），失败任务可直接返回新建任务。",
+        "缺少 API 密钥时直接定位输入框；支持为各本地 Agent 指定安装路径。",
+        "RC7.2 涉及启动器桥接改动，应用内更新使用完整包。",
+      ],
+      en: [
+        "Select a specific local Agent in tasks and batches; retry later model candidates after connection failures.",
+        "Long-press to delete history records without deleting subtitles, and return directly to a new task after failure.",
+        "Focus the missing API key field and configure custom installation paths for local Agents.",
+        "RC7.2 updates the launcher bridge, so in-app updates use the full package.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.7.post1",
     title: { zh: "RC7.1 · 更新与任务可靠性", en: "RC7.1 · Update and task reliability" },
     notes: {

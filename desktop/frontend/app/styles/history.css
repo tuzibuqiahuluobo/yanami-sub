@@ -17,6 +17,23 @@
   padding: 14px 16px;
 }
 
+.history-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.history-record-delete {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.history-row:hover .history-record-delete,
+.history-row:focus-within .history-record-delete,
+.history-row.is-delete-revealed .history-record-delete {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 .history-icon,
 .resource-large-icon,
 .api-key-icon {

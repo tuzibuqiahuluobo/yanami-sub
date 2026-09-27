@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import deque
 from collections.abc import Callable, Mapping
 from contextlib import ExitStack, contextmanager
+import json
 import logging
 import math
 from pathlib import Path
@@ -252,6 +253,45 @@ class JobManager:
                     snapshot.model_copy(deep=True)
                     for snapshot in reversed(recent)
                 ]
+
+    def delete_record(self, task_id: str) -> None:
+        """Forget one finished history row, leaving every task file untouched.
+
+        The shared index must be edited under FineSub's own lock. Its normal
+        merge writer intentionally keeps old rows, so passing it a shorter
+        list would silently resurrect the record.
+        """
+
+        validate_task_id(task_id)
+        with self._lock:
+            with self._holding_refreshed_task_paths():
+                snapshot = self._require_history(task_id)
+                if snapshot.state == "running":
+                    raise JobAlreadyRunning(f"Task {task_id} is still running")
+                if self.history_path is not None and self.history_path.is_file():
+                    path = self.history_path
+                    with task_index.holding_lock(
+                        path.with_suffix(f"{path.suffix}.lock"),
+                        timeout=task_index.LOCK_TIMEOUT_SECONDS,
+                    ):
+                        document = json.loads(path.read_text(encoding="utf-8"))
+                        if not isinstance(document, dict) or not isinstance(document.get("tasks"), list):
+                            raise ValueError("任务历史索引格式无效，未删除任何记录。")
+                        document["tasks"] = [
+                            row for row in document["tasks"]
+                            if not isinstance(row, dict) or row.get("task_id") != task_id
+                        ]
+                        temporary = path.with_suffix(f"{path.suffix}.tmp")
+                        temporary.write_text(
+                            json.dumps(document, ensure_ascii=False, separators=(",", ":")),
+                            encoding="utf-8", newline="\n",
+                        )
+                        task_index.replace_path(temporary, path, budget=task_index.RECORD_REPLACE)
+                self._history = [row for row in self._history if row.task_id != task_id]
+                if self._snapshot is not None and self._snapshot.task_id == task_id:
+                    self._snapshot = None
+                    self._events.clear()
+                    self._event_base_cursor = 0
 
     def events_after(
         self,

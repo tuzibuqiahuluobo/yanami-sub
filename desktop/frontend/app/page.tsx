@@ -104,6 +104,18 @@ function HomeContent() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Which task the cleanup dialog is asking about; null when it is closed.
   const [cleanupTaskId, setCleanupTaskId] = useState<string | null>(null);
+  const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
+  const [historyError, setHistoryError] = useState("");
+  const [settingsFocus, setSettingsFocus] = useState<{ target: ApiProvider | "agents" | "routing"; sequence: number } | null>(null);
+  const [resourceFocusId, setResourceFocusId] = useState("");
+  const focusSettings = (target: ApiProvider | "agents" | "routing") => {
+    setSettingsFocus((current) => ({ target, sequence: (current?.sequence ?? 0) + 1 }));
+    dispatch({ type: "navigate", route: "settings" });
+  };
+  const focusResource = (id: string) => {
+    setResourceFocusId(id);
+    dispatch({ type: "navigate", route: "resources" });
+  };
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheck | null>(null);
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState("");
   const [autoUpdateCheck, setAutoUpdateCheck] = useState(
@@ -480,7 +492,7 @@ function HomeContent() {
         // Leave "checking" before handing off, or the workspace sits on a
         // spinner with no task behind it.
         dispatch({ type: "taskRejected", error: RESOURCE_REQUIRED_ERROR });
-        dispatch({ type: "navigate", route: "resources" });
+        focusResource(missing.id);
         await installResource(missing.id);
         return;
       }
@@ -497,6 +509,9 @@ function HomeContent() {
     } catch (error) {
       const bridgeError = toBridgeError(error);
       dispatch({ type: "taskRejected", error: bridgeError });
+      if (bridgeError.code === "api_key_required") focusSettings("gemini_free");
+      else if (bridgeError.action === "open_agents") focusSettings("agents");
+      else if (bridgeError.action === "open_settings") focusSettings("routing");
       if (bridgeError.action === "show_batch") {
         dispatch({ type: "navigate", route: "batch" });
       }
@@ -553,6 +568,19 @@ function HomeContent() {
     }
   };
 
+  const deleteHistoryRecord = async (taskId: string) => {
+    try {
+      await desktopApi.deleteTaskRecord(taskId);
+      dispatch({ type: "historyRecordDeleted", taskId });
+      setHistoryError("");
+      showSuccess(t.history.recordDeleted, `history-record-${taskId}`);
+    } catch (error) {
+      setHistoryError(toBridgeError(error).message);
+    } finally {
+      setDeleteRecordId(null);
+    }
+  };
+
   const cancelHistoryTask = async (taskId: string) => {
     try {
       await desktopApi.cancelTask(taskId);
@@ -594,17 +622,20 @@ function HomeContent() {
         request={state.task.request}
         capabilities={state.capabilities}
         routing={state.routing}
+        apiKeys={state.settings.api_keys}
+        onOpenSettings={focusSettings}
         onRequestChange={(changes) => {
           dispatch({ type: "requestChanged", changes });
           rememberTaskOptions(changes);
         }}
-        onOpenResources={() => dispatch({ type: "navigate", route: "resources" })}
+        onOpenResources={() => focusResource(blockingResources(state.resources)[0]?.id ?? "uv")}
       />
     );
   } else if (state.route === "history") {
     content = (
       <TaskHistory
         tasks={state.history}
+        error={historyError}
         reuseDisabled={
           busy ||
           state.task.phase === "running" ||
@@ -623,6 +654,7 @@ function HomeContent() {
           }
           setCleanupTaskId(taskId);
         }}
+        onDeleteRecord={setDeleteRecordId}
       />
     );
   } else if (state.route === "knowledge") {
@@ -630,6 +662,7 @@ function HomeContent() {
   } else if (state.route === "resources") {
     content = (
       <ResourceManager
+        focusResourceId={resourceFocusId}
         resources={state.resources}
         installs={state.resourceInstalls}
         onInstall={(resourceId) => void installResource(resourceId)}
@@ -666,6 +699,8 @@ function HomeContent() {
     content = (
       <Settings
         state={state}
+        focusTarget={settingsFocus?.target}
+        focusSequence={settingsFocus?.sequence}
         appearance={appearance}
         onAppearanceChange={updateAppearance}
         onSaveKey={saveKey}
@@ -737,6 +772,7 @@ function HomeContent() {
         modelsReady={pipelineModelsReady(state.resources)}
         onCancel={() => void cancelTask()}
         onRetry={() => void startTask()}
+        onBackToNewTask={() => dispatch({ type: "resetTask" })}
       />
     );
   } else if (
@@ -763,9 +799,8 @@ function HomeContent() {
         }}
         onReuse={(snapshot) => dispatch({ type: "reuseAsr", snapshot })}
         onInstallResource={(resourceId) => void installResource(resourceId)}
-        onOpenResources={() =>
-          dispatch({ type: "navigate", route: "resources" })
-        }
+        onOpenResources={() => focusResource(blockingResources(state.resources)[0]?.id ?? "uv")}
+        onOpenSettings={focusSettings}
         onStart={() => void startTask()}
       />
     );
@@ -779,7 +814,10 @@ function HomeContent() {
         <AppShell
           state={state}
           api={desktopApi}
-          onNavigate={(route: Route) => dispatch({ type: "navigate", route })}
+          onNavigate={(route: Route) => {
+            if (route !== "settings") setSettingsFocus(null);
+            dispatch({ type: "navigate", route });
+          }}
           updateAvailable={startupUpdate?.available === true}
         >
           {content}
@@ -799,6 +837,18 @@ function HomeContent() {
               }
             }}
             onCancel={() => setCleanupTaskId(null)}
+          />
+          <ConfirmDialog
+            config={{
+              id: "delete-task-record",
+              title: t.history.deleteRecordConfirmTitle,
+              message: t.history.deleteRecordConfirmBody,
+              confirmLabel: t.history.deleteRecordConfirmAction,
+              allowRemember: false,
+            }}
+            open={deleteRecordId !== null}
+            onConfirm={() => { if (deleteRecordId) void deleteHistoryRecord(deleteRecordId); }}
+            onCancel={() => setDeleteRecordId(null)}
           />
           <UpdateAnnouncement
             open={

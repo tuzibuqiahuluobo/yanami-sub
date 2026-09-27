@@ -57,6 +57,7 @@ function getResourceInfo(resourceId: string, t: any): { title: string; detail: s
 
 
 interface ResourceManagerProps {
+  focusResourceId?: string;
   resources: ResourceStatus[];
   installs: ResourceInstallSnapshot[];
   onInstall: (resourceId: string) => void;
@@ -84,6 +85,7 @@ interface ResourceManagerProps {
 
 
 export function ResourceManager({
+  focusResourceId,
   resources,
   installs,
   onInstall,
@@ -103,6 +105,15 @@ export function ResourceManager({
 }: ResourceManagerProps) {
   const { t } = useLanguage();
   const { showSuccess } = useToast();
+  useEffect(() => {
+    if (!focusResourceId) return;
+    const frame = window.requestAnimationFrame(() => {
+      const element = document.getElementById(`resource-${focusResourceId}`);
+      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      element?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusResourceId]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
   const [pythonPreflight, setPythonPreflight] = useState<PythonInterpreterChoice | null>(null);
@@ -710,6 +721,8 @@ export function ResourceManager({
             : unresolvedDependency(resource, resources);
           return (
             <article
+              id={`resource-${resource.id}`}
+              tabIndex={-1}
               className={`resource-card${running ? " is-installing" : ""
                 }${failed ? " is-failed" : ""}`}
               key={resource.id}

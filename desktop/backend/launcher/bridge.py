@@ -29,7 +29,9 @@ from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobAlreadyRunning, JobNotFound
 from desktop.backend.resources import python_interpreter
 from desktop.backend.settings.preferences import PreferencesStore
-from desktop.backend.settings.local_agents import configure_local_agents, validated_dsh_path
+from desktop.backend.settings.local_agents import (
+    LOCAL_AGENT_TIERS, configure_local_agents, validated_agent_path,
+)
 from desktop.backend.settings.store import SettingsStore
 
 
@@ -584,6 +586,17 @@ class DesktopBridge:
         except Exception:
             return self._internal_error("delete_task_intermediates")
 
+    def delete_task_record(self, task_id: str) -> dict[str, Any]:
+        try:
+            self.jobs.delete_record(task_id)
+            return _success({"task_id": task_id})
+        except JobNotFound:
+            return _failure(BridgeError(code="task_not_found", message="没有找到该任务。"))
+        except JobAlreadyRunning:
+            return _failure(BridgeError(code="task_already_running", message="运行中的任务不能删除记录。"))
+        except (OSError, ValueError) as error:
+            return _failure(BridgeError(code="task_record_delete_failed", message=str(error)))
+
     def get_task_snapshot(self) -> dict[str, Any]:
         return self._guard(self.jobs.snapshot)
 
@@ -1125,13 +1138,40 @@ class DesktopBridge:
         return self._guard(probe_and_refresh)
 
     def get_dsh_path(self) -> dict[str, Any]:
-        value = self.preferences.load().ui.get("dshPath")
-        return _success({"path": value if isinstance(value, str) else ""})
+        return _success({"path": self.get_agent_paths()["data"]["paths"]["LOCAL_DSH"]})
 
     def set_dsh_path(self, path: str) -> dict[str, Any]:
+        result = self.set_agent_path("LOCAL_DSH", path)
+        if not result.get("ok"):
+            return result
+        return _success({"path": result["data"]["path"]})
+
+    def get_agent_paths(self) -> dict[str, Any]:
+        ui = self.preferences.load().ui
+        saved = ui.get("agentPaths")
+        paths = {
+            tier: saved.get(tier, "") if isinstance(saved, dict) and isinstance(saved.get(tier), str) else ""
+            for tier in LOCAL_AGENT_TIERS
+        }
+        if not paths["LOCAL_DSH"] and isinstance(ui.get("dshPath"), str):
+            paths["LOCAL_DSH"] = ui["dshPath"]
+        return _success({"paths": paths})
+
+    def set_agent_path(self, tier: str, path: str) -> dict[str, Any]:
         def save() -> dict[str, str]:
-            selected = validated_dsh_path(path)[0] if path.strip() else ""
-            self.preferences.save(ui={"dshPath": selected or None})
+            if tier not in LOCAL_AGENT_TIERS:
+                raise ValueError("不支持的本地 Agent。")
+            selected = validated_agent_path(tier, path)[0] if path.strip() else ""
+            ui = self.preferences.load().ui
+            paths = dict(ui.get("agentPaths") or {}) if isinstance(ui.get("agentPaths"), dict) else {}
+            if selected:
+                paths[tier] = selected
+            else:
+                paths.pop(tier, None)
+            patch = {"agentPaths": paths or None}
+            if tier == "LOCAL_DSH":
+                patch["dshPath"] = None  # migrate the former single-path preference
+            self.preferences.save(ui=patch)
             configure_local_agents(self.settings.user_data)
             self._refresh_worker_environment()
             return {"path": selected}

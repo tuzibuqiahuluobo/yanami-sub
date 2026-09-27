@@ -237,6 +237,7 @@ export interface TaskRequest {
   llm_planning_media: "" | "text" | "audio" | "video";
   llm_retrieval: "none" | "local" | "native";
   llm_source?: "auto" | "api" | "agent" | "manual";
+  llm_agent?: "" | "LOCAL_AGY" | "LOCAL_CLAUDE" | "LOCAL_CODEX" | "LOCAL_DSH" | "LOCAL_WORKBUDDY";
   llm_difficulty: "quality" | "intermediate" | "efficiency";
   llm_continuity: "serial" | "parallel";
   llm_parallel_windows: number;
@@ -645,6 +646,7 @@ export interface DesktopApi {
   retryTask(taskId: string): Promise<JobSnapshot>;
   resumeTask(taskId: string): Promise<JobSnapshot>;
   deleteTaskIntermediates(taskId: string): Promise<JobSnapshot>;
+  deleteTaskRecord(taskId: string): Promise<{ task_id: string }>;
   getTaskSnapshot(): Promise<JobSnapshot | null>;
   listTasks(): Promise<JobSnapshot[]>;
   pollEvents(cursor: number): Promise<PollResult>;
@@ -703,6 +705,8 @@ export interface DesktopApi {
   probeLocalAgents(): Promise<LocalAgentStatus[]>;
   getDshPath(): Promise<{ path: string }>;
   setDshPath(path: string): Promise<{ path: string }>;
+  getAgentPaths(): Promise<{ paths: Record<string, string> }>;
+  setAgentPath(tier: string, path: string): Promise<{ path: string }>;
   getKnowledgeSnapshot(): Promise<KnowledgeSnapshot>;
   getKnowledgeEntry(name: string, rev?: number | null): Promise<KnowledgeEntryDocument>;
   runKnowledgeMaintenance(request: {

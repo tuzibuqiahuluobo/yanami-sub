@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import httpx
 
 import pytest
 
@@ -89,6 +90,26 @@ def test_agent_source_tries_installed_agents_in_settings_order_with_vetted_model
         assert "local-dsh-deepseek-v4-flash" in route.targets
         assert default_model_routes().model_groups[route.models[0]].target_ids == route.targets
         assert load_execution_settings().policy_id == "agent-only"
+
+
+def test_selected_agent_is_used_alone_with_its_own_model_fallback(monkeypatch) -> None:
+    monkeypatch.setenv(COMMANDS_ENV, json.dumps({
+        "LOCAL_CLAUDE": ["claude.exe"], "LOCAL_DSH": ["dsh.exe"],
+    }))
+    request = TaskRequest(input="a.mp4", stage="final-srt", llm_source="agent", llm_agent="LOCAL_DSH")
+    with source_route(request) as route:
+        assert len(route.targets) >= 2
+        assert all(default_model_routes().target_fact(target).provider_tier == "LOCAL_DSH" for target in route.targets)
+
+
+def test_closed_http_connection_is_transient_but_invalid_request_is_not() -> None:
+    from finesub.llm.routing.model_router import FailureKind, classify_failure
+
+    with source_route(TaskRequest(input="a.mp4", stage="final-srt", llm_source="manual")):
+        assert classify_failure(httpx.RemoteProtocolError("Server disconnected without sending a response")) is FailureKind.TRANSIENT
+        request = httpx.Request("POST", "https://example.invalid")
+        response = httpx.Response(400, request=request)
+        assert classify_failure(httpx.HTTPStatusError("invalid request", request=request, response=response)) is FailureKind.PERMANENT
 
 
 def test_missing_free_key_and_agent_returns_raw_subtitle_fallback() -> None:
