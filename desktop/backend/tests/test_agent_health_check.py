@@ -121,6 +121,15 @@ def test_check_agent_tier_version_success(mock_run):
 
 
 @patch("subprocess.run")
+def test_nonzero_version_exit_is_not_a_healthy_agent(mock_run):
+    mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="node failed")
+    with patch("desktop.backend.worker.agent_health_check._executable_exists", return_value=True):
+        status = _check_agent_tier("LOCAL_DSH", ["dsh"])
+    assert not status.available
+    assert status.reason == "version_check_failed"
+
+
+@patch("subprocess.run")
 def test_check_agent_tier_quota_error(mock_run):
     """Test detecting quota errors."""
     mock_run.return_value = MagicMock(

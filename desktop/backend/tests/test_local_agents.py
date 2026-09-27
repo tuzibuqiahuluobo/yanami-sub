@@ -12,6 +12,7 @@ from desktop.backend.settings.local_agents import (
     configure_local_agents,
     discover_local_agent_commands,
     install_local_agent_command_overrides,
+    validated_dsh_path,
 )
 
 
@@ -137,3 +138,37 @@ def test_resolved_command_is_used_by_the_core_driver(
         model="deepseek-chat",
     )
     assert config.command == tuple(command)
+
+
+def test_explicit_dsh_checkout_outside_home_is_used_without_drive_scan(tmp_path: Path) -> None:
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    node = bin_dir / "node.exe"
+    node.write_bytes(b"node")
+    checkout = tmp_path / "other-drive" / "deepseek-harness"
+    entry = checkout / "apps" / "cli" / "lib" / "bin.js"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("", encoding="utf-8")
+    environment = {"PATH": str(bin_dir), "USERPROFILE": str(tmp_path / "home")}
+
+    saved, command = validated_dsh_path(str(checkout), environment)
+    assert saved == str(checkout.resolve())
+    assert command == (str(node.resolve()), str(entry.resolve()))
+    commands = discover_local_agent_commands(
+        environ=environment, source_roots=[], preferred_dsh_path=saved,
+    )
+    assert commands["LOCAL_DSH"] == command
+
+
+def test_explicit_dsh_rejects_unknown_script_and_missing_node(tmp_path: Path) -> None:
+    arbitrary = tmp_path / "bin.js"
+    arbitrary.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="deepseek-harness"):
+        validated_dsh_path(str(arbitrary), {"PATH": ""})
+
+    checkout = tmp_path / "deepseek-harness"
+    entry = checkout / "apps" / "cli" / "lib" / "bin.js"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("", encoding="utf-8")
+    with pytest.raises(ValueError, match="node.exe"):
+        validated_dsh_path(str(checkout), {"PATH": ""})

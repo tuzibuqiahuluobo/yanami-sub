@@ -11,7 +11,7 @@ import pytest
 
 from finesub_bootstrap.paths import AppPaths
 from desktop.backend.updates import installer as installer_module
-from desktop.backend.updates.installer import AppInstaller
+from desktop.backend.updates.installer import AppInstaller, validate_app_directory
 from desktop.backend.updates.manifest import UpdateManifest
 
 
@@ -92,6 +92,47 @@ def _manifest(body: bytes) -> UpdateManifest:
             },
         }
     )
+
+
+def test_hashed_app_manifest_detects_a_same_size_edit_and_missing_module(tmp_path: Path) -> None:
+    version_root = tmp_path / "1.1.0"
+    files = app_files()
+    files.pop("app-manifest.json")
+    for name, content in files.items():
+        target = version_root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+    manifest = {
+        "version": "1.1.0", "platform": "windows-x64",
+        "files": {
+            name: {"size": len(content), "sha256": hashlib.sha256(content).hexdigest()}
+            for name, content in files.items()
+        },
+    }
+    (version_root / "app-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    validate_app_directory(version_root, version="1.1.0")
+    module = version_root / "desktop" / "backend" / "worker" / "main.py"
+    module.write_bytes(b"y")
+    with pytest.raises(ValueError, match="digest"):
+        validate_app_directory(version_root, version="1.1.0")
+    module.unlink()
+    with pytest.raises(FileNotFoundError):
+        validate_app_directory(version_root, version="1.1.0")
+
+
+def test_rc71_rejects_a_manifest_without_integrity_hashes(tmp_path: Path) -> None:
+    version_root = tmp_path / "0.1.0-rc.7.post1"
+    for name, content in app_files().items():
+        target = version_root / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+    (version_root / "app-manifest.json").write_text(
+        json.dumps({"version": "0.1.0-rc.7.post1", "platform": "windows-x64"}),
+        encoding="utf-8",
+    )
+    with pytest.raises(ValueError, match="per-file"):
+        validate_app_directory(version_root, version="0.1.0-rc.7.post1")
 
 
 def test_app_install_switches_pointer_only_after_validation(tmp_path: Path) -> None:

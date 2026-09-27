@@ -53,6 +53,7 @@ DESKTOP_UV_ASSET = {
 
 PUBLIC_BRIDGE_METHODS = (
     "get_bootstrap_state",
+    "confirm_app_health",
     "get_diagnostics",
     "select_input_file",
     "select_batch_files",
@@ -100,6 +101,8 @@ PUBLIC_BRIDGE_METHODS = (
     "save_provider_key",
     "delete_provider_key",
     "probe_local_agents",
+    "get_dsh_path",
+    "set_dsh_path",
     "get_knowledge_snapshot",
     "get_knowledge_entry",
     "run_knowledge_maintenance",
@@ -689,7 +692,7 @@ def create_backend_services(
     os.environ.setdefault("UV_DATA_DIR", str(paths.runtime / "uv-data"))
     # Resolve concrete shell-free Agent commands before worker environments
     # are captured. This also refreshes a PATH that may predate CLI installs.
-    configure_local_agents()
+    configure_local_agents(paths.user_data)
     settings = SettingsStore(paths.user_data)
     bootstrap = _load_resources(paths, app_source)
 
@@ -886,7 +889,7 @@ def create_application(
         if pointer.get("pendingHealth") and isinstance(current, str):
             installer.confirm_health(current)
 
-    window.events.loaded += confirm_health
+    bridge.health_confirmation = confirm_health
     window.events.loaded += lambda *_args: tray.start()
 
     def on_closed(*_args: Any) -> None:

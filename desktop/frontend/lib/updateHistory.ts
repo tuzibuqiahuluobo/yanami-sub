@@ -17,6 +17,38 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.7.post1",
+    title: { zh: "RC7.1 · 更新与任务可靠性", en: "RC7.1 · Update and task reliability" },
+    notes: {
+      zh: [
+        "修复纯文本 Agent 的实际媒体路由，支持手动指定非标准位置的 DSH，并区分可启动检测与真实任务成功。",
+        "只在纠错模型调用失败时保留原始字幕；保护同名及用户手改字幕不被覆盖。",
+        "显示真实阶段进度与模型来源，启动验证应用文件完整性并在损坏时尝试回退。",
+        "RC7.1 涉及启动器改动，从 RC7 更新使用完整包；仍可在应用内下载更新。",
+      ],
+      en: [
+        "Corrected effective media routing for text-only Agents, added explicit DSH paths, and separated launch checks from real task success.",
+        "Only fall back to raw subtitles for correction-model failures; protect edited and same-name subtitles.",
+        "Show real stage progress and model source; validate app files on startup and recover a complete prior version.",
+        "RC7.1 changes the launcher, so RC7 updates use the full in-app package.",
+      ],
+    },
+  },
+  {
+    version: "0.1.0-rc.7",
+    title: { zh: "RC7 · Agent 路由与安全修复", en: "RC7 · Agent routing and safety" },
+    notes: {
+      zh: [
+        "按上游质量下限筛选 Agent 与 API 纠错候选，补回 Claude Code、Codex 等本地 Agent。",
+        "改进生产模式安全边界，并修复模型顺序与测试覆盖。",
+      ],
+      en: [
+        "Selected Agent and API correction targets using upstream quality floors, restoring local Claude Code and Codex candidates.",
+        "Improved production-mode boundaries, model ordering, and test coverage.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.6.post10",
     title: { zh: "RC6.10 · 任务恢复与日志", en: "RC6.10 · Task recovery and logs" },
     notes: {

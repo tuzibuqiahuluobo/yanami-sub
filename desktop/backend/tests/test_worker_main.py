@@ -247,12 +247,7 @@ def test_worker_applies_and_restores_one_run_model_routing(tmp_path: Path) -> No
 def test_no_available_agent_preserves_raw_subtitles_and_marks_correction_skipped(
     tmp_path: Path, monkeypatch
 ) -> None:
-    """RC6.13+: Pre-check now fails fast when no agents/API keys are available.
-
-    This test now verifies that the pre-check correctly detects the missing
-    configuration and raises ValueError with a helpful error message, rather
-    than silently degrading to raw subtitles after expensive ASR stages.
-    """
+    """Automatic source selection may keep a raw subtitle when none is ready."""
     from desktop.backend.settings.local_agents import COMMANDS_ENV
 
     monkeypatch.delenv("GEMINI_FREE", raising=False)
@@ -266,17 +261,16 @@ def test_no_available_agent_preserves_raw_subtitles_and_marks_correction_skipped
     stages: list[str] = []
     events = []
 
-    # RC6.13+: Should fail fast with pre-check error
-    with pytest.raises(ValueError, match="未配置任何本地 Agent"):
-        run_request(
-            TaskRequest(input=str(source), stage="final-srt", llm_source="auto"),
-            task_id="task-no-agent",
-            pipeline=lambda _source, **kwargs: stages.append(kwargs["stage"]) or paths,
-            emit=events.append,
-        )
+    outputs = run_request(
+        TaskRequest(input=str(source), stage="final-srt", llm_source="auto"),
+        task_id="task-no-agent",
+        pipeline=lambda _source, **kwargs: stages.append(kwargs["stage"]) or paths,
+        emit=events.append,
+    )
 
-    # Pipeline should not have been called at all (pre-check failed)
-    assert stages == []
+    assert stages == ["raw-srt"]
+    assert "rawSrt" in outputs
+    assert any(event.payload.get("skipped") for event in events)
 
 
 def test_exhausted_agent_chain_preserves_raw_subtitles_and_marks_skip(
@@ -377,7 +371,9 @@ def test_exhausted_api_correction_preserves_raw_subtitles_and_marks_skip(
             # A generic API failure: rate limit, revoked key, network error.
             # Deliberately has none of the `_harness_*` attributes an Agent
             # error carries, to prove the fallback no longer depends on them.
-            raise RuntimeError("429 Too Many Requests")
+            error = RuntimeError("429 Too Many Requests")
+            error.failure_kind = "rate_limit"
+            raise error
         return paths
 
     outputs = run_request(
@@ -420,6 +416,30 @@ def test_api_correction_failure_without_raw_subtitle_still_raises(
             task_id="task-api-no-raw",
             pipeline=pipeline,
             emit=events.append,
+        )
+
+
+def test_non_llm_failure_with_old_raw_subtitle_is_not_silently_skipped(
+    tmp_path: Path, monkeypatch
+) -> None:
+    config = tmp_path / "config.toml"
+    config.write_text("[llm]\n", encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    monkeypatch.setenv("GEMINI_FREE", "test-free-key")
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"audio")
+    output = tmp_path / "run" / "a.srt"
+    raw = output.with_name("a-raw.srt")
+    raw.parent.mkdir(parents=True)
+    raw.write_text("previous raw", encoding="utf-8")
+
+    def pipeline(_source, **_kwargs):
+        raise OSError("disk is full")
+
+    with pytest.raises(OSError, match="disk is full"):
+        run_request(
+            TaskRequest(input=str(source), output=str(output), stage="final-srt", llm_source="api"),
+            task_id="task-api-disk-failure", pipeline=pipeline, emit=lambda _event: None,
         )
 
 
@@ -699,7 +719,7 @@ def test_the_only_stage_reported_is_the_one_the_pipeline_entered(
         ("raw-srt", False),
     ]
     assert events[0].type == "started"
-    assert events[1].payload["stage"] == "vocal"
+    assert next(event for event in events if event.type == "stage").payload["stage"] == "vocal"
 
 
 def test_worker_keeps_private_artifacts_when_pipeline_fails(tmp_path: Path) -> None:
@@ -986,6 +1006,37 @@ def test_a_rerun_replaces_the_subtitle_the_last_run_published(tmp_path: Path) ->
         == "subtitle from task-2"
     )
     assert not (tmp_path / "a-raw.finesub.srt").exists()
+
+
+def test_a_same_size_user_edit_is_not_overwritten(tmp_path: Path) -> None:
+    source_file = tmp_path / "a.wav"
+    source_file.write_bytes(b"audio")
+    first = _publish_beside(source_file, task_id="task-1", run_dir=tmp_path / "run-1")
+    _record_outputs(first, task_id="task-1")
+    original = Path(first["rawSrt"])
+    original.write_text("manual subtitle!!!!!", encoding="utf-8")
+    assert original.stat().st_size == len("subtitle from task-1".encode("utf-8"))
+
+    second = _publish_beside(source_file, task_id="task-2", run_dir=tmp_path / "run-2")
+
+    assert original.read_text(encoding="utf-8") == "manual subtitle!!!!!"
+    assert Path(second["rawSrt"]) != original
+    assert Path(second["rawSrt"]).read_text(encoding="utf-8") == "subtitle from task-2"
+
+
+def test_same_stem_different_media_does_not_claim_subtitle(tmp_path: Path) -> None:
+    first_media = tmp_path / "a.wav"
+    second_media = tmp_path / "a.mp4"
+    first_media.write_bytes(b"first media")
+    second_media.write_bytes(b"second media")
+    first = _publish_beside(first_media, task_id="task-1", run_dir=tmp_path / "run-1")
+    _record_outputs(first, task_id="task-1")
+
+    second = _publish_beside(second_media, task_id="task-2", run_dir=tmp_path / "run-2")
+
+    assert Path(first["rawSrt"]).read_text(encoding="utf-8") == "subtitle from task-1"
+    assert Path(second["rawSrt"]) != Path(first["rawSrt"])
+    assert Path(second["rawSrt"]).read_text(encoding="utf-8") == "subtitle from task-2"
 
 
 def test_a_second_stranger_pushes_the_serial_along(tmp_path: Path) -> None:

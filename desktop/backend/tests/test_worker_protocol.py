@@ -29,6 +29,28 @@ def test_event_round_trip_is_one_json_line() -> None:
     assert decode_event(encoded) == event
 
 
+def test_reporter_only_emits_trustworthy_throttled_stage_counts() -> None:
+    events: list[WorkerEvent] = []
+    reporter = WorkerReporter("task-1", events.append)
+    reporter.stage_started("aligned")
+    reporter.progress("aligned", completed=1, total=None)
+    reporter.progress("aligned", completed=1, total=0)
+    for count in range(101):
+        reporter.progress("aligned", completed=count, total=100)
+    progress = [event for event in events if event.type == "progress"]
+    assert 2 <= len(progress) <= 52
+    assert progress[-1].payload == {"stage": "aligned", "completed": 100, "total": 100}
+    assert decode_event(encode_event(progress[-1])) == progress[-1]
+
+
+def test_route_event_identifies_candidates_without_claiming_a_success() -> None:
+    event = WorkerEvent.route("task-1", source="agent", targets=("local-dsh-a", "local-codex-b"))
+    assert decode_event(encode_event(event)) == event
+    assert event.payload == {
+        "source": "agent", "targets": ["local-dsh-a", "local-codex-b"],
+    }
+
+
 def test_non_protocol_worker_output_becomes_log_event() -> None:
     event = parse_worker_line("Loading model...\n", task_id="task-1")
 

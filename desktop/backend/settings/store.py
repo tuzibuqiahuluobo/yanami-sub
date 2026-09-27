@@ -694,7 +694,7 @@ class SettingsStore:
         # Refresh the inherited desktop PATH and resolve supported source/npm
         # installs on every explicit scan. The app can stay open while a CLI
         # is installed, so startup-only discovery would immediately go stale.
-        commands = configure_local_agents()
+        commands = configure_local_agents(self.user_data)
 
         from finesub.llm.routing.execution_policy import (
             driver_for_provider_tier,

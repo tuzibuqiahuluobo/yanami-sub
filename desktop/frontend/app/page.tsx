@@ -219,6 +219,16 @@ function HomeContent() {
     void loadBootstrap();
   }, [loadBootstrap]);
 
+  useEffect(() => {
+    if (!state.bootstrapped) return;
+    // Window loaded only means index.html was read. Confirm a pending update
+    // after the first successful bootstrap bridge call and painted app frame.
+    const frame = window.requestAnimationFrame(() => {
+      void desktopApi.confirmAppHealth().catch(() => undefined);
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [state.bootstrapped]);
+
   // `%LOCALAPPDATA%\FineSub\user-data` is shared with the CLI on purpose, so a
   // key can appear from outside this application -- a CLI run, another front
   // end, or a `.env` the user copied in. Every read backend-side goes to the

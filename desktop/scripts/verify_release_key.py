@@ -1,7 +1,7 @@
 """Refuse to sign with a key the shipped clients do not trust.
 
-The signing key lives in a secret now, and GitHub never reads a secret back. A
-truncated paste, the wrong file, or a mangled line ending would all produce a
+The signing key lives outside Git and is supplied to the local release build.
+A truncated file, the wrong file, or a mangled line ending would all produce a
 perfectly valid Ed25519 key that simply is not *the* key -- and the result would
 be a release whose manifest every installed client rejects, discovered by users
 rather than by us.

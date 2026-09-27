@@ -22,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { desktopApi } from "@/lib/bridge";
 
 import {
   isStale,
@@ -175,6 +176,26 @@ export function Settings({
   const [routingError, setRoutingError] = useState("");
   const [agentProbeBusy, setAgentProbeBusy] = useState(false);
   const [agentStatuses, setAgentStatuses] = useState<LocalAgentStatus[] | null>(null);
+  const [dshPath, setDshPath] = useState("");
+  const [dshPathBusy, setDshPathBusy] = useState(false);
+  const [dshPathError, setDshPathError] = useState("");
+  useEffect(() => {
+    void desktopApi.getDshPath().then((saved) => setDshPath(saved.path)).catch(() => undefined);
+  }, []);
+  const saveDshPath = async (path: string) => {
+    setDshPathBusy(true);
+    setDshPathError("");
+    try {
+      const saved = await desktopApi.setDshPath(path);
+      setDshPath(saved.path);
+      setAgentStatuses(null);
+      showSuccess(t.toast.saved, "dsh-path-saved");
+    } catch (error) {
+      setDshPathError(error instanceof Error ? error.message : t.settings.routing.dshPathFailed);
+    } finally {
+      setDshPathBusy(false);
+    }
+  };
   useEffect(() => {
     setRoutingDraft(toRoutingDraft());
   }, [routing]);
@@ -787,6 +808,24 @@ export function Settings({
             </div>
 
             <div className="agent-diagnostics">
+              <div className="agent-path-card">
+                <label className="field">
+                  <span>{t.settings.routing.dshPath}</span>
+                  <input
+                    value={dshPath}
+                    onChange={(event) => setDshPath(event.target.value)}
+                    placeholder={t.settings.routing.dshPathPlaceholder}
+                    spellCheck={false}
+                    disabled={dshPathBusy}
+                  />
+                </label>
+                <p className="field-help">{t.settings.routing.dshPathHint}</p>
+                <div className="agent-path-actions">
+                  <button type="button" className="button button-secondary button-compact" disabled={dshPathBusy} onClick={() => void saveDshPath(dshPath)}>{t.settings.routing.dshPathSave}</button>
+                  <button type="button" className="button button-secondary button-compact" disabled={dshPathBusy || !dshPath} onClick={() => void saveDshPath("")}>{t.settings.routing.dshPathClear}</button>
+                </div>
+                {dshPathError ? <p className="routing-error" role="alert">{dshPathError}</p> : null}
+              </div>
               <div className="settings-section-heading compact">
                 <div>
                   <h3>{t.settings.routing.agents}</h3>

@@ -12,7 +12,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 ## 快速开始
 
 1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.1.0-rc.6.post10-Setup.exe`。
+   `Yanami-Sub-0.1.0-rc.7.post1-Setup.exe`。
 2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
 3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
 4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
@@ -24,10 +24,11 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 准备 Python 前会在后台检查本机可复用的 64 位 Python 3.12（最长约 12 秒），并明确提供
 “使用本机 Python”“指定解释器”或“下载私有 Python”三种选择。
 
-> `v0.1.0-rc.6.post10`（RC6.10）新增任务与批处理的 API / Agent 来源选择、顺序回退
-> 和失败日志；修复后置知识库更新失败导致已生成字幕被判为失败，并完善完整日志导出。
-> RC6.9 可在“应用更新”中升级；RC6.6 若因 WinError 448 无法打开，请下载 RC6.10
-> 安装器覆盖安装，无需卸载或清理数据。
+> `v0.1.0-rc.7.post1`（RC7.1）修复纯文本 Agent 的实际媒体路由、任务阶段进度、
+> 字幕覆盖风险和应用版本完整性检查，并允许在设置中指定非标准位置的 DSH。
+> RC7 可在“应用更新”中下载 RC7.1 完整包；若应用无法启动，可用 RC7.1 安装器
+> 覆盖安装，无需卸载或清理用户数据。卸载器不再自动递归删除自选安装目录中的
+> 运行环境、模型与缓存；这些残留可由用户确认路径后手动清理。
 > 旧版 FineSub Desktop、RC4 及无法发现更新的旧版本也请使用安装器。
 > 每个桌面 Release 均同时提供在线更新清单和签名。请从本仓库 Release 下载并按页面
 > 提供的 SHA-256 校验。

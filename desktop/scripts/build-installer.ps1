@@ -128,6 +128,13 @@ if ($SigningCertificate) {
         -FilePath @($InstallerPath) `
         -Certificate $SigningCertificate
 }
+$ChecksumPath = "$InstallerPath.sha256"
+$Checksum = (Get-FileHash -LiteralPath $InstallerPath -Algorithm SHA256).Hash.ToLowerInvariant()
+[System.IO.File]::WriteAllText(
+    $ChecksumPath,
+    "$Checksum  $InstallerName`n",
+    (New-Object System.Text.UTF8Encoding($false))
+)
 
 Write-Host "Yanami Sub installer ready:"
 Write-Host $InstallerPath

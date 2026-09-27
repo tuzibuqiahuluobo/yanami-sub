@@ -25,7 +25,7 @@ from packaging.version import InvalidVersion, Version
 
 from finesub_bootstrap.fsops import remove_tree
 
-from desktop.backend.updates.installer import REQUIRED_APP_FILES
+from desktop.backend.updates.installer import validate_app_directory
 
 UPDATE_DIRECTORY_NAME = ".update"
 BACKUP_PREFIX = "backup-"
@@ -143,9 +143,11 @@ def full_update_in_progress(
 
 
 def _app_version_is_complete(version_directory: Path) -> bool:
-    return all(
-        (version_directory / relative).is_file() for relative in REQUIRED_APP_FILES
-    )
+    try:
+        validate_app_directory(version_directory, version=version_directory.name)
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
 
 
 def _version_sort_key(path: Path) -> tuple[int, Version, float]:

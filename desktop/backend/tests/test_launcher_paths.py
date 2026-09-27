@@ -196,6 +196,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
 
     assert exposed == [
         "get_bootstrap_state",
+        "confirm_app_health",
         "get_diagnostics",
         "select_input_file",
         "select_batch_files",
@@ -243,6 +244,8 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "save_provider_key",
         "delete_provider_key",
         "probe_local_agents",
+        "get_dsh_path",
+        "set_dsh_path",
         "get_knowledge_snapshot",
         "get_knowledge_entry",
         "run_knowledge_maintenance",

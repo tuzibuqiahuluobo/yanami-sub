@@ -95,6 +95,8 @@ export function ProcessingView({
     : task.currentStage
       ? stageLabels[task.currentStage]
       : t.processing.starting;
+  const stageProgress = task.phase === "running" && task.stageProgress?.stage === task.currentStage
+    ? task.stageProgress : null;
   const exportLog = async () => {
     if (!task.taskId) return;
     setExportBusy(true);
@@ -161,6 +163,32 @@ export function ProcessingView({
             </span>
           </div>
         </div>
+
+        {stageProgress ? (
+          <div className="processing-stage-progress" role="group" aria-label={t.processing.stageProgress}>
+            <div className="processing-stage-progress-copy">
+              <span>{t.processing.stageProgress}</span>
+              <strong>{stageProgress.completed} / {stageProgress.total}</strong>
+            </div>
+            <progress value={stageProgress.completed} max={stageProgress.total} />
+          </div>
+        ) : null}
+
+        {task.sourceRoute && task.request.stage !== "raw-srt" ? (
+          <div className="processing-route">
+            <span>{t.processing.modelSource}: {
+              task.sourceRoute.source === "api" ? t.newTask.settings.llmSourceApi :
+              task.sourceRoute.source === "agent" ? t.newTask.settings.llmSourceAgent :
+              t.newTask.settings.llmSourceManual
+            }</span>
+            {task.sourceRoute.targets.length ? (
+              <details>
+                <summary>{t.processing.attemptOrder} ({task.sourceRoute.targets.length})</summary>
+                <p>{task.sourceRoute.targets.join(" → ")}</p>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
 
         {firstRun && task.phase !== "failed" ? (
           <div className="inline-note" role="note">

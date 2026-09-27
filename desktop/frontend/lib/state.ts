@@ -32,6 +32,9 @@ export interface TaskState {
   request: Omit<TaskRequest, "input">;
   taskId: string | null;
   currentStage: PipelineStage | null;
+  /** Verified within-stage count only; never an overall task percentage. */
+  stageProgress?: { stage: PipelineStage; completed: number; total: number } | null;
+  sourceRoute?: { source: string; targets: string[] } | null;
   /** Stages that were satisfied by an existing artifact instead of running. */
   reusedStages: PipelineStage[];
   skippedStages?: PipelineStage[];
@@ -213,6 +216,8 @@ const emptyTask = (defaults: Partial<TaskRequest> = {}): TaskState => ({
   request: { ...defaultRequest, ...defaults },
   taskId: null,
   currentStage: null,
+  stageProgress: null,
+  sourceRoute: null,
   reusedStages: [],
   skippedStages: [],
   statusMessage: "",
@@ -233,6 +238,8 @@ function restoreRunningTask(
   }
   const { input, ...request } = snapshot.request;
   let currentStage: PipelineStage | null = null;
+  let stageProgress: TaskState["stageProgress"] = null;
+  let sourceRoute: TaskState["sourceRoute"] = null;
   let statusMessage = "";
   // Stages the pipeline entered without doing work, because their output was
   // already on disk. Worth keeping apart: on a rerun most of the list is this,
@@ -240,11 +247,30 @@ function restoreRunningTask(
   const reusedStages: PipelineStage[] = [];
   const skippedStages: PipelineStage[] = [];
   for (const event of snapshot.events ?? []) {
+    if (event.type === "route" && typeof event.payload.source === "string" &&
+        Array.isArray(event.payload.targets)) {
+      sourceRoute = {
+        source: event.payload.source,
+        targets: event.payload.targets.filter((value): value is string => typeof value === "string"),
+      };
+      continue;
+    }
+    if (event.type === "progress" && typeof event.payload.stage === "string" &&
+        typeof event.payload.completed === "number" && typeof event.payload.total === "number" &&
+        event.payload.total > 0) {
+      stageProgress = {
+        stage: event.payload.stage as PipelineStage,
+        completed: event.payload.completed,
+        total: event.payload.total,
+      };
+      continue;
+    }
     if (event.type !== "stage") {
       continue;
     }
     if (typeof event.payload.stage === "string") {
       currentStage = event.payload.stage as PipelineStage;
+      stageProgress = null;
       if (event.payload.reused === true && !reusedStages.includes(currentStage)) {
         reusedStages.push(currentStage);
       }
@@ -267,6 +293,8 @@ function restoreRunningTask(
     request,
     taskId,
     currentStage,
+    stageProgress,
+    sourceRoute,
     reusedStages,
     skippedStages,
     statusMessage,
@@ -485,6 +513,8 @@ export function reduceAppState(
           logs: [],
           outputs: {},
           skippedStages: [],
+          stageProgress: null,
+          sourceRoute: null,
         },
       };
     }
@@ -629,7 +659,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
   if (event.type === "started") {
     return {
       ...state,
-      task: { ...state.task, phase: "running", error: null },
+      task: { ...state.task, phase: "running", error: null, stageProgress: null, sourceRoute: null },
     };
   }
   if (event.type === "stage") {
@@ -651,12 +681,38 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
         ...state.task,
         phase: "running",
         currentStage: stage,
+        stageProgress: null,
         reusedStages: reused,
         skippedStages: skipped,
         statusMessage:
           typeof payload.message === "string"
             ? payload.message
             : state.task.statusMessage,
+      },
+    };
+  }
+  if (event.type === "progress") {
+    const { stage, completed, total } = payload;
+    if (stage !== state.task.currentStage || typeof completed !== "number" ||
+        typeof total !== "number" || total <= 0) return state;
+    return {
+      ...state,
+      task: {
+        ...state.task,
+        stageProgress: { stage: stage as PipelineStage, completed, total },
+      },
+    };
+  }
+  if (event.type === "route") {
+    if (typeof payload.source !== "string" || !Array.isArray(payload.targets)) return state;
+    return {
+      ...state,
+      task: {
+        ...state.task,
+        sourceRoute: {
+          source: payload.source,
+          targets: payload.targets.filter((value): value is string => typeof value === "string"),
+        },
       },
     };
   }
@@ -692,6 +748,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
       task: {
         ...state.task,
         phase: "completed",
+        stageProgress: null,
         statusMessage: "字幕处理完成",
         outputs: normalizedOutputs,
         error: null,
@@ -712,6 +769,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
       task: {
         ...state.task,
         phase: "failed",
+        stageProgress: null,
         logs: [...state.task.logs, message].slice(-200),
         error: {
           code: "worker_failed",
@@ -728,6 +786,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
     task: {
       ...state.task,
       phase: state.task.selectedFile ? "ready" : "empty",
+      stageProgress: null,
       statusMessage: "任务已取消",
     },
   };

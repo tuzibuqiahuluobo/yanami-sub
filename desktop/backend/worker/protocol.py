@@ -11,6 +11,8 @@ from pydantic import BaseModel, ConfigDict, Field
 EventType = Literal[
     "started",
     "stage",
+    "progress",
+    "route",
     "log",
     "debug",
     "completed",
@@ -73,6 +75,20 @@ class WorkerEvent(BaseModel):
     @classmethod
     def log(cls, task_id: str, message: str) -> "WorkerEvent":
         return cls(type="log", task_id=task_id, payload={"message": message})
+
+    @classmethod
+    def stage_progress(
+        cls, task_id: str, *, stage: str, completed: int, total: int
+    ) -> "WorkerEvent":
+        return cls(type="progress", task_id=task_id, payload={
+            "stage": stage, "completed": completed, "total": total,
+        })
+
+    @classmethod
+    def route(cls, task_id: str, *, source: str, targets: tuple[str, ...]) -> "WorkerEvent":
+        return cls(type="route", task_id=task_id, payload={
+            "source": source, "targets": list(targets),
+        })
 
     @classmethod
     def debug(cls, task_id: str, message: str) -> "WorkerEvent":

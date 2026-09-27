@@ -606,6 +606,20 @@
   border-top: 1px solid var(--border);
 }
 
+.agent-path-card {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--panel-subtle);
+}
+
+.agent-path-card .field-help { margin: 0; }
+
+.agent-path-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
 .settings-section-heading.compact {
   align-items: center;
   padding-bottom: 10px;

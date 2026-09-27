@@ -22,6 +22,29 @@ $CoreRoot = if ($CoreRoot) {
 }
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
 
+function Get-CleanSourceCommit {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    Push-Location -LiteralPath $Path
+    try {
+        $Changes = @(& git status --porcelain --untracked-files=no)
+        if ($LASTEXITCODE -ne 0 -or $Changes.Count -gt 0) {
+            throw "Release source has uncommitted tracked changes: $Path"
+        }
+        $Commit = (& git rev-parse HEAD).Trim()
+        if ($LASTEXITCODE -ne 0 -or $Commit -notmatch '^[0-9a-f]{40}$') {
+            throw "Cannot determine release source commit: $Path"
+        }
+        return $Commit
+    }
+    finally {
+        Pop-Location
+    }
+}
+$SourceCommit = Get-CleanSourceCommit -Path $RepoRoot
+if ($CoreRoot -ne $RepoRoot) {
+    $CoreCommit = Get-CleanSourceCommit -Path $CoreRoot
+}
+
 # What ships is decided by git, not by whatever happens to be on disk.
 #
 # This used to walk the source tree with -Force and copy everything whose
@@ -177,10 +200,40 @@ Copy-Item -LiteralPath $FrontendOut `
     -Destination (Join-Path $VersionDesktop "frontend\out") -Recurse -Force
 Copy-Item -LiteralPath (Join-Path $RepoRoot "pyproject.toml") -Destination $VersionRoot -Force
 
+# The signed ZIP protects this manifest on delivery. On later starts it lets
+# the frozen launcher detect a missing/corrupted import or frontend chunk,
+# rather than trusting only a handful of sentinel files.
+$IntegrityFiles = [ordered]@{}
+function Get-AppFileSha256 {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    $Stream = [System.IO.File]::OpenRead($Path)
+    $Algorithm = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        return [System.BitConverter]::ToString($Algorithm.ComputeHash($Stream)).Replace('-', '').ToLowerInvariant()
+    }
+    finally {
+        $Algorithm.Dispose()
+        $Stream.Dispose()
+    }
+}
+Get-ChildItem -LiteralPath $VersionRoot -Recurse -File | ForEach-Object {
+    if ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) {
+        throw "App payload cannot contain a reparse point: $($_.FullName)"
+    }
+    $Relative = $_.FullName.Substring($VersionRoot.Length + 1).Replace('\', '/')
+    if ($Relative -ne 'app-manifest.json') {
+        $IntegrityFiles[$Relative] = @{
+            size = $_.Length
+            sha256 = Get-AppFileSha256 -Path $_.FullName
+        }
+    }
+}
 $AppManifest = @{
     version = $Version
     platform = "windows-x64"
-} | ConvertTo-Json -Compress
+    sourceCommit = $SourceCommit
+    files = $IntegrityFiles
+} | ConvertTo-Json -Depth 6 -Compress
 Write-Utf8NoBom `
     -Path (Join-Path $VersionRoot "app-manifest.json") `
     -Content $AppManifest

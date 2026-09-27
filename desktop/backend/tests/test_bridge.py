@@ -258,6 +258,16 @@ def _bridge(tmp_path: Path) -> tuple[DesktopBridge, FakeJobs]:
     return bridge, jobs
 
 
+def test_health_requires_an_explicit_rendered_frontend_ack(tmp_path: Path) -> None:
+    bridge, _jobs = _bridge(tmp_path)
+    confirmed: list[bool] = []
+    bridge.health_confirmation = lambda: confirmed.append(True)
+    assert bridge.get_bootstrap_state()["ok"] is True
+    assert confirmed == []
+    assert bridge.confirm_app_health()["ok"] is True
+    assert confirmed == [True]
+
+
 def test_bridge_exposes_a_structured_diagnostic_report(tmp_path: Path) -> None:
     bridge, _ = _bridge(tmp_path)
 

@@ -437,6 +437,21 @@ def test_startup_repairs_pointer_to_newest_complete_version(tmp_path: Path) -> N
     }
 
 
+def test_rc7_missing_agent_module_is_not_selected_on_startup(tmp_path: Path) -> None:
+    from desktop.backend.updates.recovery import repair_active_app_version
+
+    root = tmp_path / "Yanami Sub"
+    prior = root / "app" / "versions" / "1.2.0"
+    _write_app_version(prior, "1.2.0")
+    rc7 = root / "app" / "versions" / "0.1.0-rc.7"
+    _write_app_version(rc7, "0.1.0-rc.7")
+    (root / "app" / "current.json").write_text(
+        '{"current":"0.1.0-rc.7","previous":"1.2.0","pendingHealth":false}',
+        encoding="utf-8",
+    )
+    assert repair_active_app_version(root) == "1.2.0"
+
+
 def test_update_handoff_marker_blocks_only_while_owner_is_live(
     tmp_path: Path,
 ) -> None:

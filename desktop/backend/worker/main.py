@@ -3,7 +3,9 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
+import hashlib
 import json
+import logging
 import os
 from pathlib import Path
 import shutil
@@ -44,6 +46,7 @@ class PipelineCallable(Protocol):
 
 
 Emit = Callable[[WorkerEvent], None]
+LOGGER = logging.getLogger(__name__)
 
 
 class WorkerReporter:
@@ -60,6 +63,7 @@ class WorkerReporter:
     def __init__(self, task_id: str, emit: Emit) -> None:
         self.task_id = task_id
         self.emit = emit
+        self._last_progress: dict[str, tuple[int, int]] = {}
 
     def planned(self, stages) -> None:
         return
@@ -69,6 +73,7 @@ class WorkerReporter:
         # before that -- the requested stage, in particular -- is a claim about
         # where the run is that nothing has established: it read as every
         # earlier stage being finished the moment the task started.
+        self._last_progress.pop(stage, None)
         self.emit(
             WorkerEvent.progress(
                 self.task_id,
@@ -79,9 +84,25 @@ class WorkerReporter:
         )
 
     def progress(self, stage, *, completed, total=None, unit="", detail="") -> None:
-        # Deliberately not a log line per update: the UI shows the stage, and
-        # the counts would be hundreds of rows in the task log.
-        return
+        # FineSub knows the unit of work for some stages, not an overall task
+        # percentage. Keep unknown totals indeterminate and avoid filling the
+        # bounded event deque with hundreds of near-identical updates.
+        if not isinstance(total, (int, float)) or total <= 0:
+            return
+        if not isinstance(completed, (int, float)):
+            return
+        count = max(0, min(int(completed), int(total)))
+        size = int(total)
+        previous = self._last_progress.get(stage)
+        if previous and previous[1] == size:
+            old_bucket = previous[0] * 50 // size
+            new_bucket = count * 50 // size
+            if old_bucket == new_bucket and count != size:
+                return
+        self._last_progress[stage] = (count, size)
+        self.emit(WorkerEvent.stage_progress(
+            self.task_id, stage=stage, completed=count, total=size,
+        ))
 
     def summary(self, stage: str, metrics) -> None:
         body = "，".join(
@@ -131,7 +152,51 @@ _EXPERT_OUTPUT_BY_STAGE = {
 }
 
 
-def _claimed_outputs() -> set[Path]:
+def _published_metadata_path() -> Path | None:
+    from finesub.paths import resolve_managed_app_paths
+
+    app_paths = resolve_managed_app_paths()
+    return app_paths.user_data / "published-subtitles.json" if app_paths is not None else None
+
+
+def _published_metadata() -> dict[str, dict[str, str]]:
+    path = _published_metadata_path()
+    if path is None:
+        return {}
+    try:
+        body = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if not isinstance(body, dict):
+        return {}
+    return {key: value for key, value in body.items()
+            if isinstance(key, str) and isinstance(value, dict)}
+
+
+def _sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def _record_published_output(path: Path, source: Path) -> None:
+    """Keep overwrite evidence private; the shared CLI index forbids new keys."""
+
+    metadata_path = _published_metadata_path()
+    if metadata_path is None:
+        return
+    from finesub_bootstrap.fsops import write_atomic
+
+    metadata_path.parent.mkdir(parents=True, exist_ok=True)
+    with holding_lock(metadata_path.with_suffix(".lock"), timeout=10):
+        current = _published_metadata()
+        current[str(path)] = {"sha256": _sha256(path), "source": str(source)}
+        write_atomic(metadata_path, json.dumps(current, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _claimed_outputs() -> dict[Path, dict[str, str]]:
     """Every subtitle path this machine's task index already claims as ours.
 
     Publishing beside the user's own media means the name we want may already
@@ -146,7 +211,8 @@ def _claimed_outputs() -> set[Path]:
     A machine whose index cannot be read yields nothing, which errs towards
     writing a new name rather than overwriting a stranger's subtitle.
 
-    RC6.13+: Returns dict mapping Path to (size, mtime) tuple for verification.
+    Only paths in the shared index AND our private digest ledger are reusable.
+    A prior version without a digest conservatively gets a new filename.
     """
 
     from finesub.paths import resolve_managed_app_paths
@@ -159,49 +225,43 @@ def _claimed_outputs() -> set[Path]:
     app_paths = resolve_managed_app_paths()
     if app_paths is None:
         return {}
-    claimed: dict[Path, tuple[int, float]] = {}
+    metadata = _published_metadata()
+    claimed: dict[Path, dict[str, str]] = {}
     for entry in task_index.read(
         app_paths.user_data / "tasks.json", app_paths.tasks
     ):
         outputs = entry.get("outputs")
         if not isinstance(outputs, dict):
             continue
-        metadata = entry.get("output_metadata", {})
         for key, value in outputs.items():
             if isinstance(value, str) and value:
                 path = Path(value).expanduser().resolve()
-                # Store size and mtime for verification
-                meta = metadata.get(key, {}) if isinstance(metadata, dict) else {}
-                size = meta.get("size", 0) if isinstance(meta, dict) else 0
-                mtime = meta.get("mtime", 0.0) if isinstance(meta, dict) else 0.0
-                claimed[path] = (size, mtime)
+                evidence = metadata.get(str(path), {})
+                if isinstance(evidence.get("sha256"), str) and isinstance(evidence.get("source"), str):
+                    claimed[path] = evidence
     return claimed
 
 
-def _file_unchanged(path: Path, expected_size: int, expected_mtime: float) -> bool:
-    """Check if file matches expected size and mtime (not user-modified)."""
+def _file_unchanged(path: Path, expected_sha256: str) -> bool:
+    """A same-size edit is still an edit; mtimes are not trustworthy here."""
     try:
-        stat = path.stat()
-        # Allow small mtime drift (filesystem precision varies)
-        return stat.st_size == expected_size and abs(stat.st_mtime - expected_mtime) < 2.0
+        return _sha256(path) == expected_sha256
     except OSError:
         return False
 
 
-def _unclaimed_destination(destination: Path) -> Path:
+def _unclaimed_destination(destination: Path, *, source: Path) -> Path:
     """`destination`, or a free name beside it when a stranger holds that one.
 
-    RC6.13+: If destination exists and is claimed but has been modified by the
-    user (different size or mtime), treat it as unclaimed to avoid data loss.
+    Reuse only an unchanged subtitle from this exact source media file.
     """
 
     if not destination.exists():
         return destination
     claimed = _claimed_outputs()
     if destination in claimed:
-        size, mtime = claimed[destination]
-        # Only reuse if file is unchanged since we wrote it
-        if _file_unchanged(destination, size, mtime):
+        evidence = claimed[destination]
+        if evidence["source"] == str(source) and _file_unchanged(destination, evidence["sha256"]):
             return destination
         # File was modified by user - don't overwrite
     candidate = destination.with_name(
@@ -211,8 +271,8 @@ def _unclaimed_destination(destination: Path) -> Path:
     while candidate.exists():
         # Check if this candidate is also claimed and unchanged
         if candidate in claimed:
-            size, mtime = claimed[candidate]
-            if _file_unchanged(candidate, size, mtime):
+            evidence = claimed[candidate]
+            if evidence["source"] == str(source) and _file_unchanged(candidate, evidence["sha256"]):
                 return candidate
         candidate = destination.with_name(
             f"{destination.stem}.finesub.{serial}{destination.suffix}"
@@ -258,7 +318,8 @@ def _publish_output(
         return {key: str(generated)}
 
     destination = _unclaimed_destination(
-        imported.resolve().with_name(f"{imported.stem}{suffix}")
+        imported.resolve().with_name(f"{imported.stem}{suffix}"),
+        source=imported.resolve(),
     )
     if destination != generated:
         temporary = destination.with_name(
@@ -270,6 +331,12 @@ def _publish_output(
             os.replace(temporary, destination)
         finally:
             temporary.unlink(missing_ok=True)
+    try:
+        _record_published_output(destination, imported.resolve())
+    except (OSError, LockUnavailable) as error:
+        # The deliverable is already safely published. Missing evidence only
+        # prevents future replacement; it cannot authorize an overwrite.
+        LOGGER.warning("could not record published subtitle digest: %s", error)
     return {key: str(destination)}
 
 
@@ -428,11 +495,9 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
                 for item in rows
             )
 
-    # RC6.13+: For API source, check for permanent failures instead of
-    # blindly accepting any error. Common permanent failures include:
-    # - Invalid API key (authentication errors)
-    # - API key without required permissions
-    # - Malformed requests (should not happen, but if they do, should fail loudly)
+    # An API error is recoverable only when it came from the FineSub LLM
+    # correction call. A raw subtitle on disk alone is not enough evidence:
+    # a disk, decoder or packaging failure later in the pipeline must surface.
     if not matched and source == "api":
         # Check if this looks like a permanent configuration error
         error_str = str(error).lower()
@@ -454,14 +519,22 @@ def _correction_exhausted(request: TaskRequest, error: Exception, *, source: str
             # This is a configuration error - fail loudly, don't mask it
             return False
 
-        # Check harness failure_kind if available (works for both API and Agent)
+        # Structured errors from the model client are trusted; otherwise the
+        # traceback must contain both the correction stage and LLM client.
         failure_kind = getattr(error, "failure_kind", None)
         if failure_kind == "permanent":
             return False
-
-        # For other API errors (transient failures, rate limits, etc.),
-        # allow fallback to raw subtitle
-        matched = True
+        frames = traceback.extract_tb(error.__traceback__) if error.__traceback__ else []
+        from_correction = any(
+            frame.name in {"_run_llm_stage", "run_full_correction", "_run_full_correction_impl"}
+            or "correction_translation.py" in frame.filename.replace("\\", "/")
+            for frame in frames
+        )
+        from_client = any(
+            "/finesub/llm/" in frame.filename.replace("\\", "/")
+            for frame in frames
+        )
+        matched = failure_kind in {"transient", "quota", "rate_limit"} or (from_correction and from_client)
 
     if not matched:
         return False
@@ -690,6 +763,7 @@ def run_request(
             # with a default of "cuda" this could not tell a choice from a
             # default and would have rejected a bare `cpu` tier.
             check_tier_device_agreement(request.gpu_tier, request.device)
+            emit(WorkerEvent.route(task_id, source=route.source, targets=route.targets))
             if route.targets:
                 emit(WorkerEvent.log(task_id, f"模型来源：{route.source}；尝试顺序：{', '.join(route.targets)}"))
             artifact_log, artifact_offset = _route_artifact_log(request)

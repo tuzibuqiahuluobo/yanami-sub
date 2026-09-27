@@ -50,6 +50,7 @@ test("subtitle progress follows the task across pages and reuses completion feed
   assert.match(toast, /route !== "new-task" && task\.phase === "running"/);
   assert.match(toast, /<TaskProgressItem task=\{task\}/);
   assert.match(toast, /t\.processing\.stages\.translatedSrt/);
-  assert.match(toast, /update-progress-ring is-indeterminate/);
+  assert.match(toast, /progress \? "" : " is-indeterminate"/);
+  assert.match(toast, /progress\.completed\}\/\$\{progress\.total\}/);
   assert.match(page, /showSuccess\(t\.toast\.taskCompleted/);
 });

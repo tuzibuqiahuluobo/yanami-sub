@@ -3,7 +3,7 @@
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.0-rc.7"
+  #define AppVersion "0.1.0-rc.7.post1"
 #endif
 
 #ifndef OutputDir
@@ -80,10 +80,6 @@ Name: "{autodesktop}\Yanami Sub"; Filename: "{app}\{#AppExeName}"; WorkingDir: "
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,Yanami Sub}"; Flags: nowait postinstall skipifsilent
 
-[UninstallRun]
-; Stop Yanami Sub and its worker children before their installed files vanish.
-Filename: "{sys}\taskkill.exe"; Parameters: "/F /T /IM ""{#AppExeName}"""; Flags: runhidden waituntilterminated; RunOnceId: "StopYanamiSub"
-
 [Code]
 { The marker separates an installed copy (personal data in
   %LOCALAPPDATA%\FineSub) from a portable one (everything beside the exe).
@@ -95,14 +91,12 @@ begin
     SaveStringToFile(ExpandConstant('{app}\installed.marker'), '', False);
 end;
 
-{ Inno only removes files it installed, so the state FineSub creates beside the
-  exe has to go explicitly - but only the half that can be recreated (managed
-  Python, models, download caches). The two kinds that cannot are each asked
-  about separately, matching `finesub uninstall`: finished subtitles under
-  tasks\, and personal data (settings, API keys, knowledge base) which lives
-  outside the install directory and is shared with the CLI and portable copies.
-  Models or subtitles that were moved elsewhere with `finesub relocate` are not
-  touched at all: another installation is probably reading them. }
+{ Inno removes only files it installed. A custom install directory may have
+  pre-existing runtime/models/cache/app folders or junctions, and older
+  versions wrote no per-folder ownership marker. Do not recursively delete
+  those folders on uninstall: leaving rebuildable data for manual cleanup is
+  safer than deleting another application's or drive's contents. Irreplaceable
+  subtitles and shared personal data still require explicit consent. }
 procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
 var
   Subtitles: String;
@@ -110,11 +104,6 @@ var
 begin
   if CurUninstallStep <> usPostUninstall then
     exit;
-  DelTree(ExpandConstant('{app}\runtime'), True, True, True);
-  DelTree(ExpandConstant('{app}\models'), True, True, True);
-  DelTree(ExpandConstant('{app}\cache'), True, True, True);
-  DelTree(ExpandConstant('{app}\app'), True, True, True);
-  DelTree(ExpandConstant('{app}\.update'), True, True, True);
   DeleteFile(ExpandConstant('{app}\installed.marker'));
   { Neither of the two irreplaceable kinds is touched when nobody can answer
     for them. Under /SUPPRESSMSGBOXES Inno answers a MsgBox with its *default*

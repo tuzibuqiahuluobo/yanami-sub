@@ -96,6 +96,8 @@ function SuccessToast({
 
 function TaskProgressItem({ task }: { task: TaskState }) {
   const { t } = useLanguage();
+  const progress = task.stageProgress?.stage === task.currentStage ? task.stageProgress : null;
+  const percent = progress ? Math.min(100, Math.max(0, progress.completed / progress.total * 100)) : 0;
   const stageLabels: Record<PipelineStage, string> = {
     vocal: t.processing.stages.vocal,
     aligned: t.processing.stages.aligned,
@@ -107,15 +109,20 @@ function TaskProgressItem({ task }: { task: TaskState }) {
 
   return (
     <div className="toast-item update-progress-toast" role="status" aria-live="polite">
-      <span className="update-progress-ring is-indeterminate" role="progressbar" aria-label={t.processing.runningTitle}>
+      <span className={`update-progress-ring${progress ? "" : " is-indeterminate"}`}
+        role="progressbar" aria-label={t.processing.runningTitle}
+        aria-valuemin={progress ? 0 : undefined} aria-valuemax={progress ? 100 : undefined}
+        aria-valuenow={progress ? Math.round(percent) : undefined}>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <circle className="update-ring-track" cx="12" cy="12" r="9" />
-          <circle className="update-ring-value" cx="12" cy="12" r="9" pathLength="100" />
+          <circle className="update-ring-value" cx="12" cy="12" r="9" pathLength="100"
+            style={{ strokeDashoffset: progress ? 100 - percent : 72 }} />
         </svg>
       </span>
       <span className="update-progress-copy">
         <strong>{t.processing.runningTitle}</strong>
-        <small>{(task.currentStage && stageLabels[task.currentStage]) || t.processing.starting}</small>
+        <small>{(task.currentStage && stageLabels[task.currentStage]) || t.processing.starting}
+          {progress ? ` · ${progress.completed}/${progress.total}` : ""}</small>
       </span>
     </div>
   );

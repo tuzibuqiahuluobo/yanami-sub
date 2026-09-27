@@ -180,7 +180,7 @@ export interface DownloadRouteState {
 }
 
 export interface WorkerEvent {
-  type: "started" | "stage" | "log" | "completed" | "failed" | "cancelled";
+  type: "started" | "stage" | "progress" | "route" | "log" | "completed" | "failed" | "cancelled";
   task_id: string;
   timestamp: string;
   payload: Record<string, unknown>;
@@ -632,6 +632,7 @@ export interface UpdateInstallSnapshot {
 
 export interface DesktopApi {
   getBootstrapState(): Promise<BootstrapState>;
+  confirmAppHealth(): Promise<unknown>;
   getDiagnostics(): Promise<DiagnosticsReport>;
   selectInputFile(): Promise<{ path: string | null }>;
   selectBatchFiles(): Promise<{ paths: string[] }>;
@@ -700,6 +701,8 @@ export interface DesktopApi {
   saveProviderKey(providerId: string, value: string): Promise<RoutingSettings>;
   deleteProviderKey(providerId: string): Promise<RoutingSettings>;
   probeLocalAgents(): Promise<LocalAgentStatus[]>;
+  getDshPath(): Promise<{ path: string }>;
+  setDshPath(path: string): Promise<{ path: string }>;
   getKnowledgeSnapshot(): Promise<KnowledgeSnapshot>;
   getKnowledgeEntry(name: string, rev?: number | null): Promise<KnowledgeEntryDocument>;
   runKnowledgeMaintenance(request: {

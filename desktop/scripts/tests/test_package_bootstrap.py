@@ -145,6 +145,12 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources() -> None:
         assert not (version_root / "src" / "leftover.log").exists()
         assert not (version_root / "src" / "scratch").exists()
         assert (version_root / "desktop" / "backend" / "launcher" / "main.py").is_file()
+        manifest = json.loads((version_root / "app-manifest.json").read_text("utf-8"))
+        expected_commit = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=fixture_repo, text=True
+        ).strip()
+        assert manifest["sourceCommit"] == expected_commit
+        assert "desktop/backend/launcher/main.py" in manifest["files"]
         assert not (version_root / "desktop" / "backend" / "tests").exists()
         assert not (version_root / "desktop" / "backend" / "__pycache__").exists()
         assert (

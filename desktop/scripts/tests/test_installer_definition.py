@@ -38,14 +38,10 @@ def test_installer_creates_shortcuts_and_can_launch_application() -> None:
     assert "postinstall" in script
 
 
-def test_uninstaller_force_closes_the_app_and_worker_tree_first() -> None:
+def test_uninstaller_does_not_kill_other_copies_by_image_name() -> None:
     script = _installer_text()
-    uninstall_run = script.split("[UninstallRun]", 1)[1].split("[", 1)[0]
-
-    assert 'Filename: "{sys}\\taskkill.exe"' in uninstall_run
-    assert 'Parameters: "/F /T /IM ""{#AppExeName}"""' in uninstall_run
-    assert "Flags: runhidden waituntilterminated" in uninstall_run
-    assert 'RunOnceId: "StopYanamiSub"' in uninstall_run
+    assert "taskkill.exe" not in script
+    assert "CloseApplications=yes" in script
 
 
 def test_installer_uses_branding_and_exact_output_name() -> None:
@@ -133,15 +129,12 @@ def test_rc3_removes_obsolete_finesub_desktop_entry_points() -> None:
         assert f'Type: files; Name: "{obsolete}"' in script
 
 
-def test_uninstall_removes_only_what_can_be_rebuilt_without_asking() -> None:
-    # Same split as `finesub uninstall`: rebuildable state goes, and the two
-    # kinds that cannot be recreated -- finished subtitles and personal data --
-    # are each asked about.
+def test_uninstall_never_recursively_deletes_unowned_install_directories() -> None:
+    # A user may choose an existing directory or replace a child with a
+    # junction. RC7 provided no ownership markers for these folders.
     script = _installer_text()
     for runtime_child in ("runtime", "models", "cache", "app", ".update"):
-        assert (
-            "DelTree(ExpandConstant('{app}\\" + runtime_child + "')"
-        ) in script
+        assert "DelTree(ExpandConstant('{app}\\" + runtime_child + "')" not in script
     assert "DeleteFile(ExpandConstant('{app}\\installed.marker'))" in script
     assert "{app}\\tasks" in script
     assert "{localappdata}\\FineSub" in script

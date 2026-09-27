@@ -15,6 +15,7 @@ from contextlib import contextmanager
 import ctypes
 from dataclasses import replace
 import json
+import logging
 import os
 from pathlib import Path
 import re
@@ -25,6 +26,7 @@ import threading
 COMMANDS_ENV = "YANAMI_SUB_LOCAL_AGENT_COMMANDS"
 _PATCH_MARKER = "_yanami_sub_command_overrides"
 _ERROR_MODE_LOCK = threading.Lock()
+LOGGER = logging.getLogger(__name__)
 
 
 def _split_path(value: str) -> Iterator[Path]:
@@ -189,19 +191,8 @@ def _workbuddy_command(
     return (str(node), str(entry)) if node is not None else None
 
 
-def _windows_drive_roots() -> list[Path]:
-    if os.name != "nt":
-        return []
-    bitmask = ctypes.windll.kernel32.GetLogicalDrives()
-    return [
-        Path(f"{chr(ord('A') + index)}:\\")
-        for index in range(26)
-        if bitmask & (1 << index)
-    ]
-
-
 def _source_roots(environ: Mapping[str, str]) -> list[Path]:
-    """Safe source checkout discovery limited to user directories.
+    r"""Safe source checkout discovery limited to user directories.
 
     RC6.13+: Removed drive-root scanning (X:\deepseek-harness) to prevent
     security issue where arbitrary bin.js at drive roots could be executed.
@@ -219,10 +210,38 @@ def _source_roots(environ: Mapping[str, str]) -> list[Path]:
     return roots
 
 
+def validated_dsh_path(value: str, environ: Mapping[str, str] | None = None) -> tuple[str, tuple[str, ...]]:
+    """Validate a user-selected DSH CLI without running arbitrary candidates."""
+
+    if not value or not value.strip():
+        raise ValueError("请选择 DSH 安装目录或 dsh.exe。")
+    try:
+        selected = Path(value.strip().strip('"')).expanduser().resolve(strict=True)
+        if selected.is_dir():
+            entry = selected / "apps" / "cli" / "lib" / "bin.js"
+        elif selected.name.lower() == "dsh.exe":
+            if not selected.is_file():
+                raise ValueError("DSH 可执行文件不存在。")
+            return str(selected), (str(selected),)
+        elif tuple(part.lower() for part in selected.parts[-4:]) == ("apps", "cli", "lib", "bin.js"):
+            entry = selected
+        else:
+            raise ValueError("请选择 deepseek-harness 根目录、其 apps/cli/lib/bin.js 或 dsh.exe。")
+        if not entry.is_file():
+            raise ValueError("该目录缺少 apps/cli/lib/bin.js。")
+        node = _node(environ or os.environ)
+        if node is None:
+            raise ValueError("已找到 DSH，但未找到 node.exe；请安装 Node.js 并重试。")
+        return str(selected), (str(node), str(entry.resolve()))
+    except OSError as error:
+        raise ValueError(f"无法访问所选 DSH 路径：{error}") from error
+
+
 def discover_local_agent_commands(
     *,
     environ: dict[str, str] | None = None,
     source_roots: Iterable[Path] | None = None,
+    preferred_dsh_path: str = "",
 ) -> dict[str, tuple[str, ...]]:
     """Resolve supported agents to shell-free commands without launching any."""
 
@@ -268,11 +287,20 @@ def discover_local_agent_commands(
         if dsh_entry is None:
             for root in source_roots or _source_roots(target):
                 candidate = root / "apps" / "cli" / "lib" / "bin.js"
-                if candidate.is_file():
-                    dsh_entry = candidate.resolve()
-                    break
+                try:
+                    if candidate.is_file():
+                        dsh_entry = candidate.resolve()
+                        break
+                except OSError:
+                    continue
         if dsh_entry is not None:
             commands["LOCAL_DSH"] = (str(node), str(dsh_entry))
+
+    if preferred_dsh_path:
+        try:
+            _, commands["LOCAL_DSH"] = validated_dsh_path(preferred_dsh_path, target)
+        except ValueError as error:
+            LOGGER.warning("saved DSH path is unavailable; using automatic discovery: %s", error)
 
     agy = _native_command("agy", target)
     if agy is not None:
@@ -325,9 +353,19 @@ def install_local_agent_command_overrides() -> dict[str, tuple[str, ...]]:
     return commands
 
 
-def configure_local_agents() -> dict[str, tuple[str, ...]]:
+def configure_local_agents(user_data: Path | None = None) -> dict[str, tuple[str, ...]]:
+    preferred_dsh_path = ""
+    if user_data is not None:
+        from desktop.backend.settings.preferences import PreferencesStore
+
+        saved = PreferencesStore(user_data).load().ui.get("dshPath")
+        if isinstance(saved, str):
+            preferred_dsh_path = saved
     try:
-        commands = discover_local_agent_commands()
+        commands = (
+            discover_local_agent_commands(preferred_dsh_path=preferred_dsh_path)
+            if preferred_dsh_path else discover_local_agent_commands()
+        )
     except OSError:
         # Optional Agent discovery must not prevent the desktop from opening.
         commands = {}

@@ -81,6 +81,18 @@ test("bootstrap restores an active worker task and its progress", () => {
             timestamp: "2026-07-25T00:00:01Z",
             payload: { message: "worker is alive" },
           },
+          {
+            type: "progress",
+            task_id: "active-task",
+            timestamp: "2026-07-25T00:00:02Z",
+            payload: { stage: "aligned", completed: 3, total: 12 },
+          },
+          {
+            type: "route",
+            task_id: "active-task",
+            timestamp: "2026-07-25T00:00:03Z",
+            payload: { source: "agent", targets: ["local-dsh", "local-codex"] },
+          },
         ],
         created_at: 100,
       },
@@ -92,6 +104,8 @@ test("bootstrap restores an active worker task and its progress", () => {
   assert.equal(next.task.taskId, "active-task");
   assert.equal(next.task.selectedFile, "D:/media/active.mp4");
   assert.equal(next.task.currentStage, "aligned");
+  assert.deepEqual(next.task.stageProgress, { stage: "aligned", completed: 3, total: 12 });
+  assert.deepEqual(next.task.sourceRoute, { source: "agent", targets: ["local-dsh", "local-codex"] });
   assert.equal(next.task.statusMessage, "正在识别");
   assert.deepEqual(next.task.logs, ["worker is alive"]);
 });
@@ -163,6 +177,22 @@ test("stages reported as reused are remembered as such", () => {
 
   assert.deepEqual(next.task.reusedStages, ["vocal", "aligned"]);
   assert.equal(next.task.currentStage, "stable");
+});
+
+
+test("stage progress is scoped to its stage and cleared when task ends", () => {
+  const event = (type: "stage" | "progress" | "completed", payload: Record<string, unknown>) => ({
+    type, task_id: "task-1", timestamp: "2026-07-25T00:00:00Z", payload,
+  });
+  let state = reduceAppState(initialState, { type: "workerEvent", event: event("stage", { stage: "aligned" }) });
+  state = reduceAppState(state, { type: "workerEvent", event: event("progress", { stage: "aligned", completed: 2, total: 10 }) });
+  assert.deepEqual(state.task.stageProgress, { stage: "aligned", completed: 2, total: 10 });
+  state = reduceAppState(state, { type: "workerEvent", event: event("stage", { stage: "stable" }) });
+  assert.equal(state.task.stageProgress, null);
+  state = reduceAppState(state, { type: "workerEvent", event: event("progress", { stage: "aligned", completed: 9, total: 10 }) });
+  assert.equal(state.task.stageProgress, null);
+  state = reduceAppState(state, { type: "workerEvent", event: event("completed", { outputs: {} }) });
+  assert.equal(state.task.stageProgress, null);
 });
 
 

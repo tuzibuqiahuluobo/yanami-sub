@@ -662,6 +662,14 @@ function previewApi(): DesktopApi {
         { provider_tier: "LOCAL_AGY", driver: "agy", models: ["gemini-3.7-flash"], quota_pools: ["AGY_GEMINI"], status: "missing" as const, available: false, version: "", detail: "agy is not installed" },
       ];
     },
+    async confirmAppHealth() { return null; },
+    async getDshPath() {
+      return { path: String(preferences.ui.dshPath ?? "") };
+    },
+    async setDshPath(path) {
+      preferences.ui = { ...preferences.ui, dshPath: path };
+      return { path };
+    },
     async relocateData(reset = false) {
       const root = reset
         ? storage.default_big_data
@@ -910,6 +918,7 @@ function nativeApi(): DesktopApi {
   };
   return {
     getBootstrapState: () => call<BootstrapState>("get_bootstrap_state"),
+    confirmAppHealth: () => call("confirm_app_health"),
     getDiagnostics: () => call<DiagnosticsReport>("get_diagnostics"),
     selectInputFile: () => call<{ path: string | null }>("select_input_file"),
     selectBatchFiles: () => call<{ paths: string[] }>("select_batch_files"),
@@ -987,6 +996,8 @@ function nativeApi(): DesktopApi {
     deleteProviderKey: (providerId) =>
       call("delete_provider_key", providerId),
     probeLocalAgents: () => call("probe_local_agents"),
+    getDshPath: () => call("get_dsh_path"),
+    setDshPath: (path) => call("set_dsh_path", path),
     getKnowledgeSnapshot: () => call("get_knowledge_snapshot"),
     getKnowledgeEntry: (name, rev = null) =>
       call("get_knowledge_entry", name, rev),

@@ -29,6 +29,7 @@ from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobAlreadyRunning, JobNotFound
 from desktop.backend.resources import python_interpreter
 from desktop.backend.settings.preferences import PreferencesStore
+from desktop.backend.settings.local_agents import configure_local_agents, validated_dsh_path
 from desktop.backend.settings.store import SettingsStore
 
 
@@ -136,6 +137,7 @@ class DesktopBridge:
         tray: Any | None = None,
         relauncher: Callable[[], Any] | None = None,
         error_reporter: Callable[[str, BaseException], None] | None = None,
+        health_confirmation: Callable[[], None] | None = None,
         app_version: str = "development",
     ) -> None:
         self.jobs = jobs
@@ -165,6 +167,7 @@ class DesktopBridge:
         self.tray = tray
         self.relauncher = relauncher
         self.error_reporter = error_reporter
+        self.health_confirmation = health_confirmation
         self.app_version = app_version
         saved_route = self._stored_download_route()
         if saved_route is not None:
@@ -194,6 +197,10 @@ class DesktopBridge:
                 "batches": self.batches.history() if self.batches is not None else [],
             }
         )
+
+    def confirm_app_health(self) -> dict[str, Any]:
+        """Acknowledge only after the JS app rendered and crossed the bridge."""
+        return self._guard(lambda: self.health_confirmation() if self.health_confirmation else None)
 
     def _gpu_snapshot(self) -> dict[str, Any]:
         probe = getattr(self.resources, "gpu_probe", None)
@@ -1116,6 +1123,20 @@ class DesktopBridge:
             return statuses
 
         return self._guard(probe_and_refresh)
+
+    def get_dsh_path(self) -> dict[str, Any]:
+        value = self.preferences.load().ui.get("dshPath")
+        return _success({"path": value if isinstance(value, str) else ""})
+
+    def set_dsh_path(self, path: str) -> dict[str, Any]:
+        def save() -> dict[str, str]:
+            selected = validated_dsh_path(path)[0] if path.strip() else ""
+            self.preferences.save(ui={"dshPath": selected or None})
+            configure_local_agents(self.settings.user_data)
+            self._refresh_worker_environment()
+            return {"path": selected}
+
+        return self._guard(save)
 
     def get_knowledge_snapshot(self) -> dict[str, Any]:
         return self._knowledge_guard(self.knowledge.snapshot)

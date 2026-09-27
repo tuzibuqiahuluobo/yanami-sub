@@ -528,8 +528,8 @@ Pop-Location
 python desktop/scripts/verify_static_export.py desktop/frontend/out/index.html
 ```
 
-`.github/workflows/desktop-ci.yml` 在 Windows 上执行同样的后端、前端和
-PyInstaller bootstrap smoke build。根项目原有 CI 不承担桌面验证。
+当前独立仓库只有 `.github/workflows/ci.yml`；发布前仍需在 Windows 本机执行
+后端、前端和 PyInstaller bootstrap 验证，不能把不存在的发布 workflow 当成已通过的检查。
 
 ## 构建
 
@@ -601,28 +601,27 @@ checkout 中受 Git 跟踪的 `src/` 文件写入应用包：
 
 ## 发布（更新清单签名）
 
-**发布私钥不在仓库里，也不在本机构建流程里了**：它是 `release` environment 的
-secret `YANAMI_SUB_RELEASE_PRIVATE_KEY`，只有 `.github/workflows/release.yml` 用得到
-（本机 `secrets\yanami-sub\finesub-release.pem` 留作离线备份）。这把密钥换不掉
-——公钥钉死在已发货客户端里，换了等于让所有在野版本的应用内更新失效。代价是信任
-模型变了：谁能让一个 workflow 改动落到 `main`，谁就能签任意载荷，`release`
-environment 的 reviewer 是唯一的人工闸。
+**发布私钥不进入 Git，也不进入构建产物。** 当前独立仓库没有自动签名发布 workflow；
+维护者在受控本机通过 `build-release.ps1 -PrivateKeyPath` 显式传入原 Ed25519 私钥，
+签名前用 `python -m desktop.scripts.verify_release_key --private-key <pem>
+--trusted-keys desktop/resources/trusted-update-keys.json --key-id yanami-sub-release-2026`
+核对其公钥与已发货客户端信任锚一致。不要在命令输出、Issue 或 CI 日志中打印私钥内容。
+已发货客户端钉住此公钥，轮换密钥需先设计兼容迁移，不能直接替换。
 
 公钥 `desktop/resources/trusted-update-keys.json` **是跟踪文件**（2026-08-18 起）。
 它随每个安装器发给所有用户，本来就不是秘密；此前把它 gitignore 掉，意味着只有恰好
 存过一份的机器才构建得出正确的包，而 CI 会静默回落到 `.example` 里的占位公钥。
 
 更新检查读的是 **GitHub Releases 列表里最新一个带签名 manifest 的 release**，
-不是 `/releases/latest`——这个仓库还发 CLI 快照和 patched CT2 wheel，仓库级的
-"latest" 会被它们顶掉（`is_desktop_release()`）。所以一个 release 要被桌面版
+不是 `/releases/latest`——没有桌面 manifest 的发布不应被误认成桌面更新
+（`is_desktop_release()`）。所以一个 release 要被桌面版
 认作更新，必须同时带 `yanami-sub-update-manifest.json` 和
 `yanami-sub-update-manifest.sig`。旧 FineSub Desktop 只识别旧文件名，因此不会误装
 首次改名的 RC3。
 
-CLI 与桌面**共用一个版本号、一个 tag、一个 Release**，由
-`test_the_cli_and_the_desktop_app_ship_one_version_number` 强制。更新服务按
-`v{manifest.version}` 解析 release，版本号分叉会指向不存在或没有桌面资产的 tag。
-（`v0.3.0` 是这条契约成立之前发的 CLI-only release，所以联合发布线从 0.3.1 起。）
+当前仓库是独立桌面发布。更新服务按 `v{manifest.version}` 解析 Release，
+所以桌面 `VERSION`、签名清单与 tag 必须一致；FineSub 上游核心的版本单独由
+`pyproject.toml` 固定，不再在这里构建或发布 CLI wheel。
 
 ⚠️ **版本串必须先是合法的 PEP 440，再谈单调递增。** 它被 `packaging.version` 解析，
 用于安装器元数据与在线更新比较，所以一个不合法的串会让整条发布链失效——`0.1.0-rc.5.3`
@@ -669,11 +668,10 @@ updater 的安装生效，因为执行更新的是**已安装版本**的 updater
 为每个版本都发布在线更新清单和签名。保留的 `unins000.dat` 仍以最近一次 Setup 安装的文件清单为准，所以涉及
 安装器行为或根目录文件布局的版本也应优先用 Setup 覆盖安装。
 
-⚠️ **「更新之后数据还在」测不出来。** 保留名单的内容有测试钉住
-（`updater_main.py` 的 `preserved`），但整条链路——下载签名 manifest、更新器原地
-替换整棵树、用户数据幸存——要私钥和一个**已经发布过的**旧版本，本地构造不出来。
-所以**动过保留名单或数据布局的版本，发版时必须演练一次 app 增量和一次 full**。
-演练步骤在发布 skill 的「验证收尾」里。
+⚠️ **「更新之后数据还在」必须演练。** 保留名单有单元测试，但签名清单、
+更新器原地替换和用户数据幸存还需用一个已安装的旧版与本机签名测试包做端到端验证。
+改动保留名单或数据布局时至少演练 full；只有明确列入 `-SupportedFrom` 的旧版才演练
+app 增量。RC7.1 修改冻结启动器，`-SupportedFrom` 保持空数组，旧版走 full。
 
 ```powershell
 # 1. 产出 app/full 包 + 签名 manifest（版本号取自仓库根 VERSION）
@@ -681,29 +679,24 @@ updater 的安装生效，因为执行更新的是**已安装版本**的 updater
   -Version (Get-Content VERSION -Raw).Trim() `
   -UpstreamDirectory "C:\src\finesub-v0.5.1" `
   -KeyId yanami-sub-release-2026 `
-  -PrivateKeyPath <仓库外的 .pem>
+  -PrivateKeyPath <不在 Git 中的原私钥 .pem> `
+  -Channel beta
 
 # 2. Inno 安装器（README 引导新用户从 Release 下载它；full 包兼作 portable 下载）
 .\desktop\scripts\build-installer.ps1 `
   -ApplicationDirectory ".\dist\bootstrap\Yanami Sub.dist"
 
-# 3. 构建 CLI wheel（与桌面同版本同 Release；见 cli/README.md）
-.\cli\scripts\build-wheel.ps1 -Version $Version
-
-# 4. 建 Release：前四个桌面资产缺一不可；Setup 与 CLI wheel 是面向新用户的
-#    下载入口（根 README 指向它们），一并上传
-gh release create "v$Version" `
+# 3. 先建 draft Release，再一次性上传并校验桌面资产，最后发布 prerelease。
+#    RC7.1 是独立桌面仓库，不在此流程构建或上传 FineSub CLI wheel。
+gh release create "v$Version" --draft --prerelease `
   dist\release\yanami-sub-update-manifest.json `
   dist\release\yanami-sub-update-manifest.sig `
   "dist\release\yanami-sub-app-$Version-win-x64.zip" `
   "dist\release\yanami-sub-full-$Version-win-x64.zip" `
   "dist\installer\Yanami-Sub-$Version-Setup.exe" `
-  "dist\cli\finesub-$Version-py3-none-any.whl"
-
-# 5. 同一个 wheel 发 PyPI（`uv tool install finesub` 的来源；token 存仓库外，
-#    定期轮换）。版本号不可重传——传错只能 yank。
-uv publish "dist\cli\finesub-$Version-py3-none-any.whl" --token <pypi-token> `
-  "dist\cli\finesub-$Version-py3-none-any.whl"
+  "dist\installer\Yanami-Sub-$Version-Setup.exe.sha256" `
+  "dist\release\yanami-sub-app-$Version-win-x64.zip.sha256" `
+  "dist\release\yanami-sub-full-$Version-win-x64.zip.sha256"
 ```
 
 `-SupportedFrom` 默认为空 = 所有旧版本都拿 full 包。列入一个旧版本的判据**不只是

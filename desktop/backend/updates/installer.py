@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 from pathlib import Path
+from pathlib import PurePosixPath
+import re
 
 from pydantic import BaseModel, ConfigDict
 
@@ -25,6 +27,65 @@ REQUIRED_APP_FILES = (
     "pyproject.toml",
     "app-manifest.json",
 )
+
+RC7_REQUIRED_MODULES = (
+    "desktop/backend/worker/agent_health_check.py",
+    "desktop/backend/worker/model_source.py",
+    "desktop/backend/settings/local_agents.py",
+)
+
+
+def validate_app_directory(
+    root: Path, *, version: str | None = None, platform: str | None = None
+) -> None:
+    """Check immutable app files, including hashes in RC7.1+ payloads."""
+
+    required = REQUIRED_APP_FILES + (RC7_REQUIRED_MODULES if version == "0.1.0-rc.7" else ())
+    missing = [name for name in required if not (root / name).is_file()]
+    if missing:
+        raise FileNotFoundError(f"App update is missing required files: {missing}")
+    body = json.loads((root / "app-manifest.json").read_text(encoding="utf-8"))
+    if not isinstance(body, dict) or (version is not None and body.get("version") != version):
+        raise ValueError("App archive version does not match its directory")
+    if platform is not None and body.get("platform") != platform:
+        raise ValueError("App archive platform does not match update manifest")
+    files = body.get("files")
+    if files is None:
+        if version == "0.1.0-rc.7.post1":
+            raise ValueError("RC7.1 app manifest requires per-file integrity hashes")
+        return  # legacy snapshots predate per-file digests
+    if not isinstance(files, dict) or not files or len(files) > 20_000:
+        raise ValueError("App integrity file list is invalid")
+    for name, metadata in files.items():
+        if (
+            not isinstance(name, str) or not name or "\\" in name or ":" in name
+            or PurePosixPath(name).is_absolute() or PurePosixPath(name).as_posix() != name
+            or ".." in PurePosixPath(name).parts
+            or name == "app-manifest.json" or not isinstance(metadata, dict)
+        ):
+            raise ValueError("App integrity path is invalid")
+        path = root.joinpath(*PurePosixPath(name).parts)
+        size, digest = metadata.get("size"), metadata.get("sha256")
+        if path.is_symlink() or not path.is_file():
+            raise FileNotFoundError(f"App file is missing: {name}")
+        if not isinstance(size, int) or isinstance(size, bool) or path.stat().st_size != size:
+            raise ValueError(f"App file size differs: {name}")
+        if not isinstance(digest, str) or not re.fullmatch(r"[0-9a-f]{64}", digest):
+            raise ValueError(f"App file digest is invalid: {name}")
+        checksum = hashlib.sha256()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                checksum.update(chunk)
+        actual = checksum.hexdigest()
+        if actual != digest:
+            raise ValueError(f"App file digest differs: {name}")
+    actual_files = {
+        path.relative_to(root).as_posix()
+        for path in root.rglob("*") if path.is_file()
+        and path.relative_to(root).as_posix() != "app-manifest.json"
+    }
+    if actual_files != set(files):
+        raise ValueError("App integrity file list does not match the version directory")
 
 
 class PendingSwitch(BaseModel):
@@ -96,8 +157,7 @@ class AppInstaller:
         if pointer.get("current") != version:
             raise ValueError("Cannot confirm a version that is not current")
         version_dir = self.paths.app_versions / version
-        if not all((version_dir / relative).is_file() for relative in REQUIRED_APP_FILES):
-            raise FileNotFoundError(f"App version {version} is incomplete")
+        validate_app_directory(version_dir, version=version)
         self.write_pointer(
             current=version,
             previous=(
@@ -196,18 +256,6 @@ class AppInstaller:
 
     @staticmethod
     def _validate_app(staging: Path, manifest: UpdateManifest) -> None:
-        missing = [
-            relative
-            for relative in REQUIRED_APP_FILES
-            if not (staging / relative).is_file()
-        ]
-        if missing:
-            raise FileNotFoundError(f"App update is missing required files: {missing}")
-        app_manifest = json.loads(
-            (staging / "app-manifest.json").read_text(encoding="utf-8")
+        validate_app_directory(
+            staging, version=manifest.version, platform=manifest.platform
         )
-        if (
-            app_manifest.get("version") != manifest.version
-            or app_manifest.get("platform") != manifest.platform
-        ):
-            raise ValueError("App archive metadata does not match update manifest")

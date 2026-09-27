@@ -200,17 +200,16 @@ def _check_agent_tier(tier: str, command: str | list) -> AgentStatus:
                 detail="提供商被禁用",
             )
 
-        # Version check failed but no obvious error - might still work
-        # Return available with a warning
+        # Detection is not proof of a working CLI. A non-zero exit here must
+        # not send a long-running task down a route we already know failed.
         logger.warning(
-            "Agent %s --version returned non-zero but no obvious error; "
-            "treating as available", tier
+            "Agent %s --version returned status %s", tier, result.returncode
         )
         return AgentStatus(
             tier=tier,
-            available=True,
+            available=False,
             reason="version_check_failed",
-            detail="版本检查失败但可能仍可用",
+            detail=f"命令退出状态 {result.returncode}；请在终端检查该 Agent",
         )
 
     except subprocess.TimeoutExpired:
@@ -234,7 +233,10 @@ def _executable_exists(executable: str) -> bool:
 
     # If it's an absolute path, check directly
     if os.path.isabs(executable):
-        return os.path.isfile(executable) and os.access(executable, os.X_OK)
+        try:
+            return os.path.isfile(executable) and os.access(executable, os.X_OK)
+        except OSError:
+            return False
 
     # Otherwise check in PATH
     path_env = os.environ.get("PATH", "")
@@ -244,14 +246,20 @@ def _executable_exists(executable: str) -> bool:
         for directory in path_env.split(os.pathsep):
             for ext in [""] + extensions:
                 full_path = os.path.join(directory, executable + ext)
-                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
-                    return True
+                try:
+                    if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                        return True
+                except OSError:
+                    continue
     else:
         # Unix-like: direct check
         for directory in path_env.split(os.pathsep):
             full_path = os.path.join(directory, executable)
-            if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
-                return True
+            try:
+                if os.path.isfile(full_path) and os.access(full_path, os.X_OK):
+                    return True
+            except OSError:
+                continue
 
     return False
 
