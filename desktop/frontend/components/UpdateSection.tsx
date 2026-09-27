@@ -1,7 +1,7 @@
 "use client";
 
 import { ExternalLink, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { formatBytes } from "@/lib/formatters";
 import type { UpdateCheck, UpdateInstallSnapshot } from "@/lib/types";
@@ -62,6 +62,7 @@ export function UpdateSection({
     }
   }, [startupUpdate]);
   const [updateBusy, setUpdateBusy] = useState(false);
+  const checkGeneration = useRef(0);
   return (
     <section className="settings-section update-section">
       <div className="update-content">
@@ -180,10 +181,12 @@ export function UpdateSection({
           className="button button-secondary"
           disabled={updateBusy}
           onClick={async () => {
+            const generation = ++checkGeneration.current;
             setUpdateBusy(true);
             setUpdateMessage(t.settings.updates.checking);
             try {
               const result = await onCheckUpdates();
+              if (generation !== checkGeneration.current) return;
               setAvailableUpdate(result);
               setUpdateMessage(
                 result.available
@@ -199,6 +202,7 @@ export function UpdateSection({
                   : t.settings.updates.latest,
               );
             } catch (error) {
+              if (generation !== checkGeneration.current) return;
               setAvailableUpdate(null);
               setUpdateMessage(
                 error instanceof Error
@@ -230,6 +234,7 @@ export function UpdateSection({
           type="checkbox"
           checked={previewUpdates}
           onChange={(event) => {
+            ++checkGeneration.current;
             setAvailableUpdate(null);
             setUpdateMessage("");
             onPreviewUpdatesChange(event.target.checked);

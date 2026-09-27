@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.1",
+    title: { zh: "0.1.1 · 首个正式版", en: "0.1.1 · First stable release" },
+    notes: {
+      zh: [
+        "魔理沙与八奈见杏菜主题以浅色为主，并保留各自的角色配色。",
+        "RC7.4 用户可在应用内升级到正式版；旧 RC 请先升级到 RC7.4。",
+        "正式版默认只接收正式版更新，可在设置中选择接收更高版本的 RC。",
+      ],
+      en: [
+        "Marisa and Yanami use light-first character palettes.",
+        "RC7.4 installs can update in-app to stable; older RC builds should update to RC7.4 first.",
+        "Stable installs receive stable updates by default; newer RC releases are opt-in in Settings.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.7.post4",
     title: { zh: "RC7.4 · 正式版更新过渡", en: "RC7.4 · Stable-update bridge" },
     notes: {

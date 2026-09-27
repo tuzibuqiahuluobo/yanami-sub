@@ -45,6 +45,7 @@ test("preview updates are a separate persisted choice from automatic checks", ()
   assert.match(page, /desktopApi\.checkUpdates\(previewUpdates\)/);
   assert.match(section, /checked=\{previewUpdates\}/);
   assert.match(section, /setAvailableUpdate\(null\)/);
+  assert.match(section, /if \(generation !== checkGeneration\.current\) return/);
 });
 
 
