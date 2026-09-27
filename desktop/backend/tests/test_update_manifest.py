@@ -95,6 +95,18 @@ def test_manifest_rejects_unknown_signing_key(signing_material) -> None:
         verify_manifest(body, signing_key.sign(body), {})
 
 
+def test_manifest_rejects_prerelease_flag_that_disagrees_with_channel(
+    signing_material,
+) -> None:
+    signing_key, trusted_keys = signing_material
+    body = json.loads(_manifest_bytes())
+    body["prerelease"] = True
+    encoded = json.dumps(body).encode("utf-8")
+
+    with pytest.raises(UpdateNotApplicable, match="prerelease flag"):
+        verify_manifest(encoded, signing_key.sign(encoded), trusted_keys)
+
+
 def test_launcher_version_forces_full_update(signing_material) -> None:
     signing_key, trusted_keys = signing_material
     body = _manifest_bytes(minimum_launcher="2.0.0")

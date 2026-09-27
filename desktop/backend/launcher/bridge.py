@@ -1257,7 +1257,7 @@ class DesktopBridge:
 
         return self._guard(open_directory)
 
-    def check_updates(self) -> dict[str, Any]:
+    def check_updates(self, include_preview: bool | None = None) -> dict[str, Any]:
         if self.updates is None:
             return _failure(
                 BridgeError(
@@ -1265,7 +1265,13 @@ class DesktopBridge:
                     message="当前构建未配置更新检查。",
                 )
             )
-        return self._guard(self.updates.check)
+        if include_preview is None:
+            return self._guard(self.updates.check)
+        if type(include_preview) is not bool:
+            return _failure(
+                BridgeError(code="invalid_request", message="预览更新选项必须是布尔值。")
+            )
+        return self._guard(lambda: self.updates.check(include_preview))
 
     def install_update(self, kind: str, version: str) -> dict[str, Any]:
         if self.updates is None or self.update_installs is None:

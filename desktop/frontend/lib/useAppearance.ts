@@ -116,16 +116,13 @@ function applyToDom(settings: AppearanceSettings) {
     document.body.style.fontFamily = "";
   }
 
-  // 魔理沙/灵梦是基于 dark/light 基底的角色主题：复用现有明暗切换逻辑，
-  // 通过额外的 data-accent 属性承载角色配色（金色 / 绯红）。
+  // 角色主题共享浅色基底，额外的 data-accent 承载各自的配色。
   let resolved: "light" | "dark";
   if (settings.theme === "system") {
     resolved = window.matchMedia("(prefers-color-scheme: dark)").matches
       ? "dark"
       : "light";
-  } else if (settings.theme === "marisa" || settings.theme === "yanami") {
-    resolved = "dark";
-  } else if (settings.theme === "reimu") {
+  } else if (settings.theme === "marisa" || settings.theme === "reimu" || settings.theme === "yanami") {
     resolved = "light";
   } else {
     resolved = settings.theme;

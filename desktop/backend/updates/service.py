@@ -43,7 +43,8 @@ from desktop.backend.updates.manifest import (
 )
 
 
-ReleaseFetcher = Callable[[str, Literal["stable", "beta"]], dict[str, Any]]
+ReleaseFilter = Literal["stable", "beta", "all"]
+ReleaseFetcher = Callable[[str, ReleaseFilter], dict[str, Any]]
 BytesFetcher = Callable[[str, int], bytes]
 ProgressCallback = Callable[[DownloadProgress], None]
 StageCallback = Callable[[str, str], None]
@@ -86,10 +87,14 @@ class GitHubUpdateService:
         self._kind: Literal["app", "full"] | None = None
         self._release_url: str | None = None
 
-    def check(self) -> dict[str, Any]:
+    def check(self, include_preview: bool | None = None) -> dict[str, Any]:
+        if include_preview is None:
+            include_preview = self.config.channel == "beta"
+        if type(include_preview) is not bool:
+            raise ValueError("Preview update preference must be a boolean")
         release = self.release_fetcher(
             self.config.release_repository,
-            self.config.channel,
+            "all" if include_preview else "stable",
         )
         if release.get("draft"):
             raise ValueError("GitHub draft releases cannot be installed")
@@ -107,11 +112,14 @@ class GitHubUpdateService:
             ) from error
         manifest_bytes = self.bytes_fetcher(manifest_url, 1024 * 1024)
         signature_bytes = self.bytes_fetcher(signature_url, 4096)
+        release_channel = "beta" if release.get("prerelease") else "stable"
+        if release_channel == "beta" and not include_preview:
+            raise ValueError("Preview release was returned while previews are disabled")
         manifest = verify_manifest(
             manifest_bytes,
             signature_bytes,
             self.trusted_keys,
-            expected_channel=self.config.channel,
+            expected_channel=release_channel,
             expected_platform=self.config.platform,
         )
         if release.get("tag_name") != f"v{manifest.version}":
@@ -132,7 +140,7 @@ class GitHubUpdateService:
                 "available": False,
                 "version": local.version,
             }
-        kind = select_asset(manifest, local)
+        kind = select_asset(manifest, local, include_preview=include_preview)
         self._manifest = manifest
         self._kind = kind
         asset = getattr(manifest.assets, kind)
@@ -336,7 +344,7 @@ def release_assets(release: dict[str, Any]) -> dict[str, str]:
 
 def is_desktop_release(
     release: object,
-    channel: Literal["stable", "beta"],
+    channel: ReleaseFilter,
 ) -> bool:
     """Does this GitHub Release publish a desktop update for `channel`?
 
@@ -348,7 +356,7 @@ def is_desktop_release(
 
     if not isinstance(release, dict) or release.get("draft"):
         return False
-    if bool(release.get("prerelease")) != (channel == "beta"):
+    if channel != "all" and bool(release.get("prerelease")) != (channel == "beta"):
         return False
     return {
         "yanami-sub-update-manifest.json",
@@ -358,7 +366,7 @@ def is_desktop_release(
 
 def _fetch_release(
     repository: str,
-    channel: Literal["stable", "beta"],
+    channel: ReleaseFilter,
 ) -> dict[str, Any]:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -375,18 +383,19 @@ def _fetch_release(
                 # the desktop update channel. GitHub returns newest-first.
                 response = client.get(
                     f"https://api.github.com/repos/{repository}/releases",
-                    params={"per_page": 30},
+                    params={"per_page": 100},
                 )
                 response.raise_for_status()
                 releases = response.json()
                 if not isinstance(releases, list):
                     raise ValueError("GitHub releases response is malformed")
+                candidates: list[tuple[Version, dict[str, Any]]] = []
                 for release in releases:
                     if (
                         isinstance(release, dict)
                         and not release.get("assets")
                         and not release.get("draft")
-                        and bool(release.get("prerelease")) == (channel == "beta")
+                        and (channel == "all" or bool(release.get("prerelease")) == (channel == "beta"))
                         and type(release.get("id")) is int
                     ):
                         # GitHub can omit a new release's embedded assets while
@@ -402,7 +411,16 @@ def _fetch_release(
                             raise ValueError("GitHub release assets response is malformed")
                         release["assets"] = assets
                     if is_desktop_release(release, channel):
-                        return release
+                        tag = release.get("tag_name")
+                        if not isinstance(tag, str) or not tag.startswith("v"):
+                            continue
+                        try:
+                            version = Version(tag[1:])
+                        except ValueError:
+                            continue
+                        candidates.append((version, release))
+                if candidates:
+                    return max(candidates, key=lambda candidate: candidate[0])[1]
                 raise ValueError(
                     f"No signed Yanami Sub release was found on the "
                     f"{channel} channel"

@@ -232,6 +232,8 @@ export const en: Translations = {
       checkUpdate: "Check for Updates",
       autoCheck: "Check for updates automatically",
       autoCheckHint: "Queries the release feed once at startup; when off, only the button above checks.",
+      previewUpdates: "Receive preview updates",
+      previewUpdatesHint: "Off by default on stable builds. When enabled, newer RC releases are eligible. RC builds also receive stable releases.",
       openDownloadPage: "Open Download Page",
       checking: "Checking…",
       openedInBrowser: "Download page opened in browser",

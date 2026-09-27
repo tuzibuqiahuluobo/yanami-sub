@@ -230,6 +230,8 @@ export const zh = {
       checkUpdate: "检查更新",
       autoCheck: "自动检查更新",
       autoCheckHint: "启动时向发布源查询一次；关闭后只在你点「检查更新」时查询。",
+      previewUpdates: "接收预览版本更新",
+      previewUpdatesHint: "正式版默认关闭；开启后可获取比当前版本更新的 RC。RC 用户默认开启，也能升级到正式版。",
       openDownloadPage: "打开下载页面",
       checking: "正在检查…",
       openedInBrowser: "已在浏览器中打开下载页面",

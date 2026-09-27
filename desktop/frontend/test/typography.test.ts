@@ -51,8 +51,11 @@ test("Yanami Sub metadata and title bar use the supplied icon", () => {
 test("character themes include the requested Marisa and Yanami palettes", () => {
   assert.match(
     css,
-    /\[data-accent="marisa"\][\s\S]*?#dcaa35[\s\S]*?#ffffff/,
+    /\[data-accent="marisa"\][\s\S]*?#f9f8f2[\s\S]*?#86550d[\s\S]*?#ffffff/,
   );
   assert.match(css, /\[data-accent="yanami"\]/);
-  assert.match(css, /#102e59[\s\S]*?#4674aa[\s\S]*?#75a85b/);
+  assert.match(css, /#f5f8f7[\s\S]*?#315f88[\s\S]*?#53783f/);
+  const appearance = readFileSync(new URL("../lib/useAppearance.ts", import.meta.url), "utf8");
+  assert.match(appearance, /settings\.theme === "marisa" \|\| settings\.theme === "reimu" \|\| settings\.theme === "yanami"/);
+  assert.match(appearance, /resolved = "light"/);
 });

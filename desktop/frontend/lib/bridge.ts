@@ -1035,7 +1035,10 @@ function nativeApi(): DesktopApi {
     getPreferences: () => call("get_preferences"),
     savePreferences: (patch) => call("save_preferences", patch),
     saveSharedSettings: (values) => call("save_shared_settings", values),
-    checkUpdates: () => call("check_updates"),
+    checkUpdates: (includePreview) =>
+      includePreview === undefined
+        ? call("check_updates")
+        : call("check_updates", includePreview),
     installUpdate: (kind, version) =>
       call<UpdateInstallSnapshot>("install_update", kind, version),
     getUpdateInstall: () =>

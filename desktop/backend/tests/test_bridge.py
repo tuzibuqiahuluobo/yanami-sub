@@ -719,6 +719,29 @@ def test_update_check_opens_release_page_without_installing(
     ]
 
 
+def test_update_check_passes_explicit_preview_preference(tmp_path: Path) -> None:
+    class PreviewUpdates:
+        def __init__(self):
+            self.choices: list[bool] = []
+
+        def check(self, include_preview: bool):
+            self.choices.append(include_preview)
+            return {"available": False, "version": "0.1.1"}
+
+    updates = PreviewUpdates()
+    bridge = DesktopBridge(
+        jobs=FakeJobs(),
+        resources=FakeResources(),
+        settings=SettingsStore(tmp_path / "user-data"),
+        updates=updates,
+    )
+
+    assert bridge.check_updates(True)["ok"] is True
+    assert bridge.check_updates(False)["ok"] is True
+    assert bridge.check_updates("yes")["error"]["code"] == "invalid_request"
+    assert updates.choices == [True, False]
+
+
 def test_update_network_failure_suggests_switching_network_and_is_logged(
     tmp_path: Path,
 ) -> None:

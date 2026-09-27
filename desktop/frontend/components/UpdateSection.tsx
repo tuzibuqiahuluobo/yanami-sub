@@ -23,6 +23,8 @@ export interface UpdateSectionProps {
   onOpenUpdatePage: () => Promise<unknown>;
   autoCheck: boolean;
   onAutoCheckChange: (enabled: boolean) => void;
+  previewUpdates: boolean;
+  onPreviewUpdatesChange: (enabled: boolean) => void;
 }
 
 /**
@@ -42,6 +44,8 @@ export function UpdateSection({
   onOpenUpdatePage,
   autoCheck,
   onAutoCheckChange,
+  previewUpdates,
+  onPreviewUpdatesChange,
 }: UpdateSectionProps) {
   const { t } = useLanguage();
   const [updateMessage, setUpdateMessage] = useState("");
@@ -219,6 +223,21 @@ export function UpdateSection({
         <span>
           <strong>{t.settings.updates.autoCheck}</strong>
           <small>{t.settings.updates.autoCheckHint}</small>
+        </span>
+      </label>
+      <label className="switch-row">
+        <input
+          type="checkbox"
+          checked={previewUpdates}
+          onChange={(event) => {
+            setAvailableUpdate(null);
+            setUpdateMessage("");
+            onPreviewUpdatesChange(event.target.checked);
+          }}
+        />
+        <span>
+          <strong>{t.settings.updates.previewUpdates}</strong>
+          <small>{t.settings.updates.previewUpdatesHint}</small>
         </span>
       </label>
     </section>

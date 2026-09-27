@@ -35,6 +35,10 @@ def _fixture(
     *,
     minimum_launcher: str = "1.0.0",
     include_full_app: bool = True,
+    version: str = "1.1.0",
+    local_version: str = "1.0.0",
+    release_channel: str = "stable",
+    installed_channel: str = "stable",
 ) -> tuple[GitHubUpdateService, dict[str, bytes], list[list[str]]]:
     paths = AppPaths.for_root(tmp_path / "FineSub")
     # Both payloads are derived from the installer's own required-file list
@@ -47,10 +51,10 @@ def _fixture(
     }
     if include_full_app:
         full_files["app/current.json"] = (
-            b'{"current":"1.1.0","previous":null,"pendingHealth":false}'
+            json.dumps({"current": version, "previous": None, "pendingHealth": False}).encode()
         )
         full_files.update(
-            {f"app/versions/1.1.0/{name}": body for name, body in app_files().items()}
+            {f"app/versions/{version}/{name}": body for name, body in app_files().items()}
         )
     full_body = _zip(tmp_path / "full.zip", full_files)
     private = Ed25519PrivateKey.generate()
@@ -61,11 +65,11 @@ def _fixture(
     manifest = {
         "schemaVersion": 1,
         "keyId": "release-key",
-        "version": "1.1.0",
-        "channel": "stable",
+        "version": version,
+        "channel": release_channel,
         "platform": "windows-x64",
         "draft": False,
-        "prerelease": False,
+        "prerelease": release_channel == "beta",
         "minimumLauncherVersion": minimum_launcher,
         "minimumSupportedVersion": "1.0.0",
         "releaseNotes": "修复字幕处理并改进界面",
@@ -74,7 +78,7 @@ def _fixture(
                 "url": "https://downloads.example/app.zip",
                 "size": len(app_body),
                 "sha256": hashlib.sha256(app_body).hexdigest(),
-                "supportedFrom": ["1.0.0"],
+                "supportedFrom": [local_version],
             },
             "full": {
                 "url": "https://downloads.example/full.zip",
@@ -96,9 +100,9 @@ def _fixture(
         "https://downloads.example/full.zip": full_body,
     }
     release = {
-        "tag_name": "v1.1.0",
+        "tag_name": f"v{version}",
         "draft": False,
-        "prerelease": False,
+        "prerelease": release_channel == "beta",
         "assets": [
             {
                 "name": "yanami-sub-update-manifest.json",
@@ -120,9 +124,9 @@ def _fixture(
     service = GitHubUpdateService(
         paths=paths,
         config=LauncherUpdateConfig(
-            app_version="1.0.0",
+            app_version=local_version,
             launcher_version="1.0.0",
-            channel="stable",
+            channel=installed_channel,
             platform="windows-x64",
             release_repository="tuzibuqiahuluobo/yanami-sub",
         ),
@@ -153,6 +157,57 @@ def test_check_verifies_release_and_selects_small_app_update(
     assert result["releaseUrl"] == (
         "https://github.com/tuzibuqiahuluobo/yanami-sub/releases/tag/v1.1.0"
     )
+
+
+def test_rc_bridge_receives_stable_as_a_full_update(tmp_path: Path) -> None:
+    service, _, _ = _fixture(
+        tmp_path,
+        version="0.1.1",
+        local_version="0.1.0-rc.7.post4",
+        installed_channel="beta",
+    )
+    requested: list[str] = []
+    original = service.release_fetcher
+    service.release_fetcher = lambda repository, channel: (
+        requested.append(channel) or original(repository, channel)
+    )
+
+    result = service.check()
+
+    assert requested == ["all"]
+    assert result["version"] == "0.1.1"
+    assert result["kind"] == "full"
+
+
+def test_stable_build_only_receives_rc_after_preview_opt_in(tmp_path: Path) -> None:
+    service, _, _ = _fixture(
+        tmp_path,
+        version="0.1.2-rc.1",
+        local_version="0.1.1",
+        release_channel="beta",
+    )
+    requested: list[str] = []
+    original = service.release_fetcher
+    service.release_fetcher = lambda repository, channel: (
+        requested.append(channel) or original(repository, channel)
+    )
+
+    with pytest.raises(ValueError, match="previews are disabled"):
+        service.check()
+    assert service._manifest is None
+    assert service.check(True)["kind"] == "full"
+    assert requested == ["stable", "all"]
+
+
+def test_preview_opt_in_does_not_downgrade_stable_to_older_rc(tmp_path: Path) -> None:
+    service, _, _ = _fixture(
+        tmp_path,
+        version="0.1.1-rc.1",
+        local_version="0.1.1",
+        release_channel="beta",
+    )
+
+    assert service.check(True) == {"available": False, "version": "0.1.1"}
 
 
 def test_app_update_downloads_verified_archive_and_switches_pointer(
@@ -430,3 +485,27 @@ def test_release_check_recovers_assets_omitted_from_github_release_list(
         "/repos/owner/project/releases",
         "/repos/owner/project/releases/123/assets",
     ]
+
+
+def test_preview_feed_chooses_highest_version_across_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # An RC published after a stable release can still be older by version.
+    feed = [
+        _release("v0.1.1-rc.9", assets=SIGNED, prerelease=True),
+        _release("v0.1.1", assets=SIGNED),
+    ]
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=feed, request=request)
+
+    monkeypatch.setattr(update_service, "network_routes", lambda: [NetworkRoute("direct", None)])
+    monkeypatch.setattr(
+        update_service,
+        "create_client",
+        lambda *_args, **_kwargs: httpx.Client(transport=httpx.MockTransport(respond)),
+    )
+
+    assert update_service._fetch_release("owner/project", "all")["tag_name"] == "v0.1.1"
+    assert update_service._fetch_release("owner/project", "stable")["tag_name"] == "v0.1.1"
+    assert update_service._fetch_release("owner/project", "beta")["tag_name"] == "v0.1.1-rc.9"

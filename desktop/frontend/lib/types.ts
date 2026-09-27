@@ -738,7 +738,7 @@ export interface DesktopApi {
   saveSharedSettings(
     values: SharedSettings,
   ): Promise<{ shared: SharedSettings; config_path: string }>;
-  checkUpdates(): Promise<UpdateCheck>;
+  checkUpdates(includePreview?: boolean): Promise<UpdateCheck>;
   installUpdate(kind: "app" | "full", version: string): Promise<UpdateInstallSnapshot>;
   getUpdateInstall(): Promise<UpdateInstallSnapshot | null>;
   openUpdatePage(): Promise<{ url: string }>;

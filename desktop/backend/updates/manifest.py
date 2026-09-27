@@ -120,6 +120,8 @@ def verify_manifest(
         raise UpdateNotApplicable(
             f"Manifest platform {manifest.platform!r} is not supported"
         )
+    if manifest.prerelease != (manifest.channel == "beta"):
+        raise UpdateNotApplicable("Manifest prerelease flag does not match its channel")
     if expected_channel == "stable" and manifest.prerelease:
         raise UpdateNotApplicable("Prereleases are not accepted on the stable channel")
     _version(manifest.version)
@@ -133,11 +135,19 @@ def verify_manifest(
 def select_asset(
     manifest: UpdateManifest,
     local: LocalUpdateState,
+    *,
+    include_preview: bool = False,
 ) -> Literal["app", "full"]:
-    if manifest.channel != local.channel or manifest.platform != local.platform:
-        raise UpdateNotApplicable("Update channel or platform does not match")
+    if manifest.platform != local.platform:
+        raise UpdateNotApplicable("Update platform does not match")
+    if manifest.channel == "beta" and not include_preview:
+        raise UpdateNotApplicable("Preview updates are disabled")
     if _version(manifest.version) <= _version(local.version):
         raise UpdateNotApplicable("Update version must be newer than the installed version")
+    # A channel switch changes the frozen launcher's default feed. It cannot
+    # be delivered as an app-only patch.
+    if manifest.channel != local.channel:
+        return "full"
     if _version(local.launcher_version) < _version(
         manifest.minimum_launcher_version
     ):

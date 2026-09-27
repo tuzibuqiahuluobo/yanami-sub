@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.0-rc.7.post4",
+    title: { zh: "RC7.4 · 正式版更新过渡", en: "RC7.4 · Stable-update bridge" },
+    notes: {
+      zh: [
+        "更新器现在可从 RC 发现并安装更高版本的正式版；切换通道时使用完整更新包。",
+        "正式版默认只接收正式更新，可在设置中主动开启预览版；RC 用户默认也接收更新的 RC。",
+        "魔理沙与八奈见杏菜主题改为浅色基底，并调整按钮与文字对比度。",
+      ],
+      en: [
+        "The updater can now move from an RC to a newer stable release using the full package.",
+        "Stable installs default to stable-only updates; preview releases are opt-in, while RC installs also receive newer RCs by default.",
+        "Marisa and Yanami now use light-first palettes with readable controls and text.",
+      ],
+    },
+  },
+  {
     version: "0.1.0-rc.7.post3",
     title: { zh: "RC7.3 · Agent 路径与状态", en: "RC7.3 · Agent paths and status" },
     notes: {

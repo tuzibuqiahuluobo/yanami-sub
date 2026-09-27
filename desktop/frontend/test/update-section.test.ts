@@ -36,6 +36,18 @@ test("download progress is root-owned instead of an inline Settings bar", () => 
 });
 
 
+test("preview updates are a separate persisted choice from automatic checks", () => {
+  const page = readFileSync(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const section = readFileSync(new URL("../components/UpdateSection.tsx", import.meta.url), "utf8");
+
+  assert.match(page, /saveUi\(\{ previewUpdates: enabled \}\)/);
+  assert.match(page, /isPreviewVersion\(payload\.app_version\)/);
+  assert.match(page, /desktopApi\.checkUpdates\(previewUpdates\)/);
+  assert.match(section, /checked=\{previewUpdates\}/);
+  assert.match(section, /setAvailableUpdate\(null\)/);
+});
+
+
 test("subtitle progress follows the task across pages and reuses completion feedback", () => {
   const page = readFileSync(
     new URL("../app/page.tsx", import.meta.url),

@@ -82,6 +82,8 @@ const RESOURCE_REQUIRED_ERROR: BridgeError = {
   action: "open_resources",
 };
 
+const isPreviewVersion = (version: string) => /(?:^|[-.\d])rc(?:[.\d-])/i.test(version);
+
 
 export default function Home() {
   return (
@@ -124,6 +126,9 @@ function HomeContent() {
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState("");
   const [autoUpdateCheck, setAutoUpdateCheck] = useState(
     () => uiValue<boolean>("autoUpdateCheck", true),
+  );
+  const [previewUpdates, setPreviewUpdates] = useState(
+    () => uiValue<boolean>("previewUpdates", false),
   );
   const [updateInstall, setUpdateInstall] = useState<UpdateInstallSnapshot | null>(null);
 
@@ -168,6 +173,12 @@ function HomeContent() {
     saveUi({ autoUpdateCheck: enabled });
   }, []);
 
+  const changePreviewUpdates = useCallback((enabled: boolean) => {
+    setPreviewUpdates(enabled);
+    setStartupUpdate(null);
+    saveUi({ previewUpdates: enabled });
+  }, []);
+
   const dismissUpdateAnnouncement = useCallback(() => {
     if (startupUpdate) setDismissedUpdateVersion(startupUpdate.version);
   }, [startupUpdate]);
@@ -198,15 +209,16 @@ function HomeContent() {
   // a retried bootstrap goes through here again, and dev StrictMode would
   // otherwise double the request.
   const startupCheckFired = useRef(false);
-  const maybeCheckForUpdates = useCallback(() => {
+  const maybeCheckForUpdates = useCallback((appVersion: string) => {
     if (startupCheckFired.current || !uiValue("autoUpdateCheck", true)) {
       return;
     }
     startupCheckFired.current = true;
     void (async () => {
       try {
-        const result = await desktopApi.checkUpdates();
-        if (result.available) {
+        const includePreview = uiValue<boolean>("previewUpdates", isPreviewVersion(appVersion));
+        const result = await desktopApi.checkUpdates(includePreview);
+        if (result.available && uiValue<boolean>("previewUpdates", isPreviewVersion(appVersion)) === includePreview) {
           setStartupUpdate(result);
         }
       } catch {
@@ -243,8 +255,9 @@ function HomeContent() {
       // and would otherwise render one frame from the mirror.
       hydratePreferences(payload.preferences);
       setAutoUpdateCheck(uiValue<boolean>("autoUpdateCheck", true));
+      setPreviewUpdates(uiValue<boolean>("previewUpdates", isPreviewVersion(payload.app_version)));
       dispatch({ type: "bootstrapLoaded", payload });
-      maybeCheckForUpdates();
+      maybeCheckForUpdates(payload.app_version);
       if (!startupAgentProbeFired.current) {
         startupAgentProbeFired.current = true;
         void probeAgents().catch(() => undefined);
@@ -761,7 +774,7 @@ function HomeContent() {
           dispatch({ type: "navigate", route: "new-task" });
         }}
         startupUpdate={startupUpdate}
-        onCheckUpdates={() => desktopApi.checkUpdates()}
+        onCheckUpdates={() => desktopApi.checkUpdates(previewUpdates)}
         updateInstall={updateInstall}
         onInstallUpdate={startUpdateInstall}
         onCloseWindow={() => desktopApi.closeWindow()}
@@ -769,6 +782,8 @@ function HomeContent() {
         onOpenUpdatePage={() => desktopApi.openUpdatePage()}
         autoCheck={autoUpdateCheck}
         onAutoCheckChange={changeAutoUpdateCheck}
+        previewUpdates={previewUpdates}
+        onPreviewUpdatesChange={changePreviewUpdates}
         onRescanGpus={() => desktopApi.rescanGpus()}
         onSaveSharedSettings={async (values) => {
           const result = await desktopApi.saveSharedSettings(values);
