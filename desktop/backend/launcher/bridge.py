@@ -141,6 +141,7 @@ class DesktopBridge:
         error_reporter: Callable[[str, BaseException], None] | None = None,
         health_confirmation: Callable[[], None] | None = None,
         app_version: str = "development",
+        startup_update_issue: str = "",
     ) -> None:
         self.jobs = jobs
         self.batches = batches
@@ -171,6 +172,7 @@ class DesktopBridge:
         self.error_reporter = error_reporter
         self.health_confirmation = health_confirmation
         self.app_version = app_version
+        self.startup_update_issue = startup_update_issue
         saved_route = self._stored_download_route()
         if saved_route is not None:
             self._apply_download_route(saved_route)
@@ -179,6 +181,13 @@ class DesktopBridge:
         return self._guard(
             lambda: {
                 "app_version": self.app_version,
+                "system_logs_path": (
+                    str(self.resource_installs.log_dir)
+                    if self.resource_installs is not None
+                    and self.resource_installs.log_dir is not None
+                    else ""
+                ),
+                "startup_update_issue": self.startup_update_issue,
                 "resources": self.resources.check_all(),
                 "resource_installs": (
                     self.resource_installs.list()
@@ -202,7 +211,18 @@ class DesktopBridge:
 
     def confirm_app_health(self) -> dict[str, Any]:
         """Acknowledge only after the JS app rendered and crossed the bridge."""
-        return self._guard(lambda: self.health_confirmation() if self.health_confirmation else None)
+        def confirm() -> None:
+            if self.health_confirmation is None:
+                return
+            try:
+                self.health_confirmation()
+            except Exception as error:
+                # A ValueError from manifest validation otherwise takes the
+                # generic invalid-request path and never enters the session log.
+                self._record_exception("confirm_app_health", error)
+                raise
+
+        return self._guard(confirm)
 
     def _gpu_snapshot(self) -> dict[str, Any]:
         probe = getattr(self.resources, "gpu_probe", None)

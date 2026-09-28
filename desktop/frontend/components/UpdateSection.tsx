@@ -10,6 +10,7 @@ import { useLanguage } from "./LanguageProvider";
 
 
 export interface UpdateSectionProps {
+  updateIssue?: string;
   /** What the automatic startup check found, when it ran and found something. */
   startupUpdate: UpdateCheck | null;
   onCheckUpdates: () => Promise<UpdateCheck>;
@@ -35,6 +36,7 @@ export interface UpdateSectionProps {
  * survives navigation; this panel keeps the actionable restart/retry controls.
  */
 export function UpdateSection({
+  updateIssue,
   startupUpdate,
   onCheckUpdates,
   onInstallUpdate,
@@ -68,6 +70,7 @@ export function UpdateSection({
       <div className="update-content">
         <h2>{t.settings.updates.title}</h2>
         <p>{t.settings.updates.description}</p>
+        {updateIssue ? <p className="update-issue" role="alert">{updateIssue}</p> : null}
         {availableUpdate?.available && availableUpdate.releaseNotes ? (
           <p className="update-notes">{availableUpdate.releaseNotes}</p>
         ) : null}

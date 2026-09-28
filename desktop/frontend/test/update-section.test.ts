@@ -67,3 +67,21 @@ test("subtitle progress follows the task across pages and reuses completion feed
   assert.match(toast, /progress\.completed\}\/\$\{progress\.total\}/);
   assert.match(page, /showSuccess\(t\.toast\.taskCompleted/);
 });
+
+
+test("the update card cannot gain implicit columns from a switch row", () => {
+  const styles = readFileSync(new URL("../app/styles/settings.css", import.meta.url), "utf8");
+  assert.match(styles, /\.update-section\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column;/);
+});
+
+
+test("Settings ends with a localized system-log path and reveal action", () => {
+  const settings = readFileSync(new URL("../components/Settings.tsx", import.meta.url), "utf8");
+  const zh = readFileSync(new URL("../lib/translations.zh.ts", import.meta.url), "utf8");
+  const en = readFileSync(new URL("../lib/translations.en.ts", import.meta.url), "utf8");
+  assert.ok(settings.indexOf('className="settings-section system-logs-section"') > settings.indexOf("t.settings.acknowledgment.title"));
+  assert.match(settings, /state\.systemLogsPath/);
+  assert.match(settings, /desktopApi\.openInstallLogs\(\)/);
+  assert.match(zh, /systemLogs:\s*\{/);
+  assert.match(en, /systemLogs:\s*\{/);
+});

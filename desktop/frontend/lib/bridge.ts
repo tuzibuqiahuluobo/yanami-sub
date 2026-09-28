@@ -61,6 +61,8 @@ export function unwrapEnvelope<T>(envelope: ApiEnvelope<T>): T {
 
 const previewBootstrap: BootstrapState = {
   app_version: "development",
+  system_logs_path: String.raw`C:\Users\preview\AppData\Local\FineSub\user-data\logs`,
+  startup_update_issue: "",
   // The same resources the backend reports, with optional rows left
   // uninstalled so the preview also shows their on-demand presentation.
   resources: [

@@ -270,6 +270,13 @@ export const en: Translations = {
       announcementFailed: "Could not start the in-app update. Try again later.",
       announcementOpenFailed: "Could not open the GitHub download page.",
     },
+    systemLogs: {
+      title: "System Logs",
+      description: "Startup, update, and resource-install diagnostics. Find session logs here when reporting an issue.",
+      unavailable: "Log directory unavailable",
+      openLocation: "Open Log Location",
+      openFailed: "Could not open the log directory",
+    },
     confirmMemory: {
       title: "Dialog Memory",
       description: "Manage remembered confirmation dialogs. Reset to show dialogs again.",

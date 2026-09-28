@@ -699,13 +699,12 @@
 }
 
 .update-section {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 16px;
 }
 
 .update-auto-check {
-  grid-column: 1;
   padding-top: 14px;
   border-top: 1px solid var(--border);
 }
@@ -719,6 +718,13 @@
 .update-message {
   color: var(--accent);
   font-size: 0.8rem;
+}
+
+.update-issue {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.82rem;
+  overflow-wrap: anywhere;
 }
 
 .update-notes {
@@ -735,5 +741,22 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
+}
+
+.system-logs-section {
+  display: grid;
+  justify-items: start;
+  gap: 10px;
+}
+
+.system-logs-path {
+  display: block;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--panel-subtle);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 

@@ -581,6 +581,8 @@ export interface SharedSettings {
 
 export interface BootstrapState {
   app_version: string;
+  system_logs_path?: string;
+  startup_update_issue?: string;
   resources: ResourceStatus[];
   resource_installs: ResourceInstallSnapshot[];
   capabilities: CapabilityState;

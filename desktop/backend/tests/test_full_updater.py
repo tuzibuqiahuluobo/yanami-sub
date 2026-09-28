@@ -516,6 +516,35 @@ def test_an_incomplete_app_version_is_replaced_rather_than_adopted(
     assert (adopted / "app-manifest.json").is_file()
 
 
+def test_existing_app_with_all_entry_files_but_bad_hash_is_replaced(
+    tmp_path: Path,
+) -> None:
+    target, source, backup = _minimal_full_update(tmp_path)
+    version = "2.0.0"
+    source_version = source / "app" / "versions" / version
+    _write_app_version(source_version, version)
+    (source / "app" / "current.json").write_text(
+        json.dumps({"current": version}), encoding="utf-8"
+    )
+    existing = target / "app" / "versions" / version
+    _write_app_version(existing, version)
+    corrupt = existing / "desktop" / "frontend" / "out" / "index.html"
+    corrupt.write_text("bad", encoding="utf-8")
+    (target / "app" / "current.json").write_text(
+        json.dumps({"current": "1.0.0"}), encoding="utf-8"
+    )
+
+    apply_full_update(
+        FullUpdateRequest(
+            source=str(source), target=str(target), backup=str(backup),
+            parent_pid=0, relaunch_path="Yanami Sub.exe",
+        ),
+        relaunch=False,
+    )
+
+    assert corrupt.read_bytes() == (source_version / "desktop" / "frontend" / "out" / "index.html").read_bytes()
+
+
 def test_the_updater_waits_long_enough_for_a_running_task_to_finish() -> None:
     """The UI promises completion on exit with no deadline attached."""
     from desktop.backend.updater_main import PARENT_EXIT_TIMEOUT_SECONDS
@@ -544,6 +573,19 @@ def test_an_updater_failure_report_is_read_once_and_archived(
     assert len(first) == 1 and "TimeoutError" in first[0]
     assert second == [], "a report must not be surfaced on every start"
     assert list(update_root.glob("*.seen"))
+
+
+def test_unapplied_full_update_is_visible_without_an_error_report(
+    tmp_path: Path,
+) -> None:
+    from desktop.backend.updates.recovery import latest_unapplied_full_update
+
+    update_root = tmp_path / ".update"
+    update_root.mkdir()
+    (update_root / "request-0.1.1.json").write_text("{}", encoding="utf-8")
+
+    assert latest_unapplied_full_update(tmp_path, "0.1.0-rc.7.post4") == "0.1.1"
+    assert latest_unapplied_full_update(tmp_path, "0.1.1") is None
 
 
 def _foreign_process(seconds: float) -> int:

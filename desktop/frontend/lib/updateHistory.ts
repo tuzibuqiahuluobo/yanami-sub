@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.2-rc.7.post5",
+    title: { zh: "RC7.5 · 更新回滚修复", en: "RC7.5 · Update rollback fix" },
+    notes: {
+      zh: [
+        "修复 Python 字节码缓存触发误报，导致健康确认失败、更新后反复回到旧版的问题。",
+        "修复更新说明被挤成窄列，并在设置底部提供系统日志路径与打开位置。",
+        "正式版仅在主动开启预览更新后接收本 RC；旧 RC 可继续在应用内更新。",
+      ],
+      en: [
+        "Fixes Python bytecode caches incorrectly failing the post-update health check and rolling the app back.",
+        "Fixes the narrow update-notes layout and adds a System Logs location at the bottom of Settings.",
+        "Stable installs receive this RC only when preview updates are enabled; existing RC installs can update in-app.",
+      ],
+    },
+  },
+  {
     version: "0.1.1",
     title: { zh: "0.1.1 · 首个正式版", en: "0.1.1 · First stable release" },
     notes: {

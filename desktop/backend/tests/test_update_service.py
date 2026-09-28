@@ -182,7 +182,7 @@ def test_rc_bridge_receives_stable_as_a_full_update(tmp_path: Path) -> None:
 def test_stable_build_only_receives_rc_after_preview_opt_in(tmp_path: Path) -> None:
     service, _, _ = _fixture(
         tmp_path,
-        version="0.1.2-rc.1",
+        version="0.1.2-rc.7.post5",
         local_version="0.1.1",
         release_channel="beta",
     )
@@ -197,6 +197,22 @@ def test_stable_build_only_receives_rc_after_preview_opt_in(tmp_path: Path) -> N
     assert service._manifest is None
     assert service.check(True)["kind"] == "full"
     assert requested == ["stable", "all"]
+
+
+def test_rc74_can_receive_rc75_as_a_full_update(tmp_path: Path) -> None:
+    service, _, _ = _fixture(
+        tmp_path,
+        version="0.1.2-rc.7.post5",
+        local_version="0.1.0-rc.7.post4",
+        installed_channel="beta",
+        release_channel="beta",
+    )
+
+    result = service.check()
+
+    assert result["available"] is True
+    assert result["version"] == "0.1.2-rc.7.post5"
+    assert result["kind"] == "full"
 
 
 def test_preview_opt_in_does_not_downgrade_stable_to_older_rc(tmp_path: Path) -> None:

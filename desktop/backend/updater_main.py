@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from finesub_bootstrap.fsops import remove_tree
 
-from desktop.backend.updates.installer import REQUIRED_APP_FILES
+from desktop.backend.updates.installer import validate_app_directory
 from desktop.backend.updates.recovery import (
     UPDATE_RELAUNCH_ENV,
     clear_full_update_marker,
@@ -241,23 +241,7 @@ def _merge_app_from_full_update(
     ):
         raise ValueError("Full update App pointer contains an invalid version")
     source_version = source_app / "versions" / version
-    missing = [
-        relative
-        for relative in REQUIRED_APP_FILES
-        if not (source_version / relative).is_file()
-    ]
-    if missing:
-        raise FileNotFoundError(
-            f"Full update App version is incomplete: {missing}"
-        )
-    app_manifest = json.loads(
-        (source_version / "app-manifest.json").read_text(encoding="utf-8")
-    )
-    if (
-        app_manifest.get("version") != version
-        or app_manifest.get("platform") != "windows-x64"
-    ):
-        raise ValueError("Full update App metadata is inconsistent")
+    validate_app_directory(source_version, version=version, platform="windows-x64")
 
     target_versions = target_app / "versions"
     target_versions.mkdir(parents=True, exist_ok=True)
@@ -274,6 +258,7 @@ def _merge_app_from_full_update(
     if not target_version.exists():
         shutil.copytree(source_version, target_version)
         created_version = target_version
+    validate_app_directory(target_version, version=version, platform="windows-x64")
 
     target_pointer = target_app / "current.json"
     previous_bytes = target_pointer.read_bytes() if target_pointer.is_file() else None
@@ -305,11 +290,15 @@ def _merge_app_from_full_update(
 
 
 def _app_version_is_complete(version_directory: Path) -> bool:
-    """Whether an app version directory carries everything the app needs."""
+    """Do not reuse a snapshot whose required files exist but hashes differ."""
 
-    return all(
-        (version_directory / relative).is_file() for relative in REQUIRED_APP_FILES
-    )
+    try:
+        validate_app_directory(
+            version_directory, version=version_directory.name, platform="windows-x64"
+        )
+    except (OSError, ValueError, TypeError):
+        return False
+    return True
 
 
 def _rollback_app_merge(

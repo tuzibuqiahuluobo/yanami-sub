@@ -280,6 +280,18 @@ def test_health_requires_an_explicit_rendered_frontend_ack(tmp_path: Path) -> No
     assert confirmed == [True]
 
 
+def test_failed_health_ack_is_recorded_for_update_diagnosis(tmp_path: Path) -> None:
+    bridge, _jobs = _bridge(tmp_path)
+    recorded: list[tuple[str, str]] = []
+    bridge.error_reporter = lambda context, error: recorded.append((context, str(error)))
+    bridge.health_confirmation = lambda: (_ for _ in ()).throw(ValueError("bad app hash"))
+
+    result = bridge.confirm_app_health()
+
+    assert result["ok"] is False
+    assert recorded == [("bridge.confirm_app_health", "bad app hash")]
+
+
 def test_bridge_exposes_a_structured_diagnostic_report(tmp_path: Path) -> None:
     bridge, _ = _bridge(tmp_path)
 

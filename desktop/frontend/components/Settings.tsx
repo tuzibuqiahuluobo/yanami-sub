@@ -10,6 +10,7 @@ import {
   ExternalLink,
   Eye,
   EyeOff,
+  FolderOpen,
   Github,
   Heart,
   Monitor,
@@ -111,6 +112,7 @@ export function Settings({
   const appearance = appearanceProp ?? DEFAULT_APPEARANCE;
   const { showSuccess } = useToast();
   const [docsOpen, setDocsOpen] = useState(false);
+  const [logsError, setLogsError] = useState("");
   const [routingCatalogOpen, setRoutingCatalogOpen] = useState(false);
   // Preferences are hydrated before this page can be reached, so the initial
   // read is already the durable one.
@@ -1053,6 +1055,34 @@ export function Settings({
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="settings-section system-logs-section">
+        <div className="settings-section-heading">
+          <div>
+            <h2>{t.settings.systemLogs.title}</h2>
+            <p>{t.settings.systemLogs.description}</p>
+          </div>
+        </div>
+        <code className="system-logs-path">
+          {state.systemLogsPath || t.settings.systemLogs.unavailable}
+        </code>
+        <button
+          type="button"
+          className="button button-secondary"
+          onClick={async () => {
+            setLogsError("");
+            try {
+              await desktopApi.openInstallLogs();
+            } catch (error) {
+              setLogsError(error instanceof Error ? error.message : t.settings.systemLogs.openFailed);
+            }
+          }}
+        >
+          <FolderOpen size={14} />
+          {t.settings.systemLogs.openLocation}
+        </button>
+        {logsError ? <p className="api-key-error" role="alert">{logsError}</p> : null}
       </section>
 
       {docsOpen ? (

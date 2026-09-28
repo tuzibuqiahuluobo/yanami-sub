@@ -49,6 +49,8 @@ export interface AppState {
   route: Route;
   bootstrapped: boolean;
   appVersion: string;
+  systemLogsPath: string;
+  startupUpdateIssue: string;
   resources: ResourceStatus[];
   resourceInstalls: ResourceInstallSnapshot[];
   history: JobSnapshot[];
@@ -311,6 +313,8 @@ export const initialState: AppState = {
   route: "new-task",
   bootstrapped: false,
   appVersion: "development",
+  systemLogsPath: "",
+  startupUpdateIssue: "",
   resources: [],
   resourceInstalls: [],
   history: [],
@@ -373,6 +377,8 @@ export function reduceAppState(
         ...state,
         bootstrapped: true,
         appVersion: action.payload.app_version,
+        systemLogsPath: action.payload.system_logs_path ?? "",
+        startupUpdateIssue: action.payload.startup_update_issue ?? "",
         resources: action.payload.resources,
         resourceInstalls: action.payload.resource_installs ?? [],
         history: action.payload.tasks ?? [],

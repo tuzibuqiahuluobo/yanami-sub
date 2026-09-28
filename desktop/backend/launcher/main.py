@@ -31,8 +31,10 @@ from desktop.backend.settings.local_agents import configure_local_agents
 from desktop.backend.updates.install_manager import UpdateInstallManager
 from desktop.backend.updates.installer import AppInstaller
 from desktop.backend.updates.recovery import (
+    latest_unapplied_full_update,
     recover_interrupted_update,
     repair_active_app_version,
+    take_update_error_reports,
 )
 from desktop.backend.updates.service import (
     GitHubUpdateService,
@@ -832,17 +834,42 @@ def create_application(
     development_url = None if frozen else os.environ.get("YANAMI_SUB_DEV_URL")
     development = bool(development_url)
     installer = AppInstaller(paths)
+    startup_update_issue = ""
     if not development:
         # Before anything else looks at the install root: if the last full
         # update died between emptying it and filling it back in, there is no
         # executable here and the only copy of the program is under `.update`.
         # Nothing used to look, and the next update attempt deleted it.
-        recover_interrupted_update(paths.root, log=print)
+        recover_interrupted_update(paths.root, log=session.write)
         # `YanamiSub.py` does this before importing the app source in a frozen
         # build. Keep the runtime path defensive as well for direct launcher
         # calls and test/development harnesses.
-        repair_active_app_version(paths.root)
-        installer.prepare_startup()
+        try:
+            previous_pointer = installer.read_pointer() if paths.app_current.is_file() else {}
+        except (OSError, ValueError):
+            previous_pointer = {}
+        repaired = repair_active_app_version(paths.root)
+        started = installer.prepare_startup()
+        old_version = previous_pointer.get("current")
+        if isinstance(old_version, str) and repaired and old_version != repaired:
+            session.write(f"app integrity recovery: {old_version} -> {repaired}")
+        if repaired and started and repaired != started:
+            session.write(f"app health rollback: {repaired} -> {started}")
+        reports = take_update_error_reports(paths.root)
+        for report in reports:
+            session.write(f"external updater failure:\n{report}")
+        active_version = resolve_app_version(paths)
+        unapplied = latest_unapplied_full_update(paths.root, active_version)
+        if unapplied:
+            startup_update_issue = (
+                f"上次请求更新到 {unapplied}，但当前仍为 {active_version}。"
+                "请查看底部系统日志；确认原因后再重试更新。"
+            )
+            if reports:
+                summary = next((line.strip() for line in reversed(reports[-1].splitlines()) if line.strip()), "")
+                if summary:
+                    startup_update_issue += f" 错误：{summary[:300]}"
+            session.write(startup_update_issue)
     frontend_url = resolve_frontend_url(
         paths,
         development_url=development_url,
@@ -867,6 +894,7 @@ def create_application(
         ),
         error_reporter=session.exception,
         app_version=resolve_app_version(paths),
+        startup_update_issue=startup_update_issue,
     )
     session.write(
         f"version={resolve_app_version(paths)} root={paths.root} "
@@ -891,6 +919,7 @@ def create_application(
         current = pointer.get("current")
         if pointer.get("pendingHealth") and isinstance(current, str):
             installer.confirm_health(current)
+            session.write(f"app health confirmed: {current}")
 
     bridge.health_confirmation = confirm_health
     window.events.loaded += lambda *_args: tray.start()

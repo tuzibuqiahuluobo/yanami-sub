@@ -268,6 +268,13 @@ export const zh = {
       announcementFailed: "无法启动应用内更新，请稍后重试。",
       announcementOpenFailed: "无法打开 GitHub 下载页面。",
     },
+    systemLogs: {
+      title: "系统日志",
+      description: "启动、更新和资源安装的诊断记录。反馈问题时可在此找到会话日志。",
+      unavailable: "日志目录暂不可用",
+      openLocation: "打开日志位置",
+      openFailed: "无法打开日志目录",
+    },
     confirmMemory: {
       title: "主界面",
       description: "管理已记住的确认弹窗，选择重置后将再次弹出确认窗口。",

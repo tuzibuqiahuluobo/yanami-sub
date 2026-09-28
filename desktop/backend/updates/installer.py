@@ -81,9 +81,13 @@ def validate_app_directory(
         if actual != digest:
             raise ValueError(f"App file digest differs: {name}")
     actual_files = {
-        path.relative_to(root).as_posix()
+        relative.as_posix()
         for path in root.rglob("*") if path.is_file()
-        and path.relative_to(root).as_posix() != "app-manifest.json"
+        for relative in (path.relative_to(root),)
+        if relative.as_posix() != "app-manifest.json"
+        # Importing the unpacked app produces these after installation. They
+        # are not release payloads and must not trigger a health rollback.
+        and not ("__pycache__" in relative.parts and path.suffix in {".pyc", ".pyo"})
     }
     if actual_files != set(files):
         raise ValueError("App integrity file list does not match the version directory")

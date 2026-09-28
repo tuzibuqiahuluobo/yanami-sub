@@ -774,6 +774,7 @@ function HomeContent() {
           dispatch({ type: "navigate", route: "new-task" });
         }}
         startupUpdate={startupUpdate}
+        updateIssue={state.startupUpdateIssue}
         onCheckUpdates={() => desktopApi.checkUpdates(previewUpdates)}
         updateInstall={updateInstall}
         onInstallUpdate={startUpdateInstall}

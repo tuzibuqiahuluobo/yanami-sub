@@ -318,6 +318,35 @@ def take_update_error_reports(root: Path) -> list[str]:
     return reports
 
 
+def latest_unapplied_full_update(root: Path, current_version: str) -> str | None:
+    """Find a completed handoff request that never became the active version.
+
+    The external updater can exit without a readable error report (for example
+    after the new app is rolled back by its health check). Do not describe a
+    launched child process as an installed update on the next start.
+    """
+
+    if full_update_in_progress(root):
+        return None
+    try:
+        current = Version(current_version)
+    except InvalidVersion:
+        return None
+    update_root = root / UPDATE_DIRECTORY_NAME
+    if not update_root.is_dir():
+        return None
+    candidates: list[tuple[float, str]] = []
+    for request in update_root.glob("request-*.json"):
+        version = request.name.removeprefix("request-").removesuffix(".json")
+        try:
+            if Version(version) <= current:
+                continue
+            candidates.append((request.stat().st_mtime, version))
+        except (InvalidVersion, OSError):
+            continue
+    return max(candidates)[1] if candidates else None
+
+
 def discard_backups(root: Path, *, keep: Path | None = None) -> None:
     """Delete update backups -- only ever called once the root is bootable.
 
