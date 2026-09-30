@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.1.post1",
+    title: { zh: "0.1.1.post1 · 首个正式版热修", en: "0.1.1.post1 · First stable hotfix" },
+    notes: {
+      zh: [
+        "包含 RC7.6 的同一批修复：任务与批处理日志逐行加入时间戳，修复 Python 解释器选择弹窗。",
+        "防止重装与恢复后新启动器调用旧任务引擎；保留字节码缓存完整性误报、更新回滚和系统日志入口的修复。",
+        "正式版用户无需开启预览更新即可收到本版；使用完整更新包，保留任务、设置与模型。",
+      ],
+      en: [
+        "Includes the same fixes as RC7.6: per-line task/batch timestamps and the Python interpreter picker.",
+        "Prevents launcher/worker mismatches after reinstall or recovery, retaining bytecode integrity, update rollback and System Logs fixes.",
+        "Stable users receive this hotfix without opting into previews. The full update preserves tasks, settings and models.",
+      ],
+    },
+  },
+  {
     version: "0.1.2-rc.7.post6",
     title: { zh: "RC7.6 · 任务日志与启动兼容性", en: "RC7.6 · Task logs and startup compatibility" },
     notes: {
@@ -31,22 +47,6 @@ export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
         "Fixes the Python file picker and shows selection errors inside its modal; cancelling keeps the detected interpreter.",
         "Recovery and health rollback validate launcher/worker compatibility so reinstalls cannot route new requests to an old worker. Tasks and batches share the active version.",
         "This release changes the frozen launcher and requires a full update. Unbootable installs can be repaired in place without clearing tasks, settings or models.",
-      ],
-    },
-  },
-  {
-    version: "0.1.1.post1",
-    title: { zh: "0.1.1.post1 · 首个正式版热修", en: "0.1.1.post1 · First stable hotfix" },
-    notes: {
-      zh: [
-        "包含 RC7.6 的同一批修复：任务与批处理日志逐行加入时间戳，修复 Python 解释器选择弹窗。",
-        "防止重装与恢复后新启动器调用旧任务引擎；保留字节码缓存完整性误报、更新回滚和系统日志入口的修复。",
-        "正式版用户无需开启预览更新即可收到本版；使用完整更新包，保留任务、设置与模型。",
-      ],
-      en: [
-        "Includes the same fixes as RC7.6: per-line task/batch timestamps and the Python interpreter picker.",
-        "Prevents launcher/worker mismatches after reinstall or recovery, retaining bytecode integrity, update rollback and System Logs fixes.",
-        "Stable users receive this hotfix without opting into previews. The full update preserves tasks, settings and models.",
       ],
     },
   },
