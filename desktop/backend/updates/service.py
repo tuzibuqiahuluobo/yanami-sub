@@ -253,7 +253,7 @@ class GitHubUpdateService:
             )
         try:
             full_current = json.loads(
-                full_pointer.read_text(encoding="utf-8")
+                full_pointer.read_text(encoding="utf-8-sig")
             ).get("current")
         except (OSError, ValueError, AttributeError) as error:
             raise ValueError("Full update App pointer is malformed") from error
@@ -319,7 +319,7 @@ class GitHubUpdateService:
         if self.paths.app_current.is_file():
             try:
                 pointer = json.loads(
-                    self.paths.app_current.read_text(encoding="utf-8")
+                    self.paths.app_current.read_text(encoding="utf-8-sig")
                 )
                 current = pointer.get("current")
                 if isinstance(current, str) and current:

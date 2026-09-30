@@ -79,7 +79,7 @@ def test_full_update_replaces_program_and_preserves_mutable_data(
     _write_app_version(new_app, "2.0.0")
     (source / "app" / "current.json").write_text(
         '{"current":"2.0.0","previous":null,"pendingHealth":false}',
-        encoding="utf-8",
+        encoding="utf-8-sig",
     )
     (source / "user-data").mkdir()
     (source / "user-data" / "marker.txt").write_text(

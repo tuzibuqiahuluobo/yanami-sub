@@ -51,7 +51,7 @@ def _fixture(
     }
     if include_full_app:
         full_files["app/current.json"] = (
-            json.dumps({"current": version, "previous": None, "pendingHealth": False}).encode()
+            json.dumps({"current": version, "previous": None, "pendingHealth": False}).encode("utf-8-sig")
         )
         full_files.update(
             {f"app/versions/{version}/{name}": body for name, body in app_files().items()}
@@ -224,6 +224,14 @@ def test_preview_opt_in_does_not_downgrade_stable_to_older_rc(tmp_path: Path) ->
     )
 
     assert service.check(True) == {"available": False, "version": "0.1.1"}
+
+
+def test_update_check_reads_the_active_version_from_a_bom_pointer(tmp_path: Path) -> None:
+    service, _, _ = _fixture(tmp_path)
+    service.paths.app_current.parent.mkdir(parents=True)
+    service.paths.app_current.write_text('{"current":"1.1.0"}', encoding="utf-8-sig")
+
+    assert service.check() == {"available": False, "version": "1.1.0"}
 
 
 def test_app_update_downloads_verified_archive_and_switches_pointer(

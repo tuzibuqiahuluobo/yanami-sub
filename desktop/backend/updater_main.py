@@ -228,7 +228,7 @@ def _merge_app_from_full_update(
     target_app: Path,
 ) -> tuple[Path | None, bytes | None]:
     source_pointer = json.loads(
-        (source_app / "current.json").read_text(encoding="utf-8")
+        (source_app / "current.json").read_text(encoding="utf-8-sig")
     )
     version = source_pointer.get("current")
     if (
