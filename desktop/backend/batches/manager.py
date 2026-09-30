@@ -28,6 +28,7 @@ from desktop.backend.jobs.launch import (
     device_environment,
     task_stem,
 )
+from desktop.backend.worker.protocol import format_log_message
 
 
 LOGGER = logging.getLogger(__name__)
@@ -432,6 +433,10 @@ class BatchManager:
                 if snapshot.state == "running":
                     snapshot.state = "failed"
                     snapshot.error = f"批处理进程意外退出（代码 {return_code}）。"
+                    self._append_log(snapshot, BatchWorkerEvent(
+                        type="failed", batch_id=batch_id,
+                        payload={"message": snapshot.error},
+                    ))
                     snapshot.updated_at = time.time()
                 if self._process is process:
                     self._process = None
@@ -449,17 +454,22 @@ class BatchManager:
         elif event.type == "failed":
             snapshot.state = "failed"
             snapshot.error = str(event.payload.get("message") or "批处理失败。")
+            self._append_log(snapshot, event)
         elif event.type == "log":
-            message = str(event.payload.get("message") or "")
-            if message:
-                self._append_log(snapshot, message)
+            self._append_log(snapshot, event)
 
     @staticmethod
-    def _append_log(snapshot: BatchSnapshot, message: str) -> None:
+    def _append_log(snapshot: BatchSnapshot, event: BatchWorkerEvent) -> None:
+        message = format_log_message(str(event.payload.get("message") or ""), event.timestamp)
+        if not message:
+            return
         path = Path(snapshot.log_path)
-        path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as handle:
-            handle.write(message.rstrip("\r\n") + "\n")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8", newline="\n") as handle:
+                handle.write(message + "\n")
+        except OSError:
+            LOGGER.exception("could not write the batch log")
 
     def _ensure_idle(self) -> None:
         if self.is_running():

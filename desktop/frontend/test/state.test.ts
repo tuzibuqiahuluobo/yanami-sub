@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { initialState, reduceAppState } from "../lib/state";
+import { formatTaskLog } from "../lib/formatters";
 
 
 test("bootstrap restores an active worker task and its progress", () => {
@@ -107,7 +108,9 @@ test("bootstrap restores an active worker task and its progress", () => {
   assert.deepEqual(next.task.stageProgress, { stage: "aligned", completed: 3, total: 12 });
   assert.deepEqual(next.task.sourceRoute, { source: "agent", targets: ["local-dsh", "local-codex"] });
   assert.equal(next.task.statusMessage, "正在识别");
-  assert.deepEqual(next.task.logs, ["worker is alive"]);
+  assert.deepEqual(next.task.logs, [formatTaskLog({
+    timestamp: "2026-07-25T00:00:01Z", payload: { message: "worker is alive" },
+  })]);
 });
 
 
@@ -321,7 +324,24 @@ test("log history stays bounded", () => {
   }
 
   assert.equal(state.task.logs.length, 200);
-  assert.equal(state.task.logs[0], "line-20");
+  assert.equal(state.task.logs[0], formatTaskLog({
+    timestamp: "2026-07-25T00:00:00Z", payload: { message: "line-20" },
+  }));
+});
+
+
+test("live and terminal logs get one timestamp without changing the task error", () => {
+  const timestamp = "2026-09-30T02:03:04.567Z";
+  const message = "错误 Error\n  中文 / 日本語";
+  const event = { task_id: "task-1", timestamp, payload: { message } };
+  const logging = reduceAppState(initialState, {
+    type: "workerEvent", event: { ...event, type: "log" },
+  });
+  const failed = reduceAppState(logging, {
+    type: "workerEvent", event: { ...event, type: "failed" },
+  });
+  assert.deepEqual(failed.task.logs, [formatTaskLog(event), formatTaskLog(event)]);
+  assert.equal(failed.task.error?.message, message);
 });
 
 

@@ -3,6 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+import shutil
+import subprocess
+
+import pytest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -66,6 +70,37 @@ def test_release_build_accepts_ascii_bootstrap_directory() -> None:
     assert '$Bootstrap = Join-Path $BootstrapDirectory "Yanami Sub.dist"' in (
         RELEASE_SCRIPT
     )
+
+
+def test_release_defaults_deliver_the_rc76_frozen_startup_fix() -> None:
+    assert '[string]$MinimumLauncherVersion = $Version' in RELEASE_SCRIPT
+    assert '"--minimum-launcher", $MinimumLauncherVersion' in RELEASE_SCRIPT
+
+
+@pytest.mark.skipif(not shutil.which("powershell"), reason="PowerShell is required")
+@pytest.mark.parametrize("version, core", [
+    ("0.1.1.post1", "0.1.1.0"),
+    ("0.1.2-rc.7.post6", "0.1.2.0"),
+])
+def test_windows_version_resources_support_stable_hotfix_and_rc(
+    tmp_path: Path, version: str, core: str,
+) -> None:
+    # Execute only the real function; do not start a PyInstaller build.
+    function = SCRIPT.split("function New-VersionResource {", 1)[1].split(
+        '\nif (-not $VenvPath)', 1,
+    )[0]
+    script = "function New-VersionResource {" + function
+    output = tmp_path / "version.txt"
+    template = REPOSITORY_ROOT / "desktop/assets/yanami-sub-version.txt"
+    script += f"\nNew-VersionResource -TemplatePath '{template}' -DestinationPath '{output}' -Version '{version}'\n"
+    checked = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", script],
+        capture_output=True, encoding="utf-8", errors="replace",
+    )
+    assert checked.returncode == 0, checked.stderr
+    resource = output.read_text("utf-8")
+    assert f"StringStruct('ProductVersion', '{version}')" in resource
+    assert f"StringStruct('FileVersion', '{core}')" in resource
 
 
 def test_desktop_version_sources_match_canonical_version() -> None:

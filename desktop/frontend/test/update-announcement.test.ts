@@ -48,8 +48,10 @@ test("history stays bundled and unrendered until the user loads it", () => {
     "utf8",
   );
 
-  assert.equal(UPDATE_HISTORY.length, 25);
-  assert.equal(updateHistoryFor("zh")[0]?.version, "0.1.2-rc.7.post5");
+  const version = readFileSync(new URL("../../../VERSION", import.meta.url), "utf8").trim();
+  assert.ok(UPDATE_HISTORY.length >= 26);
+  assert.equal(updateHistoryFor("zh")[0]?.version, version);
+  assert.equal(updateHistoryFor("en")[0]?.version, version);
   assert.equal(updateHistoryFor("en").at(-1)?.version, "0.1.0-rc.3");
   assert.match(source, /historyLoaded \? \(/);
   assert.match(source, /setHistoryLoaded\(\(value\) => !value\)/);

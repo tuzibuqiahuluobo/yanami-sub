@@ -15,6 +15,7 @@ from desktop.backend.batches.protocol import (
     parse_batch_event,
 )
 from desktop.backend.common.models import BatchRequest
+from desktop.backend.worker.protocol import format_log_message
 
 
 class FakeProcess:
@@ -57,6 +58,37 @@ def test_batch_protocol_recovers_native_windows_tool_output(monkeypatch) -> None
         batch_id="batch-1",
     )
     assert received.payload["message"] == native_line.rstrip("\n")
+
+
+def test_batch_logs_timestamp_every_line_and_the_terminal_error(tmp_path: Path) -> None:
+    stamp = "2026-09-30T02:03:04.567Z"
+    message = "项目 1 Recognition / café / 日本語 ✅\n项目 2 纠错翻译 Translation"
+    error = "RuntimeError: 批次失败 Batch failed"
+    events = []
+
+    def process_factory(command, **_kwargs):
+        batch_id = command[-1]
+        events.extend([
+            BatchWorkerEvent(type="log", batch_id=batch_id, timestamp=stamp, payload={"message": message}),
+            BatchWorkerEvent(type="failed", batch_id=batch_id, timestamp=stamp, payload={"message": error}),
+        ])
+        return FakeProcess("".join(encode_batch_event(event) for event in events), return_code=1)
+
+    manager = BatchManager(
+        python_executable="python.exe", worker_env={}, process_factory=process_factory,
+        history_path=tmp_path / "batches.json", output_root=tmp_path / "tasks",
+    )
+    started = manager.start(BatchRequest.model_validate({"items": [{"input": "a.wav"}]}))
+    deadline = time.monotonic() + 2
+    while manager.snapshot().state == "running" and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    assert manager.snapshot().state == "failed"
+    assert manager.snapshot().error == error
+    assert Path(started.log_path).read_text("utf-8") == (
+        format_log_message(message, stamp) + "\n" + format_log_message(error, stamp) + "\n"
+    )
+    assert events[0].payload["message"] == message
 
 
 def test_batch_manager_persists_core_worker_progress_and_owned_outputs(

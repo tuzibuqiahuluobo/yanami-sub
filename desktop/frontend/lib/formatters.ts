@@ -2,6 +2,7 @@ import type {
   CapabilityState,
   PipelineStage,
   UpdateCheck,
+  WorkerEvent,
 } from "./types";
 
 
@@ -82,6 +83,26 @@ export function formatDuration(seconds: number): string {
     return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   }
   return `${minutes}:${String(remainder).padStart(2, "0")}`;
+}
+
+
+/** Match disk logs: local ISO date/time, milliseconds and explicit UTC offset. */
+export function formatTaskLog(event: Pick<WorkerEvent, "timestamp" | "payload">): string {
+  const message = String(event.payload.message ?? "").replace(/[\r\n]+$/, "");
+  if (!message) return "";
+  const timestamp = /(?:Z|[+-]\d{2}:?\d{2})$/.test(event.timestamp)
+    ? event.timestamp : `${event.timestamp}Z`;
+  const moment = new Date(timestamp);
+  let stamp = "unknown time";
+  if (Number.isFinite(moment.getTime())) {
+    const pad = (value: number, length = 2) => String(value).padStart(length, "0");
+    const offset = -moment.getTimezoneOffset();
+    const zone = `${offset < 0 ? "-" : "+"}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
+    stamp = `${moment.getFullYear()}-${pad(moment.getMonth() + 1)}-${pad(moment.getDate())} ` +
+      `${pad(moment.getHours())}:${pad(moment.getMinutes())}:${pad(moment.getSeconds())}.${pad(moment.getMilliseconds(), 3)}${zone}`;
+  }
+  return message.replace(/\r\n?/g, "\n").split("\n")
+    .map((line) => `[${stamp}] ${line}`).join("\n");
 }
 
 

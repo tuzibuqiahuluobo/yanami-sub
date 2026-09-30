@@ -23,9 +23,9 @@ _APP_FILE_BODIES = {
 }
 
 
-def _app_manifest(files: dict[str, bytes]) -> bytes:
+def _app_manifest(files: dict[str, bytes], *, version: str = "1.1.0") -> bytes:
     return json.dumps({
-        "version": "1.1.0",
+        "version": version,
         "platform": "windows-x64",
         "files": {
             name: {"size": len(body), "sha256": hashlib.sha256(body).hexdigest()}
@@ -34,7 +34,7 @@ def _app_manifest(files: dict[str, bytes]) -> bytes:
     }).encode("utf-8")
 
 
-def app_files(**overrides: bytes) -> dict[str, bytes]:
+def app_files(*, version: str = "1.1.0", **overrides: bytes) -> dict[str, bytes]:
     """A complete app payload, DERIVED from the installer's own contract.
 
     Restating the list here is how these fixtures went red the day a module was
@@ -47,7 +47,7 @@ def app_files(**overrides: bytes) -> dict[str, bytes]:
         for name in installer_module.REQUIRED_APP_FILES
     }
     files.update(overrides)
-    files["app-manifest.json"] = _app_manifest(files)
+    files["app-manifest.json"] = _app_manifest(files, version=version)
     return files
 
 
@@ -195,6 +195,10 @@ def test_app_install_switches_pointer_only_after_validation(tmp_path: Path) -> N
 
 def test_failed_health_check_restores_previous_version(tmp_path: Path) -> None:
     installer = AppInstaller(AppPaths.for_root(tmp_path / "FineSub"))
+    for name, body in app_files(version="1.0.0").items():
+        path = installer.paths.app_versions / "1.0.0" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
     installer.write_pointer(
         current="1.1.0",
         previous="1.0.0",
@@ -245,6 +249,10 @@ def test_pending_app_gets_one_health_attempt_then_rolls_back(
     tmp_path: Path,
 ) -> None:
     installer = AppInstaller(AppPaths.for_root(tmp_path / "FineSub"))
+    for name, body in app_files(version="1.0.0").items():
+        path = installer.paths.app_versions / "1.0.0" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
     installer.write_pointer(
         current="1.1.0",
         previous="1.0.0",
@@ -261,6 +269,38 @@ def test_pending_app_gets_one_health_attempt_then_rolls_back(
     assert second_start == "1.0.0"
     assert second_pointer["current"] == "1.0.0"
     assert second_pointer["pendingHealth"] is False
+
+
+@pytest.mark.parametrize("previous", ["1.0.0", "../outside", "missing"])
+def test_health_check_cannot_mix_a_new_launcher_with_an_old_or_missing_app(
+    tmp_path: Path, previous: str,
+) -> None:
+    paths = AppPaths.for_root(tmp_path / "Yanami Sub")
+    paths.root.mkdir(parents=True)
+    (paths.root / "launcher.json").write_text('{"appVersion":"1.1.0"}', encoding="utf-8")
+    for name, body in app_files(version="1.0.0").items():
+        path = paths.app_versions / "1.0.0" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    installer = AppInstaller(paths)
+    installer.write_pointer(current="1.1.0", previous=previous, pending_health=True, health_attempts=1)
+
+    assert installer.prepare_startup() == "1.1.0"
+    assert installer.read_pointer()["current"] == "1.1.0"
+
+
+def test_health_check_does_not_roll_back_to_a_corrupt_snapshot(tmp_path: Path) -> None:
+    paths = AppPaths.for_root(tmp_path / "Yanami Sub")
+    for name, body in app_files(version="1.0.0").items():
+        path = paths.app_versions / "1.0.0" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    (paths.app_versions / "1.0.0" / "desktop/backend/worker/main.py").write_bytes(b"corrupt")
+    installer = AppInstaller(paths)
+    installer.write_pointer(current="1.1.0", previous="1.0.0", pending_health=True)
+
+    assert installer.rollback_failed_start() is None
+    assert installer.read_pointer()["current"] == "1.1.0"
 
 
 def test_app_archive_without_dependency_manifest_is_rejected(

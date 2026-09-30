@@ -125,6 +125,7 @@ export function ResourceManager({
   const [diagnosticError, setDiagnosticError] = useState("");
   const [pythonBusy, setPythonBusy] = useState<"" | "choose" | "clear">("");
   const [pythonNotice, setPythonNotice] = useState("");
+  const [pythonActionError, setPythonActionError] = useState("");
   const [maintenanceBusy, setMaintenanceBusy] = useState<"move" | "reset" | "purge" | "">("");
   const [maintenanceError, setMaintenanceError] = useState("");
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
@@ -180,6 +181,7 @@ export function ResourceManager({
     const requestId = ++pythonPreflightRequest.current;
     setPythonPreflight(null);
     setPythonPreflightError("");
+    setPythonActionError("");
     setPythonPreflightBusy(true);
     void onCheckPythonInterpreter()
       .then((result) => {
@@ -219,6 +221,7 @@ export function ResourceManager({
       setConfirmOpen(true);
       setPythonPreflight(null);
       setPythonPreflightError("");
+      setPythonActionError("");
       if (resourceId === "uv") {
         startPythonPreflight();
       }
@@ -254,6 +257,8 @@ export function ResourceManager({
     } | null = null;
     setPythonBusy(kind);
     setPythonNotice("");
+    setPythonActionError("");
+    const requestId = pythonPreflightRequest.current;
     try {
       if (kind === "clear") {
         await onClearPythonInterpreter();
@@ -268,12 +273,20 @@ export function ResourceManager({
         }
       }
       if (diagnostics) {
-        setDiagnostics(await onRunDiagnostics());
+        try {
+          setDiagnostics(await onRunDiagnostics());
+        } catch (error) {
+          setDiagnosticError(
+            error instanceof Error ? error.message : t.resources.diagnostics.failed,
+          );
+        }
       }
     } catch (error) {
-      setPythonNotice(
-        error instanceof Error ? error.message : t.resources.diagnostics.failed,
-      );
+      if (pythonPreflightRequest.current === requestId) {
+        setPythonActionError(
+          error instanceof Error ? error.message : t.resources.diagnostics.failed,
+        );
+      }
     } finally {
       setPythonBusy("");
     }
@@ -282,8 +295,9 @@ export function ResourceManager({
 
   const choosePythonForInstall = async () => {
     setPythonPreflightError("");
+    const requestId = pythonPreflightRequest.current;
     const result = await runPythonAction("choose");
-    if (result?.path) {
+    if (result?.path && pythonPreflightRequest.current === requestId) {
       setPythonPreflight({
         configured: result.path,
         found: result.path,
@@ -622,6 +636,9 @@ export function ResourceManager({
               ) : null}
               {pythonNotice ? (
                 <p className="diagnostics-interpreter-detail">{pythonNotice}</p>
+              ) : null}
+              {pythonActionError ? (
+                <p className="resource-error" role="alert">{pythonActionError}</p>
               ) : null}
             </details>
           </div>
@@ -999,6 +1016,9 @@ export function ResourceManager({
                     </p>
                   )}
                 </div>
+                {pythonActionError ? (
+                  <p className="resource-error" role="alert">{pythonActionError}</p>
+                ) : null}
                 <div className="dialog-actions python-preflight-actions">
                   <button
                     type="button"

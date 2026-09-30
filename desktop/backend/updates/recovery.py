@@ -24,8 +24,13 @@ import time
 from packaging.version import InvalidVersion, Version
 
 from finesub_bootstrap.fsops import remove_tree
+from finesub_bootstrap.paths import AppPaths
 
-from desktop.backend.updates.installer import validate_app_directory
+from desktop.backend.updates.installer import (
+    AppInstaller,
+    app_version_is_compatible,
+    validate_app_directory,
+)
 
 UPDATE_DIRECTORY_NAME = ".update"
 BACKUP_PREFIX = "backup-"
@@ -165,14 +170,14 @@ def _version_sort_key(path: Path) -> tuple[int, Version, float]:
 
 
 def repair_active_app_version(root: Path) -> str | None:
-    """Use the newest complete app version and repair a stale pointer."""
+    """Keep a complete compatible snapshot, or repair a stale app pointer."""
 
     app_root = root / "app"
     pointer_path = app_root / "current.json"
     pointer: dict[str, object] = {}
     if pointer_path.is_file():
         try:
-            parsed = json.loads(pointer_path.read_text(encoding="utf-8"))
+            parsed = json.loads(pointer_path.read_text(encoding="utf-8-sig"))
             if isinstance(parsed, dict):
                 pointer = parsed
         except (OSError, ValueError):
@@ -181,8 +186,7 @@ def repair_active_app_version(root: Path) -> str | None:
     current = pointer.get("current")
     if (
         isinstance(current, str)
-        and current not in {"", ".", ".."}
-        and not any(separator in current for separator in ("/", "\\", ":"))
+        and app_version_is_compatible(root, current)
         and _app_version_is_complete(versions / current)
     ):
         return current
@@ -194,6 +198,7 @@ def repair_active_app_version(root: Path) -> str | None:
                 for entry in versions.iterdir()
                 if entry.is_dir()
                 and not entry.name.endswith(".staging")
+                and app_version_is_compatible(root, entry.name)
                 and _app_version_is_complete(entry)
             ),
             key=_version_sort_key,
@@ -225,6 +230,28 @@ def repair_active_app_version(root: Path) -> str | None:
     return selected
 
 
+def prepare_app_startup(root: Path, *, log: LogCallback | None = None) -> str | None:
+    """Finish pointer recovery/health rollback before any app code is imported."""
+
+    installer = AppInstaller(AppPaths.for_root(root))
+    try:
+        previous = installer.read_pointer() if installer.pointer_path.is_file() else {}
+    except (OSError, ValueError):
+        previous = {}
+    recover_interrupted_update(root, log=log)
+    repaired = repair_active_app_version(root)
+    if repaired is None:
+        return None
+    started = installer.prepare_startup()
+    if log is not None:
+        old_version = previous.get("current")
+        if isinstance(old_version, str) and old_version != repaired:
+            log(f"app compatibility/integrity recovery: {old_version} -> {repaired}")
+        if started and repaired != started:
+            log(f"app health rollback: {repaired} -> {started}")
+    return started
+
+
 def backups(root: Path) -> list[Path]:
     """Every interrupted-update backup, newest first."""
 
@@ -245,7 +272,8 @@ def install_is_bootable(root: Path) -> bool:
     if repair_active_app_version(root) is not None:
         return True
     return (
-        (root / "desktop" / "frontend" / "out" / "index.html").is_file()
+        not (root / "app" / "versions").is_dir()
+        and (root / "desktop" / "frontend" / "out" / "index.html").is_file()
         and (root / "src" / "finesub" / "pipeline.py").is_file()
         and (root / "pyproject.toml").is_file()
     )

@@ -5,10 +5,12 @@ import json
 from pathlib import Path
 import shutil
 import sys
+from types import SimpleNamespace
 
 import finesub_bootstrap
 from finesub_bootstrap.paths import AppPaths
-from desktop.YanamiSub import _activate_packaged_source
+from desktop.backend.launcher import main as launcher
+from desktop.YanamiSub import _activate_packaged_source, _preflight_packaged_install
 from desktop.backend.common.product import INSTALLED_MARKER_NAME
 from desktop.backend.launcher.main import (
     DESKTOP_UV_ASSET,
@@ -25,6 +27,7 @@ from desktop.backend.launcher.main import (
     resolve_frontend_url,
 )
 from desktop.backend.updates.installer import AppInstaller
+from desktop.backend.tests.test_update_installer import app_files
 from desktop.backend.launcher.bridge import DesktopBridge
 from desktop.backend.settings.store import SettingsStore
 
@@ -106,6 +109,32 @@ def test_personal_data_is_the_same_place_for_every_form(
     assert resolve_application_paths(portable).models == (
         portable.resolve() / "models"
     )
+
+
+def test_bom_pointer_keeps_core_worker_frontend_and_version_in_sync(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    paths = AppPaths.for_root(tmp_path)
+    version = "0.1.2-rc.7.post6"
+    selected = paths.app_versions / version
+    for name, body in app_files(version=version).items():
+        path = selected / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    (paths.root / "launcher.json").write_text(json.dumps({"appVersion": version}), encoding="utf-8-sig")
+    paths.app_current.write_text(json.dumps({"current": version, "pendingHealth": False}), encoding="utf-8-sig")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path))
+    original_path = list(sys.path)
+    try:
+        assert _preflight_packaged_install() is True
+        _activate_packaged_source()
+        assert sys.path[0] == str(selected / "src")
+        assert resolve_application_source(paths) == selected
+        assert resolve_frontend_url(paths) == str(selected / "desktop/frontend/out/index.html")
+        assert resolve_app_version(paths) == version
+    finally:
+        sys.path[:] = original_path
 
 
 def test_development_url_takes_precedence(tmp_path: Path) -> None:
@@ -307,6 +336,10 @@ def test_pending_broken_app_rolls_back_to_previous_frontend(
     )
     previous.parent.mkdir(parents=True)
     previous.write_text("<html>previous</html>", encoding="utf-8")
+    for name, body in app_files(version="1.1.0").items():
+        path = paths.app_versions / "1.1.0" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
     installer = AppInstaller(paths)
     installer.write_pointer(
         current="1.2.0",
@@ -319,6 +352,125 @@ def test_pending_broken_app_rolls_back_to_previous_frontend(
     pointer = json.loads(paths.app_current.read_text(encoding="utf-8"))
     assert resolved == str(previous.resolve())
     assert pointer["current"] == "1.1.0"
+
+
+def test_frozen_preflight_rolls_back_before_selecting_the_core_source(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    paths = AppPaths.for_root(tmp_path)
+    for version in ("1.1.0", "1.2.0"):
+        for name, body in app_files(version=version).items():
+            path = paths.app_versions / version / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+    (paths.root / "launcher.json").write_text('{"appVersion":"1.1.0"}', encoding="utf-8")
+    installer = AppInstaller(paths)
+    installer.write_pointer(
+        current="1.2.0", previous="1.1.0", pending_health=True, health_attempts=1,
+    )
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path))
+    original_path = list(sys.path)
+    try:
+        assert _preflight_packaged_install() is True
+        _activate_packaged_source()
+        selected = paths.app_versions / "1.1.0"
+        assert sys.path[0] == str(selected / "src")
+        assert resolve_application_source(paths) == selected
+        assert resolve_frontend_url(paths) == str(selected / "desktop/frontend/out/index.html")
+        assert installer.read_pointer()["pendingHealth"] is False
+    finally:
+        sys.path[:] = original_path
+
+
+def test_both_task_managers_use_the_compatible_snapshot_after_reinstall(
+    tmp_path: Path,
+) -> None:
+    from desktop.backend.updates.recovery import prepare_app_startup
+
+    paths = AppPaths.for_root(tmp_path)
+    new = "0.1.2-rc.7.post6"
+    old = "0.1.0-rc.7.post1"
+    for version in (old, new):
+        files = app_files(version=version, **{
+            "src/finesub_bootstrap/runtime-manifest.json": RUNTIME_MANIFEST.read_bytes(),
+        })
+        for name, body in files.items():
+            path = paths.app_versions / version / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+    (paths.root / "launcher.json").write_text(json.dumps({"appVersion": new}), encoding="utf-8")
+    AppInstaller(paths).write_pointer(current=old, previous=None, pending_health=False)
+
+    assert prepare_app_startup(paths.root) == new
+    jobs, batches, _resources, _settings = create_backend_services(paths)
+    expected = str(paths.app_versions / new)
+    assert jobs.worker_context.working_directory == expected
+    assert batches._worker_context.working_directory == expected
+    assert jobs.worker_context.environment["PYTHONPATH"] == batches._worker_context.environment["PYTHONPATH"]
+    assert expected in jobs.worker_context.environment["PYTHONPATH"]
+
+
+def test_prepared_startup_is_not_counted_as_a_second_health_attempt(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    import webview
+    from desktop.backend.updates.recovery import prepare_app_startup
+
+    paths = AppPaths.for_root(tmp_path)
+    for version in ("1.1.0", "1.2.0"):
+        for name, body in app_files(version=version).items():
+            path = paths.app_versions / version / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(body)
+    (paths.root / "launcher.json").write_text('{"appVersion":"1.1.0"}', encoding="utf-8")
+    installer = AppInstaller(paths)
+    installer.write_pointer(current="1.2.0", previous="1.1.0", pending_health=True)
+    assert prepare_app_startup(paths.root) == "1.2.0"
+
+    class Event:
+        def __iadd__(self, _handler):
+            return self
+
+    window = SimpleNamespace(events=SimpleNamespace(loaded=Event(), closed=Event()))
+    monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path))
+    monkeypatch.delenv("YANAMI_SUB_DEV_URL", raising=False)
+    monkeypatch.setattr(sys, "frozen", False, raising=False)
+    monkeypatch.setattr(webview, "create_window", lambda *_args, **_kwargs: window)
+    monkeypatch.setattr(launcher, "create_backend_services", lambda *_args, **_kwargs: (
+        object(), object(), SimpleNamespace(install_manager=None), object(),
+    ))
+    monkeypatch.setattr(launcher, "load_update_service", lambda _paths: None)
+    monkeypatch.setattr(launcher, "DesktopBridge", lambda **_kwargs: SimpleNamespace())
+    monkeypatch.setattr(launcher, "TrayController", lambda *_args: SimpleNamespace())
+    monkeypatch.setattr(launcher, "expose_bridge", lambda *_args: None)
+
+    launcher.create_application(startup_prepared=True)
+
+    pointer = installer.read_pointer()
+    assert pointer["current"] == "1.2.0"
+    assert pointer["healthAttempts"] == 1
+    assert pointer["pendingHealth"] is True
+
+
+def test_modern_install_cannot_bypass_compatibility_via_leftover_legacy_files(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    paths = AppPaths.for_root(tmp_path)
+    for name, body in app_files(version="1.0.0").items():
+        for target in (paths.app_versions / "1.0.0" / name, paths.root / name):
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(body)
+    (paths.root / "launcher.json").write_text('{"appVersion":"1.1.0"}', encoding="utf-8")
+    AppInstaller(paths).write_pointer(current="1.0.0", previous=None, pending_health=False)
+    messages = []
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path))
+    monkeypatch.setattr("desktop.YanamiSub._show_startup_message", messages.append)
+
+    assert _preflight_packaged_install() is False
+    assert len(messages) == 1
+    assert "重新安装" in messages[0]
 
 
 def test_development_static_frontend_falls_back_to_repo_copy(

@@ -336,7 +336,10 @@ def main() -> int:
             protocol_output.flush()
 
     def forward_log(event) -> None:
-        emit(BatchWorkerEvent.log(args.batch_id, str(event.payload.get("message") or "")))
+        emit(BatchWorkerEvent(
+            type="log", batch_id=args.batch_id,
+            timestamp=event.timestamp, payload=event.payload,
+        ))
 
     log_writer = EventLogWriter(args.batch_id, forward_log)
     activity_root = os.environ.get(TASK_ACTIVITY_ROOT_VARIABLE, "")

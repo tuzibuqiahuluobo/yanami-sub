@@ -29,11 +29,10 @@ from desktop.backend.resources.install_manager import ResourceInstallManager
 from desktop.backend.settings.store import SettingsStore
 from desktop.backend.settings.local_agents import configure_local_agents
 from desktop.backend.updates.install_manager import UpdateInstallManager
-from desktop.backend.updates.installer import AppInstaller
+from desktop.backend.updates.installer import AppInstaller, app_version_is_compatible
 from desktop.backend.updates.recovery import (
     latest_unapplied_full_update,
-    recover_interrupted_update,
-    repair_active_app_version,
+    prepare_app_startup,
     take_update_error_reports,
 )
 from desktop.backend.updates.service import (
@@ -574,11 +573,11 @@ def resolve_application_paths(root: Path) -> AppPaths:
 def resolve_application_source(paths: AppPaths) -> Path:
     if paths.app_current.is_file():
         try:
-            pointer = json.loads(paths.app_current.read_text(encoding="utf-8"))
+            pointer = json.loads(paths.app_current.read_text(encoding="utf-8-sig"))
         except (OSError, ValueError, AttributeError):
             pointer = {}
         current = pointer.get("current")
-        if isinstance(current, str) and current:
+        if isinstance(current, str) and app_version_is_compatible(paths.root, current):
             source = (paths.app_versions / current).resolve()
             if (
                 (source / "src" / "finesub" / "pipeline.py").is_file()
@@ -586,7 +585,8 @@ def resolve_application_source(paths: AppPaths) -> Path:
             ):
                 return source
     if (
-        (paths.root / "src" / "finesub" / "pipeline.py").is_file()
+        not paths.app_versions.is_dir()
+        and (paths.root / "src" / "finesub" / "pipeline.py").is_file()
         and (paths.root / "pyproject.toml").is_file()
     ):
         return paths.root
@@ -609,7 +609,7 @@ def resolve_frontend_url(
         except (OSError, ValueError, json.JSONDecodeError):
             pointer = {}
     current = pointer.get("current")
-    if isinstance(current, str) and current:
+    if isinstance(current, str) and app_version_is_compatible(paths.root, current):
         candidate = (
             paths.app_versions
             / current
@@ -634,7 +634,7 @@ def resolve_frontend_url(
                 if restored_frontend.is_file():
                     return str(restored_frontend.resolve())
     development_static = paths.root / "desktop" / "frontend" / "out" / "index.html"
-    if development_static.is_file():
+    if not paths.app_versions.is_dir() and development_static.is_file():
         return str(development_static.resolve())
     raise FileNotFoundError("Yanami Sub frontend out/index.html was not found")
 
@@ -649,7 +649,7 @@ def resolve_app_version(paths: AppPaths) -> str:
         if not path.is_file():
             continue
         try:
-            value = json.loads(path.read_text(encoding="utf-8")).get(key)
+            value = json.loads(path.read_text(encoding="utf-8-sig")).get(key)
         except (OSError, ValueError, AttributeError):
             continue
         if isinstance(value, str) and value:
@@ -819,8 +819,23 @@ def load_update_service(paths: AppPaths) -> GitHubUpdateService | None:
     )
 
 
+def choose_python_interpreter(window: Any) -> str | None:
+    import webview
+
+    result = window.create_file_dialog(
+        webview.FileDialog.OPEN,
+        file_types=("Python 解释器 (*.exe)", "所有文件 (*.*)"),
+    )
+    if not result:
+        return None
+    selected = result[0] if isinstance(result, (list, tuple)) else result
+    return str(selected)
+
+
 def create_application(
     session: SessionLog | None = None,
+    *,
+    startup_prepared: bool = False,
 ) -> tuple[Any, DesktopBridge, bool]:
     import webview
 
@@ -836,25 +851,10 @@ def create_application(
     installer = AppInstaller(paths)
     startup_update_issue = ""
     if not development:
-        # Before anything else looks at the install root: if the last full
-        # update died between emptying it and filling it back in, there is no
-        # executable here and the only copy of the program is under `.update`.
-        # Nothing used to look, and the next update attempt deleted it.
-        recover_interrupted_update(paths.root, log=session.write)
-        # `YanamiSub.py` does this before importing the app source in a frozen
-        # build. Keep the runtime path defensive as well for direct launcher
-        # calls and test/development harnesses.
-        try:
-            previous_pointer = installer.read_pointer() if paths.app_current.is_file() else {}
-        except (OSError, ValueError):
-            previous_pointer = {}
-        repaired = repair_active_app_version(paths.root)
-        started = installer.prepare_startup()
-        old_version = previous_pointer.get("current")
-        if isinstance(old_version, str) and repaired and old_version != repaired:
-            session.write(f"app integrity recovery: {old_version} -> {repaired}")
-        if repaired and started and repaired != started:
-            session.write(f"app health rollback: {repaired} -> {started}")
+        # Frozen entrypoints already did this before importing the app core.
+        # A second call would consume the next health attempt in the same run.
+        if not startup_prepared:
+            prepare_app_startup(paths.root, log=session.write)
         reports = take_update_error_reports(paths.root)
         for report in reports:
             session.write(f"external updater failure:\n{report}")
@@ -1038,21 +1038,11 @@ def create_application(
 
     bridge.key_export_selector = select_key_export
 
-    def select_python_interpreter() -> str | None:
-        result = window.create_file_dialog(
-            webview.FileDialog.OPEN,
-            file_types=(
-                "Python 解释器 (python.exe)",
-                "所有文件 (*.*)",
-            ),
-        )
-        return str(result[0]) if result else None
-
-    bridge.python_selector = select_python_interpreter
+    bridge.python_selector = lambda: choose_python_interpreter(window)
     return window, bridge, development
 
 
-def main() -> int:
+def main(*, startup_prepared: bool = False) -> int:
     import webview
 
     # Opened first: a start-up that dies in `create_application` is precisely
@@ -1070,7 +1060,7 @@ def main() -> int:
     phase = "startup"
     try:
         install_frozen_pywebview_win32()
-        window, _, development = create_application(session)
+        window, _, development = create_application(session, startup_prepared=startup_prepared)
         phase = "run"
         webview.start(
             prepare_window,

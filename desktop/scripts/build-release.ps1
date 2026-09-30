@@ -7,10 +7,10 @@ param(
     [string]$VenvPath = "",
     [string]$BootstrapDirectory = "",
     [string]$UpstreamDirectory = "",
-    # RC3 is the first Yanami Sub-branded build. Earlier FineSub Desktop builds
-    # use a different executable and updater protocol, so they migrate through
-    # the RC3 installer rather than an application-only delta.
-    [string]$MinimumLauncherVersion = "0.1.0-rc.3",
+    # RC7.6 fixes frozen startup ordering and app/worker compatibility. Older
+    # launchers must receive the full package, not an application-only delta.
+    [string]$MinimumLauncherVersion = $Version,
+    # RC3 is the first Yanami Sub-branded build that can use this updater.
     [string]$MinimumSupportedVersion = "0.1.0-rc.3",
     [string[]]$SupportedFrom = @(),
     [string]$ReleaseNotes = "",

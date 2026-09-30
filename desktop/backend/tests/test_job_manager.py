@@ -1289,7 +1289,9 @@ def test_export_task_log_copies_complete_disk_file(tmp_path) -> None:
     destination = tmp_path / "export.txt"
 
     assert manager.export_task_log(task.task_id, destination) == destination.resolve()
-    assert destination.read_text("utf-8") == "working\n"
+    saved = (manager.task_directory(task.task_id) / "task-log.txt").read_bytes()
+    assert destination.read_bytes() == saved, "export must not retime log lines"
+    assert saved.decode("utf-8").endswith("] working\n")
     with pytest.raises((ValueError, JobNotFound)):
         manager.export_task_log("../other", destination)
 

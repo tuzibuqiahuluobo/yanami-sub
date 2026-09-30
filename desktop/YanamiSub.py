@@ -43,7 +43,7 @@ def _preflight_packaged_install() -> bool:
     from desktop.backend.updates.recovery import (
         UPDATE_RELAUNCH_ENV,
         full_update_in_progress,
-        repair_active_app_version,
+        prepare_app_startup,
     )
 
     root = _application_root()
@@ -55,14 +55,17 @@ def _preflight_packaged_install() -> bool:
         )
         return False
 
-    if repair_active_app_version(root) is not None:
+    # Health rollback must precede _activate_packaged_source, not change the
+    # worker snapshot after the launcher has imported a different core.
+    if prepare_app_startup(root) is not None:
         return True
 
     # Development-era/portable layouts predate versioned app snapshots. Keep
     # them bootable while refusing a modern install whose versions are all
     # incomplete.
     if (
-        (root / "desktop" / "frontend" / "out" / "index.html").is_file()
+        not (root / "app" / "versions").is_dir()
+        and (root / "desktop" / "frontend" / "out" / "index.html").is_file()
         and (root / "src" / "finesub" / "pipeline.py").is_file()
         and (root / "pyproject.toml").is_file()
     ):
@@ -81,7 +84,7 @@ def _activate_packaged_source() -> None:
     root = _application_root()
     try:
         current = json.loads(
-            (root / "app" / "current.json").read_text(encoding="utf-8")
+            (root / "app" / "current.json").read_text(encoding="utf-8-sig")
         ).get("current")
         versions = (root / "app" / "versions").resolve()
         version_root = (
@@ -112,4 +115,7 @@ if _STARTUP_ALLOWED:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main() if _STARTUP_ALLOWED else 0)
+    raise SystemExit(
+        main(startup_prepared=bool(getattr(sys, "frozen", False)))
+        if _STARTUP_ALLOWED else 0
+    )

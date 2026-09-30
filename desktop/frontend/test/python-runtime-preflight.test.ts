@@ -33,3 +33,13 @@ test("Python preflight choices are localized and explain interpreter reuse", () 
   assert.match(translations.en.resources.confirm.python.checking, /12 seconds/);
   assert.match(translations.en.resources.confirm.python.found, /without downloading/);
 });
+
+
+test("a file-picker error stays visible inside the Python modal without discarding discovery", () => {
+  const manager = read("../components/ResourceManager.tsx");
+  const modal = manager.slice(manager.indexOf('aria-labelledby="resource-confirm-title"'));
+  assert.match(modal, /pythonActionError[\s\S]*role="alert"[\s\S]*pythonActionError/);
+  const choose = manager.slice(manager.indexOf("const choosePythonForInstall"), manager.indexOf("const runStorageMaintenance"));
+  assert.match(choose, /pythonPreflightRequest\.current === requestId/);
+  assert.doesNotMatch(choose, /setPythonPreflight\(null\)/);
+});

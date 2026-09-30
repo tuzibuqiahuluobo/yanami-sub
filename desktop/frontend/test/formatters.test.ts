@@ -6,11 +6,35 @@ import {
   formatCapability,
   formatDuration,
   formatPercent,
+  formatTaskLog,
   formatUpdateSummary,
   invalidOutputName,
   isUrlSource,
   summarizeTaskError,
 } from "../lib/formatters";
+
+
+test("task log lines preserve original event time and multilingual content", () => {
+  const event = {
+    timestamp: "2026-09-30T01:02:03.456Z",
+    payload: { message: "正在识别 Recognition / café / 日本語 ✅\r\n  错误 Error" },
+  };
+  const lines = formatTaskLog(event).split("\n");
+  assert.equal(lines.length, 2);
+  assert.match(lines[0]!, /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.456[+-]\d{2}:\d{2}\] 正在识别 Recognition \/ café \/ 日本語 ✅$/);
+  const prefix = lines[0]!.slice(1, lines[0]!.indexOf("]")).replace(" ", "T");
+  assert.equal(new Date(prefix).getTime(), new Date(event.timestamp).getTime());
+  assert.equal(lines[0]!.slice(0, lines[0]!.indexOf("]") + 1), lines[1]!.slice(0, lines[1]!.indexOf("]") + 1));
+  assert.ok(lines[1]!.endsWith("  错误 Error"));
+  assert.equal(formatTaskLog({ ...event, timestamp: "2026-09-30T01:02:03.456+00:00" }), formatTaskLog(event));
+  assert.equal(event.payload.message, "正在识别 Recognition / café / 日本語 ✅\r\n  错误 Error");
+});
+
+test("invalid timestamps do not throw or retime historical logs", () => {
+  assert.equal(formatTaskLog({ timestamp: "bad", payload: { message: "你好 Hello\nError" } }),
+    "[unknown time] 你好 Hello\n[unknown time] Error");
+  assert.equal(formatTaskLog({ timestamp: "bad", payload: { message: "" } }), "");
+});
 
 
 test("missing translation key is neutral capability copy", () => {

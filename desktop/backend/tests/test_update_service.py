@@ -525,3 +525,29 @@ def test_preview_feed_chooses_highest_version_across_channels(
     assert update_service._fetch_release("owner/project", "all")["tag_name"] == "v0.1.1"
     assert update_service._fetch_release("owner/project", "stable")["tag_name"] == "v0.1.1"
     assert update_service._fetch_release("owner/project", "beta")["tag_name"] == "v0.1.1-rc.9"
+
+
+def test_stable_hotfix_and_rc76_stay_in_their_update_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    feed = [
+        _release("v0.1.1.post1", assets=SIGNED),
+        _release("v0.1.2-rc.7.post6", assets=SIGNED, prerelease=True),
+        _release("v0.1.1", assets=SIGNED),
+        _release("v0.1.2-rc.7.post5", assets=SIGNED, prerelease=True),
+    ]
+
+    monkeypatch.setattr(update_service, "network_routes", lambda: [NetworkRoute("direct", None)])
+    monkeypatch.setattr(
+        update_service,
+        "create_client",
+        lambda *_args, **_kwargs: httpx.Client(
+            transport=httpx.MockTransport(
+                lambda request: httpx.Response(200, json=feed, request=request)
+            )
+        ),
+    )
+
+    assert update_service._fetch_release("owner/project", "stable")["tag_name"] == "v0.1.1.post1"
+    assert update_service._fetch_release("owner/project", "all")["tag_name"] == "v0.1.2-rc.7.post6"
+    assert update_service._fetch_release("owner/project", "beta")["tag_name"] == "v0.1.2-rc.7.post6"

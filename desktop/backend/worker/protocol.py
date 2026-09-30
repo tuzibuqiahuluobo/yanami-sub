@@ -34,6 +34,23 @@ def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def format_log_message(message: str, timestamp: str) -> str:
+    """Prefix every physical log line with its event time, never export time."""
+
+    message = message.rstrip("\r\n")
+    if not message:
+        return ""
+    try:
+        moment = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+        if moment.tzinfo is None:
+            moment = moment.replace(tzinfo=timezone.utc)
+        stamp = moment.astimezone().isoformat(sep=" ", timespec="milliseconds")
+    except (ValueError, OverflowError):
+        stamp = "unknown time"
+    lines = message.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    return "\n".join(f"[{stamp}] {line}" for line in lines)
+
+
 class WorkerEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

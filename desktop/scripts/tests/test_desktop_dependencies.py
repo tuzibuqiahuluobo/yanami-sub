@@ -118,10 +118,10 @@ def test_release_defaults_do_not_promise_future_deltas() -> None:
     )
 
     assert "[string[]]$SupportedFrom = @()" in script
-    for name in ("MinimumLauncherVersion", "MinimumSupportedVersion"):
-        match = re.search(rf'\[string\]\${name} = "([^"]+)"', script)
-        assert match is not None
-        assert Version(match.group(1)) <= version
+    assert '[string]$MinimumLauncherVersion = $Version' in script
+    match = re.search(r'\[string\]\$MinimumSupportedVersion = "([^"]+)"', script)
+    assert match is not None
+    assert Version(match.group(1)) <= version
 
 
 def test_upstream_runtime_keeps_the_verified_tuna_python_route() -> None:

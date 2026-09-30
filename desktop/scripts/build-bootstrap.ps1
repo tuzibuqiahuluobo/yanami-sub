@@ -135,7 +135,7 @@ function New-VersionResource {
         [string]$Version
     )
 
-    if ($Version -notmatch "^(?<core>\d+(?:\.\d+){0,3})(?:-[0-9A-Za-z.-]+)?$") {
+    if ($Version -notmatch "^(?<core>\d+(?:\.\d+){0,3})(?:-[0-9A-Za-z.-]+|\.post\d+)?$") {
         throw "Invalid Yanami Sub release version: $Version"
     }
     $Parts = @($Matches.core.Split(".") | ForEach-Object { [int]$_ })

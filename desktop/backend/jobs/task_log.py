@@ -12,7 +12,7 @@ import os
 from pathlib import Path
 from typing import TextIO
 
-from desktop.backend.worker.protocol import WorkerEvent
+from desktop.backend.worker.protocol import WorkerEvent, format_log_message
 
 
 class TaskLog:
@@ -41,7 +41,9 @@ class TaskLog:
         # the drawer cannot afford but a later diagnosis needs.
         if event.type not in {"log", "debug", "failed"}:
             return
-        message = str(event.payload.get("message", "")).rstrip()
+        message = format_log_message(
+            str(event.payload.get("message", "")), event.timestamp
+        )
         if not message:
             return
         handle = self._open()

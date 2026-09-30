@@ -17,6 +17,40 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.2-rc.7.post6",
+    title: { zh: "RC7.6 · 任务日志与启动兼容性", en: "RC7.6 · Task logs and startup compatibility" },
+    notes: {
+      zh: [
+        "任务日志逐行加入原始事件时间、毫秒与时区；单任务界面、落盘日志和批处理日志均保持中英文内容。",
+        "修复“指定解释器”无法弹出文件选择器；失败提示直接显示在当前弹窗，取消选择不清空已检测的 Python。",
+        "恢复和健康回退会校验启动器与任务引擎的兼容性，避免重装后新请求被旧 worker 拒绝；单任务和批处理使用同一活动版本。",
+        "本版涉及冻结启动器，应用内升级须使用完整更新包；无法启动的旧安装可退出后覆盖安装，保留任务、设置与模型。",
+      ],
+      en: [
+        "Every task log line includes the original event time, milliseconds and UTC offset, preserving multilingual text in the UI and single/batch files.",
+        "Fixes the Python file picker and shows selection errors inside its modal; cancelling keeps the detected interpreter.",
+        "Recovery and health rollback validate launcher/worker compatibility so reinstalls cannot route new requests to an old worker. Tasks and batches share the active version.",
+        "This release changes the frozen launcher and requires a full update. Unbootable installs can be repaired in place without clearing tasks, settings or models.",
+      ],
+    },
+  },
+  {
+    version: "0.1.1.post1",
+    title: { zh: "0.1.1.post1 · 首个正式版热修", en: "0.1.1.post1 · First stable hotfix" },
+    notes: {
+      zh: [
+        "包含 RC7.6 的同一批修复：任务与批处理日志逐行加入时间戳，修复 Python 解释器选择弹窗。",
+        "防止重装与恢复后新启动器调用旧任务引擎；保留字节码缓存完整性误报、更新回滚和系统日志入口的修复。",
+        "正式版用户无需开启预览更新即可收到本版；使用完整更新包，保留任务、设置与模型。",
+      ],
+      en: [
+        "Includes the same fixes as RC7.6: per-line task/batch timestamps and the Python interpreter picker.",
+        "Prevents launcher/worker mismatches after reinstall or recovery, retaining bytecode integrity, update rollback and System Logs fixes.",
+        "Stable users receive this hotfix without opting into previews. The full update preserves tasks, settings and models.",
+      ],
+    },
+  },
+  {
     version: "0.1.2-rc.7.post5",
     title: { zh: "RC7.5 · 更新回滚修复", en: "RC7.5 · Update rollback fix" },
     notes: {

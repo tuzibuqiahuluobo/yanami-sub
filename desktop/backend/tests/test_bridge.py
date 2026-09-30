@@ -321,6 +321,46 @@ def test_bridge_refreshes_python_discovery_for_an_explicit_check(
     assert resources.interpreter_refreshes == [True]
 
 
+def test_cancelled_python_picker_keeps_the_detected_interpreter(tmp_path: Path) -> None:
+    resources = FakeResources()
+    bridge = DesktopBridge(
+        jobs=FakeJobs(), resources=resources,
+        settings=SettingsStore(tmp_path / "user-data"), python_selector=lambda: None,
+    )
+
+    assert bridge.select_python_interpreter() == {"ok": True, "data": {"cancelled": True}}
+    assert resources.configured_interpreters == []
+    assert bridge.get_python_interpreter()["data"]["found"] == "C:/Python312/python.exe"
+
+
+def test_python_picker_saves_only_a_validated_interpreter(tmp_path: Path, monkeypatch) -> None:
+    chosen = tmp_path / "Python312" / "python.exe"
+    resources = FakeResources()
+    bridge = DesktopBridge(
+        jobs=FakeJobs(), resources=resources,
+        settings=SettingsStore(tmp_path / "user-data"), python_selector=lambda: str(chosen),
+    )
+    monkeypatch.setattr(
+        "desktop.backend.launcher.bridge.python_interpreter.probe_interpreter",
+        lambda _path: SimpleNamespace(ok=True, path=chosen, version="3.12.14"),
+    )
+    result = bridge.select_python_interpreter()
+
+    assert result["ok"] is True
+    assert result["data"]["path"] == str(chosen)
+    assert result["data"]["version"] == "3.12.14"
+    assert resources.configured_interpreters == [chosen]
+
+    monkeypatch.setattr(
+        "desktop.backend.launcher.bridge.python_interpreter.probe_interpreter",
+        lambda _path: SimpleNamespace(ok=False, reason="必须是 CPython 3.12 / CPython 3.12 required"),
+    )
+    result = bridge.select_python_interpreter()
+    assert result["ok"] is False
+    assert result["error"]["message"] == "必须是 CPython 3.12 / CPython 3.12 required"
+    assert resources.configured_interpreters == [chosen]
+
+
 def test_only_the_failed_locked_dependency_can_open_its_download_page(
     tmp_path: Path,
 ) -> None:

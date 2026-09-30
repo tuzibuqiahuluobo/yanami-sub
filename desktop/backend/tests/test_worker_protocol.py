@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 import os
 from pathlib import Path
 import subprocess
@@ -11,8 +12,41 @@ from desktop.backend.worker.protocol import (
     WorkerEvent,
     decode_event,
     encode_event,
+    format_log_message,
     parse_worker_line,
 )
+
+
+def test_multiline_task_log_timestamps_keep_the_original_event_time(tmp_path: Path) -> None:
+    stamp = "2026-09-30T01:02:03.456Z"
+    local_stamp = datetime.fromisoformat(stamp.replace("Z", "+00:00")).astimezone().isoformat(
+        sep=" ", timespec="milliseconds",
+    )
+    message = "正在识别 Recognition / café / 日本語 ✅\r\nTraceback:\n  错误 Error"
+    events = [
+        WorkerEvent(type=kind, task_id="task-1", timestamp=stamp, payload={"message": message})
+        for kind in ("log", "debug", "failed")
+    ]
+    log = TaskLog(tmp_path)
+    for event in events:
+        log.append(event)
+    log.finish()
+
+    lines = (tmp_path / "task-log.txt").read_text(encoding="utf-8").splitlines()
+    assert lines == [
+        f"[{local_stamp}] {line}"
+        for _kind in ("log", "debug", "failed")
+        for line in message.replace("\r\n", "\n").split("\n")
+    ]
+    assert all(event.payload["message"] == message for event in events)
+    assert "�" not in "\n".join(lines)
+
+
+def test_an_invalid_or_empty_timestamp_does_not_break_task_logging() -> None:
+    assert format_log_message("你好 Hello\nError", "not-a-date") == (
+        "[unknown time] 你好 Hello\n[unknown time] Error"
+    )
+    assert format_log_message("", "bad") == ""
 
 
 def test_event_round_trip_is_one_json_line() -> None:

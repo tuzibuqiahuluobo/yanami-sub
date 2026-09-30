@@ -15,6 +15,7 @@ import type {
   TaskRequest,
   WorkerEvent,
 } from "./types";
+import { formatTaskLog } from "./formatters";
 
 
 export type TaskPhase =
@@ -287,7 +288,7 @@ function restoreRunningTask(
   }
   const logs = (snapshot.events ?? [])
     .filter((event) => event.type === "log")
-    .map((event) => String(event.payload.message ?? ""))
+    .map(formatTaskLog)
     .filter(Boolean)
     .slice(-200);
   return {
@@ -730,8 +731,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
     };
   }
   if (event.type === "log") {
-    const message =
-      typeof payload.message === "string" ? payload.message : String(payload.message ?? "");
+    const message = formatTaskLog(event);
     return {
       ...state,
       task: {
@@ -783,7 +783,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
         ...state.task,
         phase: "failed",
         stageProgress: null,
-        logs: [...state.task.logs, message].slice(-200),
+        logs: [...state.task.logs, formatTaskLog({ ...event, payload: { message } })].slice(-200),
         error: {
           code: "worker_failed",
           message,

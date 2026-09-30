@@ -16,7 +16,7 @@ from desktop.backend.updater_main import (
 from desktop.backend.updates.installer import REQUIRED_APP_FILES
 
 
-def _write_app_version(version_dir: Path, version: str) -> None:
+def _write_app_version(version_dir: Path, version: str, *, extra_files: tuple[str, ...] = ()) -> None:
     """Lay down a complete app version, DERIVED from the required-file list.
 
     Hand-listing the files here meant that adding a module to the contract
@@ -26,7 +26,7 @@ def _write_app_version(version_dir: Path, version: str) -> None:
 
     bodies = {"pyproject.toml": "[project]"}
     files = {}
-    for relative in REQUIRED_APP_FILES:
+    for relative in REQUIRED_APP_FILES + extra_files:
         if relative == "app-manifest.json":
             continue
         files[relative] = bodies.get(relative, "new").encode("utf-8")
@@ -460,6 +460,54 @@ def test_rc7_missing_agent_module_is_not_selected_on_startup(tmp_path: Path) -> 
         encoding="utf-8",
     )
     assert repair_active_app_version(root) == "1.2.0"
+
+
+def test_reinstall_rejects_a_complete_but_protocol_incompatible_worker(
+    tmp_path: Path,
+) -> None:
+    from desktop.backend.updates.installer import RC7_REQUIRED_MODULES
+    from desktop.backend.updates.recovery import prepare_app_startup
+
+    root = tmp_path / "Yanami Sub"
+    old = "0.1.0-rc.7"
+    new = "0.1.2-rc.7.post6"
+    _write_app_version(root / "app/versions" / old, old, extra_files=RC7_REQUIRED_MODULES)
+    _write_app_version(root / "app/versions" / new, new)
+    (root / "launcher.json").write_text(json.dumps({"appVersion": new}), encoding="utf-8")
+    (root / "app/current.json").write_text(json.dumps({"current": old}), encoding="utf-8")
+    messages: list[str] = []
+
+    assert prepare_app_startup(root, log=messages.append) == new
+    assert json.loads((root / "app/current.json").read_text("utf-8"))["current"] == new
+    assert any(f"{old} -> {new}" in message for message in messages)
+
+
+def test_no_compatible_app_is_safer_than_launching_an_old_worker(tmp_path: Path) -> None:
+    from desktop.backend.updates.recovery import repair_active_app_version
+
+    root = tmp_path / "Yanami Sub"
+    _write_app_version(root / "app/versions/1.0.0", "1.0.0")
+    (root / "launcher.json").write_text('{"appVersion":"1.1.0"}', encoding="utf-8")
+    (root / "app/current.json").write_text('{"current":"1.0.0"}', encoding="utf-8")
+
+    assert repair_active_app_version(root) is None
+    assert json.loads((root / "app/current.json").read_text("utf-8"))["current"] == "1.0.0"
+
+
+def test_a_newer_app_only_update_is_kept_above_the_launcher_baseline(tmp_path: Path) -> None:
+    from desktop.backend.updates.recovery import prepare_app_startup
+
+    root = tmp_path / "Yanami Sub"
+    _write_app_version(root / "app/versions/1.1.0", "1.1.0")
+    _write_app_version(root / "app/versions/1.2.0", "1.2.0")
+    (root / "launcher.json").write_text('{"appVersion":"1.1.0"}', encoding="utf-8")
+    (root / "app/current.json").write_text(
+        '{"current":"1.2.0","previous":"1.1.0","pendingHealth":true,"healthAttempts":0}',
+        encoding="utf-8",
+    )
+
+    assert prepare_app_startup(root) == "1.2.0"
+    assert json.loads((root / "app/current.json").read_text("utf-8"))["healthAttempts"] == 1
 
 
 def test_update_handoff_marker_blocks_only_while_owner_is_live(

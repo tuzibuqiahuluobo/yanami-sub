@@ -36,6 +36,28 @@ RC7_REQUIRED_MODULES = (
 )
 
 
+def app_version_is_compatible(root: Path, version: str) -> bool:
+    """A frozen launcher must not run an app older than its bundled baseline.
+
+    App-only updates may be newer than launcher.json. Full updates replace that
+    file together with the frozen request models, so falling back below its
+    appVersion can send new request fields to an old, strict worker schema.
+    Layouts predating launcher.json have no declared compatibility floor.
+    """
+
+    if not version or version in {".", ".."} or any(char in version for char in "/\\:"):
+        return False
+    config_path = root / "launcher.json"
+    if not config_path.exists():
+        return True
+    try:
+        body = json.loads(config_path.read_text(encoding="utf-8-sig"))
+        baseline = body["appVersion"]
+        return Version(version) >= Version(baseline)
+    except (OSError, ValueError, TypeError, KeyError):
+        return False
+
+
 def validate_app_directory(
     root: Path, *, version: str | None = None, platform: str | None = None
 ) -> None:
@@ -113,6 +135,8 @@ class AppInstaller:
     ) -> PendingSwitch:
         archive_path = archive_path.expanduser().resolve()
         self._verify_archive(archive_path, manifest)
+        if not app_version_is_compatible(self.paths.root, manifest.version):
+            raise ValueError("App update is incompatible with the installed launcher")
         self.paths.app_versions.mkdir(parents=True, exist_ok=True)
         staging = self.paths.app_versions / f"{manifest.version}.staging"
         final = self.paths.app_versions / manifest.version
@@ -205,7 +229,11 @@ class AppInstaller:
             return None
         current = pointer.get("current")
         previous = pointer.get("previous")
-        if not isinstance(previous, str) or not previous:
+        if not isinstance(previous, str) or not app_version_is_compatible(self.paths.root, previous):
+            return None
+        try:
+            validate_app_directory(self.paths.app_versions / previous, version=previous)
+        except (OSError, ValueError, TypeError):
             return None
         self.write_pointer(
             current=previous,
