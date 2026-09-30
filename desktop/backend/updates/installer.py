@@ -52,8 +52,10 @@ def app_version_is_compatible(root: Path, version: str) -> bool:
         return True
     try:
         body = json.loads(config_path.read_text(encoding="utf-8-sig"))
-        baseline = body["appVersion"]
-        return Version(version) >= Version(baseline)
+        baseline, candidate = Version(body["appVersion"]), Version(version)
+        # Channel switches replace the frozen launcher via a full update. A
+        # higher-numbered RC leftover is not a stable hotfix's fallback.
+        return candidate >= baseline and candidate.is_prerelease == baseline.is_prerelease
     except (OSError, ValueError, TypeError, KeyError):
         return False
 

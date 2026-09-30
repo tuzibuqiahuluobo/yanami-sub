@@ -510,6 +510,24 @@ def test_a_newer_app_only_update_is_kept_above_the_launcher_baseline(tmp_path: P
     assert json.loads((root / "app/current.json").read_text("utf-8"))["healthAttempts"] == 1
 
 
+@pytest.mark.parametrize("leftover,installed", [
+    ("0.1.2-rc.7.post5", "0.1.1.post1"),
+    ("0.1.2", "0.1.2-rc.7.post6"),
+])
+def test_recovery_does_not_cross_the_frozen_launchers_release_channel(
+    tmp_path: Path, leftover: str, installed: str,
+) -> None:
+    from desktop.backend.updates.recovery import prepare_app_startup
+
+    root = tmp_path / "Yanami Sub"
+    _write_app_version(root / "app/versions" / leftover, leftover)
+    _write_app_version(root / "app/versions" / installed, installed)
+    (root / "launcher.json").write_text(json.dumps({"appVersion": installed}), encoding="utf-8")
+    (root / "app/current.json").write_text(json.dumps({"current": leftover}), encoding="utf-8-sig")
+
+    assert prepare_app_startup(root) == installed
+
+
 def test_update_handoff_marker_blocks_only_while_owner_is_live(
     tmp_path: Path,
 ) -> None:
