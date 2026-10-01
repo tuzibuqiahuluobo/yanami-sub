@@ -270,6 +270,61 @@ def test_agent_paths_are_saved_per_tier_and_invalid_choices_are_rejected(tmp_pat
     assert bridge.set_agent_path("UNKNOWN", str(cli))["error"]["code"] == "invalid_request"
 
 
+@pytest.mark.parametrize("kind", ["file", "directory"])
+def test_agent_picker_validates_without_running_or_saving(tmp_path, monkeypatch, kind):
+    bridge, _ = _bridge(tmp_path)
+    install = tmp_path / "Agent 安装"
+    install.mkdir()
+    cli = install / "codex.exe"
+    cli.write_bytes(b"not an executable")
+    bridge.agent_file_selector = lambda: str(cli)
+    bridge.directory_selector = lambda: str(install)
+    calls = []
+    monkeypatch.setattr("desktop.backend.launcher.bridge.subprocess.run", lambda *a, **kw: calls.append(a))
+
+    selected = bridge.select_agent_path("LOCAL_CODEX", kind)
+    assert selected == {"ok": True, "data": {"cancelled": False, "path": str((cli if kind == "file" else install).resolve())}}
+    assert bridge.get_agent_paths()["data"]["paths"]["LOCAL_CODEX"] == ""
+    assert calls == []
+
+
+@pytest.mark.parametrize("kind", ["file", "directory"])
+def test_agent_picker_cancel_keeps_the_saved_path(tmp_path, kind):
+    bridge, _ = _bridge(tmp_path)
+    cli = tmp_path / "codex.exe"
+    cli.write_bytes(b"exe")
+    assert bridge.set_agent_path("LOCAL_CODEX", str(cli))["ok"]
+    bridge.agent_file_selector = lambda: None
+    bridge.directory_selector = lambda: None
+    assert bridge.select_agent_path("LOCAL_CODEX", kind) == {"ok": True, "data": {"cancelled": True}}
+    assert bridge.get_agent_paths()["data"]["paths"]["LOCAL_CODEX"] == str(cli.resolve())
+
+
+def test_agent_picker_rejects_unknown_tiers_kinds_and_shell_shims(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    calls = []
+    shim = tmp_path / "codex.cmd"
+    shim.write_text("echo unsafe", encoding="utf-8")
+    bridge.agent_file_selector = lambda: calls.append(True) or str(shim)
+    assert bridge.select_agent_path("UNKNOWN")["error"]["code"] == "invalid_request"
+    assert bridge.select_agent_path("LOCAL_CODEX", "unknown")["error"]["code"] == "invalid_request"
+    assert calls == []
+    assert bridge.select_agent_path("LOCAL_CODEX")["error"]["code"] == "invalid_request"
+    assert calls == [True]
+    assert bridge.get_agent_paths()["data"]["paths"]["LOCAL_CODEX"] == ""
+
+
+def test_agent_picker_unavailable_and_native_error_are_visible(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    assert bridge.select_agent_path("LOCAL_CODEX")["ok"] is False
+
+    def fail():
+        raise RuntimeError("native dialog unavailable")
+
+    bridge.agent_file_selector = fail
+    assert bridge.select_agent_path("LOCAL_CODEX")["ok"] is False
+
+
 def test_workbuddy_login_opens_only_the_selected_official_gui(tmp_path, monkeypatch):
     bridge, _ = _bridge(tmp_path)
     install = tmp_path / "WorkBuddy"
@@ -287,31 +342,50 @@ def test_workbuddy_login_opens_only_the_selected_official_gui(tmp_path, monkeypa
     assert calls == [([str(executable.resolve())], {"cwd": str(install.resolve()), "close_fds": True})]
 
 
-def test_github_feedback_has_no_desktop_api_and_closes_with_main_window(tmp_path, monkeypatch):
+@pytest.mark.parametrize("legacy_browser", [None, False, True])
+def test_github_feedback_always_uses_default_browser_not_an_embedded_window(tmp_path, monkeypatch, legacy_browser):
     import sys
-    from types import SimpleNamespace
-    class Event:
-        def __init__(self): self.callbacks = []
-        def __iadd__(self, callback): self.callbacks.append(callback); return self
     bridge, _ = _bridge(tmp_path)
-    bridge.window = SimpleNamespace(events=SimpleNamespace(closed=Event()))
-    destroyed = []
-    remote = SimpleNamespace(events=SimpleNamespace(before_load=Event()),
-                             get_current_url=lambda: "https://github.com/login",
-                             destroy=lambda: destroyed.append(True))
-    calls = []
-    def create(*args, **kwargs): calls.append((args, kwargs)); return remote
+
+    def create(*_args, **_kwargs):
+        pytest.fail("GitHub feedback must not create an application window")
+
     monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(create_window=create))
-    assert bridge.open_feedback_issue("Bug", "No logs in URL")["ok"] is True
-    assert calls[0][1]["js_api"] is None
-    assert calls[0][0][1].startswith("https://github.com/tuzibuqiahuluobo/yanami-sub/issues/new?")
-    bridge.window.events.closed.callbacks[0]()
-    assert destroyed == [True]
-    calls.clear()
     opened = []
     bridge.url_opener = opened.append
-    assert bridge.open_feedback_issue("Bug", "Details", True)["ok"] is True
-    assert len(opened) == 1 and calls == []
+    args = ("中文 Bug", "重现步骤 & Details") if legacy_browser is None else ("中文 Bug", "重现步骤 & Details", legacy_browser)
+    result = bridge.open_feedback_issue(*args)
+    assert result["ok"] is True
+    assert result["data"] == {"url": opened[0], "opened": True}
+    assert len(opened) == 1
+    from urllib.parse import parse_qs, urlsplit
+    url = urlsplit(opened[0])
+    assert url.scheme == "https" and url.netloc == "github.com"
+    assert url.path == "/tuzibuqiahuluobo/yanami-sub/issues/new"
+    assert parse_qs(url.query)["title"] == ["中文 Bug"]
+    assert "重现步骤 & Details" in parse_qs(url.query)["body"][0]
+
+
+def test_github_feedback_reports_default_browser_open_failure(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    bridge.url_opener = lambda _url: False
+    result = bridge.open_feedback_issue("Bug", "Details")
+    assert result["ok"] is False
+    assert "默认浏览器" in result["error"]["message"]
+
+
+def test_github_feedback_browser_exception_does_not_escape_bridge(tmp_path):
+    bridge, _ = _bridge(tmp_path)
+    reported = []
+    bridge.error_reporter = lambda context, error: reported.append((context, str(error)))
+
+    def fail(_url):
+        raise OSError("Browser launch failed")
+
+    bridge.url_opener = fail
+    result = bridge.open_feedback_issue("Bug", "Details")
+    assert result["ok"] is False
+    assert reported == [("bridge.open_issue", "Browser launch failed")]
 
 
 def test_health_requires_an_explicit_rendered_frontend_ack(tmp_path: Path) -> None:

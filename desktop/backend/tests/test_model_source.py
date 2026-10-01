@@ -16,6 +16,25 @@ from desktop.backend.worker.main import _routing_override
 from desktop.backend.worker.model_source import source_route
 
 
+def test_workbuddy_efficiency_shortcut_is_a_valid_text_only_profile():
+    from finesub.llm.routing.profiles import resolve_profile
+
+    request = TaskRequest(
+        input="视频.mp4", stage="final-srt", llm_source="agent", llm_agent="LOCAL_WORKBUDDY",
+        llm_difficulty="efficiency", llm_retrieval="none", llm_media="text",
+        llm_correction_media="text", llm_planning_media="text", knowledge="none", llm_fast="auto",
+    )
+    profile = resolve_profile(
+        media=request.llm_media, retrieval=request.llm_retrieval, difficulty=request.llm_difficulty,
+        correction_media=request.llm_correction_media, planning_media=request.llm_planning_media,
+    )
+    assert profile.external_injection is False
+    assert profile.native_search is False
+    assert profile.correction_media == profile.planning_media == "text"
+    assert request.knowledge == "none"
+    assert request.llm_fast == "auto"
+
+
 @pytest.mark.parametrize("tier,group", [("LOCAL_DSH", "dsh-capable"), ("LOCAL_WORKBUDDY", "workbuddy-capable")])
 def test_manual_text_only_route_adapts_both_axes_and_restores_overlay(tier, group):
     from finesub.llm.routing.model_routes import runtime_preferred

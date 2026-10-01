@@ -89,7 +89,8 @@ def test_health_report_format_summary():
     summary = report.format_summary()
     assert "LOCAL_DSH" in summary
     assert "LOCAL_AGY" in summary
-    assert "可用" in summary
+    assert "CLI 就绪" in summary
+    assert "登录、模型权限与额度未验证" in summary
     assert "不可用" in summary
 
 

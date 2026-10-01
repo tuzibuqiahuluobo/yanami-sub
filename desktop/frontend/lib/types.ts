@@ -716,6 +716,7 @@ export interface DesktopApi {
   getDshPath(): Promise<{ path: string }>;
   setDshPath(path: string): Promise<{ path: string }>;
   getAgentPaths(): Promise<{ paths: Record<string, string> }>;
+  selectAgentPath(tier: string, kind: "file" | "directory"): Promise<{ cancelled: boolean; path?: string }>;
   setAgentPath(tier: string, path: string): Promise<{ path: string }>;
   getKnowledgeSnapshot(): Promise<KnowledgeSnapshot>;
   getKnowledgeEntry(name: string, rev?: number | null): Promise<KnowledgeEntryDocument>;

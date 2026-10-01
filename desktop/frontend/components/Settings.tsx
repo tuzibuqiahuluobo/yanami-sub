@@ -233,6 +233,21 @@ export function Settings({
       setAgentPathBusy("");
     }
   };
+  const chooseAgentPath = async (tier: string, kind: "file" | "directory") => {
+    setAgentPathBusy(tier);
+    setAgentPathError((current) => ({ ...current, [tier]: "" }));
+    try {
+      const selected = await desktopApi.selectAgentPath(tier, kind);
+      const path = selected.path;
+      if (!selected.cancelled && path) {
+        setAgentPaths((current) => ({ ...current, [tier]: path }));
+      }
+    } catch (error) {
+      setAgentPathError((current) => ({ ...current, [tier]: error instanceof Error ? error.message : t.settings.routing.dshPathFailed }));
+    } finally {
+      setAgentPathBusy("");
+    }
+  };
   useEffect(() => {
     setRoutingDraft(toRoutingDraft());
   }, [routing]);
@@ -854,21 +869,25 @@ export function Settings({
                 <span>{t.settings.routing.dshPath}</span><ChevronDown size={16} aria-hidden="true" className={agentPathsOpen ? "is-open" : ""} />
               </button>
               <div id="agent-path-list" className="agent-path-list" hidden={!agentPathsOpen}>
-              <p className="field-help">{t.settings.routing.dshPathHint}</p>
+              <p className="field-help" id="agent-path-selection-hint">{language === "en" ? "Select a supported CLI file or its installation folder, then save. Only your selected CLI is checked; no other drives are scanned." : "选择受支持的 CLI 文件或安装目录后保存。仅检查选定的 CLI，不扫描其他磁盘。"}</p>
               {agentStatuses?.some((agent) => agent.detected_path) ? <p className="field-help">{t.settings.routing.detectedPathHint}</p> : null}
               {agentTiers.map((tier) => <div className="agent-path-card" key={tier}>
                 <label className="field">
                   <span>{tier.replace(/^LOCAL_/, "")}</span>
                   <input
                     value={agentPaths[tier] ?? ""}
-                    onChange={(event) => setAgentPaths((current) => ({ ...current, [tier]: event.target.value }))}
-                    placeholder={t.settings.routing.dshPathPlaceholder}
+                    readOnly
+                    title={agentPaths[tier] ?? ""}
+                    aria-describedby="agent-path-selection-hint"
+                    placeholder={language === "en" ? "Select a CLI file or installation folder below" : "点击下方按钮选择 CLI 文件或安装目录"}
                     spellCheck={false}
                     disabled={Boolean(agentPathBusy)}
                   />
                 </label>
                 <div className="agent-path-actions">
-                  <button type="button" className="button button-secondary button-compact" disabled={Boolean(agentPathBusy)} onClick={() => void saveAgentPath(tier, agentPaths[tier] ?? "")}>{t.settings.routing.dshPathSave}</button>
+                  <button type="button" className="button button-secondary button-compact" aria-label={`${tier.replace(/^LOCAL_/, "")} ${language === "en" ? "select CLI file" : "选择 CLI 文件"}`} disabled={Boolean(agentPathBusy)} onClick={() => void chooseAgentPath(tier, "file")}><FolderOpen size={14} aria-hidden="true" />{language === "en" ? "Select CLI file" : "选择 CLI 文件"}</button>
+                  <button type="button" className="button button-secondary button-compact" aria-label={`${tier.replace(/^LOCAL_/, "")} ${language === "en" ? "select folder" : "选择安装目录"}`} disabled={Boolean(agentPathBusy)} onClick={() => void chooseAgentPath(tier, "directory")}>{language === "en" ? "Select folder" : "选择安装目录"}</button>
+                  <button type="button" className="button button-secondary button-compact" disabled={Boolean(agentPathBusy) || !agentPaths[tier]} onClick={() => void saveAgentPath(tier, agentPaths[tier] ?? "")}>{t.settings.routing.dshPathSave}</button>
                   <button type="button" className="button button-secondary button-compact" disabled={Boolean(agentPathBusy) || !agentPaths[tier]} onClick={() => void saveAgentPath(tier, "")}>{t.settings.routing.dshPathClear}</button>
                 </div>
                 {agentPathError[tier] ? <p className="routing-error" role="alert">{agentPathError[tier]}</p> : null}
@@ -903,7 +922,7 @@ export function Settings({
                   {agentStatuses.map((agent) => (
                     <div className="agent-status-row" key={agent.provider_tier}>
                       <div><strong>{agent.provider_tier}</strong><small>{agent.driver || agent.models.join(", ")}</small></div>
-                      <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{t.settings.routing.agentStatus[agent.status]}</span>
+                      <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{agent.status === "ready" ? (language === "en" ? "CLI ready" : "CLI 就绪") : t.settings.routing.agentStatus[agent.status]}</span>
                       <small title={agent.detail}>{agent.version || agent.detail}</small>
                       {agent.status !== "ready" ? <small className="agent-status-help">{agent.status === "missing" ? t.settings.routing.agentMissingHelp : t.settings.routing.agentBrokenHelp}</small> : <small className="agent-status-help">{language === "en" ? "CLI available; login, model access and quota are not verified." : "CLI 可用；登录状态、模型权限与额度尚未验证。"}</small>}
                     </div>

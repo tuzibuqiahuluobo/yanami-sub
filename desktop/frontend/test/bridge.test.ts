@@ -92,6 +92,38 @@ test("browser preview keeps custom Agent paths separate by tier", async () => {
   assert.equal(paths.LOCAL_CODEX, "");
 });
 
+test("browser preview cancels native Agent selection without changing paths", async () => {
+  const api = createDesktopApi({ preview: true });
+  await api.setAgentPath("LOCAL_CODEX", "D:/Agent/codex.exe");
+  assert.deepEqual(await api.selectAgentPath("LOCAL_CODEX", "file"), { cancelled: true });
+  assert.deepEqual(await api.selectAgentPath("LOCAL_CODEX", "directory"), { cancelled: true });
+  assert.equal((await api.getAgentPaths()).paths.LOCAL_CODEX, "D:/Agent/codex.exe");
+});
+
+test("Agent path picker forwards tier and file/directory kind to native bridge", async () => {
+  const previousWindow = globalThis.window;
+  const calls: unknown[][] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { search: "" },
+      pywebview: { api: { select_agent_path: async (...args: unknown[]) => {
+        calls.push(args);
+        return { ok: true, data: { cancelled: false, path: "D:/Agent/codex.exe" } };
+      } } },
+    },
+  });
+  try {
+    const api = createDesktopApi({ preview: false });
+    assert.equal((await api.selectAgentPath("LOCAL_CODEX", "file")).path, "D:/Agent/codex.exe");
+    await api.selectAgentPath("LOCAL_WORKBUDDY", "directory");
+    assert.deepEqual(calls, [["LOCAL_CODEX", "file"], ["LOCAL_WORKBUDDY", "directory"]]);
+  } finally {
+    if (previousWindow === undefined) Reflect.deleteProperty(globalThis, "window");
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
+
 
 test("browser preview round-trips a static batch manifest", async () => {
   const api = createDesktopApi({ preview: true });
@@ -300,6 +332,36 @@ test("installUpdate forwards kind and version to the native bridge", async () =>
   }
 });
 
+
+test("GitHub feedback requests the default browser and allows retry after a launch failure", async () => {
+  const previousWindow = globalThis.window;
+  const calls: unknown[][] = [];
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: {
+      location: { search: "" },
+      pywebview: {
+        api: {
+          open_feedback_issue: async (...args: unknown[]) => {
+            calls.push(args);
+            return calls.length === 1
+              ? { ok: false, error: { code: "invalid_request", message: "无法打开系统默认浏览器" } }
+              : { ok: true, data: { url: "https://github.com/tuzibuqiahuluobo/yanami-sub/issues/new", opened: true } };
+          },
+        },
+      },
+    },
+  });
+  try {
+    const api = createDesktopApi();
+    await assert.rejects(() => api.openFeedbackIssue("中文 Bug", "Details"), /默认浏览器/);
+    assert.equal((await api.openFeedbackIssue("中文 Bug", "Details")).opened, true);
+    assert.deepEqual(calls, [["中文 Bug", "Details", true], ["中文 Bug", "Details", true]]);
+  } finally {
+    if (previousWindow === undefined) Reflect.deleteProperty(globalThis, "window");
+    else Object.defineProperty(globalThis, "window", { configurable: true, value: previousWindow });
+  }
+});
 
 test("browser preview refuses to install rather than pretending to", async () => {
   const api = createDesktopApi({ preview: true });

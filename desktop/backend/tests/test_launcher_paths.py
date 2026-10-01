@@ -298,6 +298,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "get_dsh_path",
         "set_dsh_path",
         "get_agent_paths",
+        "select_agent_path",
         "set_agent_path",
         "get_knowledge_snapshot",
         "get_knowledge_entry",

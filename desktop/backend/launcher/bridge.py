@@ -135,6 +135,7 @@ class DesktopBridge:
         directory_selector: Callable[[], str | None] | None = None,
         key_export_selector: Callable[[], str | None] | None = None,
         python_selector: Callable[[], str | None] | None = None,
+        agent_file_selector: Callable[[], str | None] | None = None,
         knowledge: Any | None = None,
         output_opener: Callable[[Path], None] | None = None,
         url_opener: Callable[[str], Any] | None = None,
@@ -163,6 +164,7 @@ class DesktopBridge:
         self.directory_selector = directory_selector
         self.key_export_selector = key_export_selector
         self.python_selector = python_selector
+        self.agent_file_selector = agent_file_selector
         self.knowledge = knowledge or KnowledgeService(
             settings.user_data / "knowledge",
             lambda: self.jobs.worker_context,
@@ -1192,6 +1194,22 @@ class DesktopBridge:
             paths["LOCAL_DSH"] = ui["dshPath"]
         return _success({"paths": paths})
 
+    def select_agent_path(self, tier: str, kind: str = "file") -> dict[str, Any]:
+        """Choose and validate a supported CLI without executing or saving it."""
+        def choose() -> dict[str, Any]:
+            if tier not in LOCAL_AGENT_TIERS or kind not in {"file", "directory"}:
+                raise ValueError("不支持的 Agent 或路径选择方式。")
+            selector = self.agent_file_selector if kind == "file" else self.directory_selector
+            if selector is None:
+                raise ValueError("当前窗口无法打开路径选择器。 / Path picker unavailable.")
+            selected = selector()
+            if not selected:
+                return {"cancelled": True}
+            path, _command = validated_agent_path(tier, selected)
+            return {"cancelled": False, "path": path}
+
+        return self._guard(choose)
+
     def set_agent_path(self, tier: str, path: str) -> dict[str, Any]:
         def save() -> dict[str, str]:
             if tier not in LOCAL_AGENT_TIERS:
@@ -1425,29 +1443,13 @@ class DesktopBridge:
             return {"path": str(self._diagnostic_path)}
         return self._guard(reveal)
 
-    def open_feedback_issue(self, title: str = "", description: str = "", browser: bool = False) -> dict[str, Any]:
+    def open_feedback_issue(self, title: str = "", description: str = "", browser: bool = True) -> dict[str, Any]:
         def open_issue():
             url = feedback.issue_url(title, description, self.app_version)
-            if browser:
-                self.url_opener(url)
-            else:
-                import webview
-                # Remote GitHub must NEVER receive the main window's desktop API.
-                window = webview.create_window("Yanami Sub · GitHub Issues", url,
-                                               width=1000, height=760, js_api=None)
-                def restrict_navigation():
-                    from urllib.parse import urlsplit
-                    current = window.get_current_url()
-                    if current and current != "about:blank" and urlsplit(current).scheme != "https":
-                        window.destroy()
-                window.events.before_load += restrict_navigation
-                if self.window is not None:
-                    def close_feedback():
-                        try:
-                            window.destroy()
-                        except Exception:
-                            pass  # Already closed by the user.
-                    self.window.events.closed += close_feedback
+            # Keep the old third argument for cached frontends, but never create
+            # a second WebView or handle GitHub login inside the application.
+            if self.url_opener(url) is False:
+                raise ValueError("无法打开系统默认浏览器，请检查默认浏览器设置后重试。 / Could not open the default browser; check its system settings and retry.")
             return {"url": url, "opened": True}
         return self._guard(open_issue)
 

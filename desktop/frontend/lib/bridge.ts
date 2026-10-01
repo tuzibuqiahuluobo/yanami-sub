@@ -687,6 +687,10 @@ function previewApi(): DesktopApi {
         LOCAL_DSH: String((preferences.ui.agentPaths as Record<string, string> | undefined)?.LOCAL_DSH ?? preferences.ui.dshPath ?? ""),
       } };
     },
+    async selectAgentPath() {
+      // Browser previews have no native filesystem picker or trusted CLI.
+      return { cancelled: true };
+    },
     async setAgentPath(tier, path) {
       const paths = { ...((preferences.ui.agentPaths as Record<string, string> | undefined) ?? {}) };
       if (path) paths[tier] = path;
@@ -1042,6 +1046,7 @@ function nativeApi(): DesktopApi {
     getDshPath: () => call("get_dsh_path"),
     setDshPath: (path) => call("set_dsh_path", path),
     getAgentPaths: () => call("get_agent_paths"),
+    selectAgentPath: (tier, kind) => call("select_agent_path", tier, kind),
     setAgentPath: (tier, path) => call("set_agent_path", tier, path),
     getKnowledgeSnapshot: () => call("get_knowledge_snapshot"),
     getKnowledgeEntry: (name, rev = null) =>
@@ -1077,7 +1082,7 @@ function nativeApi(): DesktopApi {
     openTaskLogLocation: (identifier) => call("open_task_log_location", identifier),
     collectFeedbackLogs: (selected) => call<DiagnosticPackage>("collect_feedback_logs", selected),
     openFeedbackReport: () => call("open_feedback_report"),
-    openFeedbackIssue: (title = "", description = "", browser = false) => call("open_feedback_issue", title, description, browser),
+    openFeedbackIssue: (title = "", description = "", browser = true) => call("open_feedback_issue", title, description, browser),
     openOutput: (path) => call<{ path: string }>("open_output", path),
     minimizeWindow: () => call("minimize_window"),
     minimizeToTray: () => call("minimize_to_tray"),

@@ -32,9 +32,9 @@ export function Feedback() {
     return () => { active = false; };
   }, []);
   const update = (patch: Partial<typeof draft>) => { const next = { ...draft, ...patch }; setDraft(next); saveUi({ feedbackDraft: next }); };
-  const open = (browser: boolean) => run(async () => {
-    await desktopApi.openFeedbackIssue(draft.title, draft.description, browser);
-    setNotice(en ? "GitHub opened. Review and submit there; no Issue has been submitted by the app." : "已打开 GitHub，请在该页面检查并提交；应用尚未替你提交 Issue。");
+  const open = () => run(async () => {
+    await desktopApi.openFeedbackIssue(draft.title, draft.description);
+    setNotice(en ? "GitHub opened in your default browser. Sign in, review and submit there; the app has not submitted an Issue." : "已在系统默认浏览器打开 GitHub，请登录后检查并提交；应用尚未替你提交 Issue。");
   });
   return <div className="page feedback-page">
     <header className="page-header"><div><h1>{en ? "Feedback" : "反馈"}</h1><p>{en ? "Report bugs or ideas through GitHub Issues." : "通过 GitHub Issues 反馈问题或建议。"}</p></div></header>
@@ -42,8 +42,8 @@ export function Feedback() {
       <h2>{en ? "Describe the issue" : "描述问题"}</h2>
       <label className="field"><span>{en ? "Title" : "标题"}</span><input maxLength={100} value={draft.title} onChange={(event) => update({ title: event.target.value })} placeholder={en ? "What went wrong?" : "遇到了什么问题？"} /></label>
       <label className="field"><span>{en ? "Steps, expected result and actual result" : "重现步骤、预期结果与实际结果"}</span><textarea rows={6} maxLength={12000} value={draft.description} onChange={(event) => update({ description: event.target.value })} /></label>
-      <p className="field-help">{en ? "GitHub requires your own account. Its native form supports Markdown, screenshots and video attachments. Only a short summary is prefilled; copy a longer description below." : "需登录你自己的 GitHub 账号。原生表单支持 Markdown、截图及视频附件。仅预填短摘要；较长描述请复制后粘贴。"}</p>
-      <div className="feedback-actions"><button type="button" className="button button-primary" disabled={busy} onClick={() => void open(false)}>{en ? "New GitHub Issue" : "新建 GitHub Issue"}</button><button type="button" className="button button-secondary" disabled={busy} onClick={() => void open(true)}>{en ? "Continue in browser" : "在浏览器继续"}</button><button type="button" className="button button-secondary" disabled={busy || !draft.description} onClick={() => void run(async () => { await navigator.clipboard.writeText(draft.description); setNotice(en ? "Description copied." : "已复制完整描述。"); })}>{en ? "Copy description" : "复制完整描述"}</button></div>
+      <p className="field-help">{en ? "Opens your system default browser; sign in to your own GitHub account there. GitHub's native form supports Markdown, screenshots and video attachments. Only a short summary is prefilled; copy a longer description below." : "将打开系统默认浏览器，请在浏览器中登录你自己的 GitHub 账号。GitHub 原生表单支持 Markdown、截图及视频附件。仅预填短摘要；较长描述请复制后粘贴。"}</p>
+      <div className="feedback-actions"><button type="button" className="button button-primary" disabled={busy} onClick={() => void open()}>{en ? "New GitHub Issue" : "新建 GitHub Issue"}</button><button type="button" className="button button-secondary" disabled={busy || !draft.description} onClick={() => void run(async () => { await navigator.clipboard.writeText(draft.description); setNotice(en ? "Description copied." : "已复制完整描述。"); })}>{en ? "Copy description" : "复制完整描述"}</button></div>
       <p className="field-help">{en ? "If GitHub is unreachable, check your network or enable a proxy that can reach GitHub, then retry. The app does not change your proxy." : "无法连接 GitHub 时，请检查网络；仍无法反馈，建议开启可访问 GitHub 的代理再试。应用不会修改系统代理。"}</p>
     </section>
     <section className="settings-section">
