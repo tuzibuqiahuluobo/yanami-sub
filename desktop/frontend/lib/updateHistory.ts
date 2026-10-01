@@ -17,6 +17,50 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.2-rc.7.post8",
+    title: { zh: "RC7.8 · 浏览器反馈与 WorkBuddy 快速流程", en: "RC7.8 · Browser feedback and WorkBuddy quick workflow" },
+    notes: {
+      zh: [
+        "反馈页新建 GitHub Issue 统一使用系统默认浏览器，不再弹出应用内 GitHub 窗口；保留草稿、描述预填及本地脱敏诊断包，附件由用户检查后手动上传。",
+        "Agent 自选安装路径新增系统文件和目录选择器；取消不清空，选择后校验，保存才固定使用。检测结果明确区分 CLI 就绪与尚未验证的登录、模型权限、额度。",
+        "优化外观与音效设置的主题开关、音量条、键盘操作及窄窗口布局；默认音效启用、音量 50%。",
+        "WorkBuddy 新增主动选择的快速流程，新建任务和批处理共用：纯文本效率模式、关闭联网调查和知识库处理；不改变所选模型、并发或窗口预算检查。",
+        "设置底部可浏览任务日志，完成页显示真实字幕与日志位置；任务、批处理、下载完成提示音不为失败或跳过播放成功音效。",
+        "本版采用完整更新包；正式版须开启预览更新才接收本 RC。快速配置减少额外流程，真实耗时尚未重跑对比。",
+      ],
+      en: [
+        "GitHub feedback opens in the system default browser instead of an embedded window. Drafts, prefilled summaries and local redacted diagnostic packages remain; review and upload attachments yourself.",
+        "Agent paths use native file/folder pickers; cancel keeps the path and saving makes it persistent. CLI readiness is clearly distinct from unverified login, model access and quota.",
+        "Theme-aware sound switches, volume controls, keyboard access and narrow-window layout. Sounds remain enabled at 50% volume by default.",
+        "An opt-in WorkBuddy quick workflow is shared by tasks and batches: text/efficiency without web research or knowledge-base work. Model choice, concurrency and window budget checks stay unchanged.",
+        "Browse task logs from Settings; completion views show real subtitle/log locations. Failure and skipped correction do not play success sounds.",
+        "Uses a full update. Stable installs must opt into previews to receive this RC. The quick preset reduces extra work; real model timing has not been re-benchmarked.",
+      ],
+    },
+  },
+  {
+    version: "0.1.1.post3",
+    title: { zh: "0.1.1.post3 · 反馈、音效与 Agent 设置", en: "0.1.1.post3 · Feedback, sounds and Agent settings" },
+    notes: {
+      zh: [
+        "反馈页新建 GitHub Issue 统一使用系统默认浏览器，不再弹出应用内 GitHub 窗口；保留草稿、描述预填及本地脱敏诊断包，附件由用户检查后手动上传。",
+        "Agent 自选安装路径新增系统文件和目录选择器；取消不清空，选择后校验，保存才固定使用。检测结果明确区分 CLI 就绪与尚未验证的登录、模型权限、额度。",
+        "优化外观与音效设置的主题开关、音量条、键盘操作及窄窗口布局；默认音效启用、音量 50%。",
+        "WorkBuddy 新增主动选择的快速流程，新建任务和批处理共用：纯文本效率模式、关闭联网调查和知识库处理；不改变所选模型、并发或窗口预算检查。",
+        "设置底部可浏览任务日志，完成页显示真实字幕与日志位置；任务、批处理、下载完成提示音不为失败或跳过播放成功音效。",
+        "正式版纳入此前 RC7.7 的反馈、音效和日志浏览功能；默认只接收正式更新，本版采用完整更新包。",
+      ],
+      en: [
+        "GitHub feedback opens in the system default browser instead of an embedded window. Drafts, prefilled summaries and local redacted diagnostic packages remain; review and upload attachments yourself.",
+        "Agent paths use native file/folder pickers; cancel keeps the path and saving makes it persistent. CLI readiness is clearly distinct from unverified login, model access and quota.",
+        "Theme-aware sound switches, volume controls, keyboard access and narrow-window layout. Sounds remain enabled at 50% volume by default.",
+        "An opt-in WorkBuddy quick workflow is shared by tasks and batches: text/efficiency without web research or knowledge-base work. Model choice, concurrency and window budget checks stay unchanged.",
+        "Browse task logs from Settings; completion views show real subtitle/log locations. Failure and skipped correction do not play success sounds.",
+        "Promotes RC7.7 feedback, sounds and log browsing to stable. Stable-only updates remain the default; this release uses a full update.",
+      ],
+    },
+  },
+  {
     version: "0.1.2-rc.7.post7",
     title: { zh: "RC7.7 · 启动修复、日志与反馈", en: "RC7.7 · Startup fixes, logs and feedback" },
     notes: {
