@@ -17,6 +17,26 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.1.post2",
+    title: { zh: "0.1.1.post2 · 启动与 Agent 可靠性", en: "0.1.1.post2 · Startup and Agent reliability" },
+    notes: {
+      zh: [
+        "修复正常 Numba 编译缓存与中断的字节码临时缓存导致再次启动误报安装损坏；新的编译缓存统一写入大数据目录。",
+        "启动校验失败也会写入应用日志；仍严格校验源文件、前端资源与真实损坏。",
+        "限制重复启动；重复点击唤回已有窗口，正常重启和更新交接仍可用。",
+        "单任务与批处理共同适配纯文本 Agent 的媒体能力；WorkBuddy 未登录不再反复当作瞬时故障，设置内提供官方客户端登录入口。",
+        "本版须使用完整更新包；无法启动的用户请退出后覆盖安装，保留任务、模型和设置。",
+      ],
+      en: [
+        "Normal Numba caches and interrupted bytecode writes no longer cause false installation-damaged errors. New JIT caches use the managed data directory.",
+        "Startup rejection is logged while source and frontend integrity checks remain strict.",
+        "Duplicate launches activate the existing window; restart and updater handoffs remain supported.",
+        "Tasks and batches adapt media routes for text-only Agents. WorkBuddy login failures stop transient retries and offer the official desktop login entry.",
+        "Requires a full update. Unbootable installs can be repaired in place without deleting tasks, models or settings.",
+      ],
+    },
+  },
+  {
     version: "0.1.1.post1",
     title: { zh: "0.1.1.post1 · 首个正式版热修", en: "0.1.1.post1 · First stable hotfix" },
     notes: {
