@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 import ctypes
 from dataclasses import replace
 import json
@@ -20,7 +21,9 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import threading
+import time
 
 
 COMMANDS_ENV = "YANAMI_SUB_LOCAL_AGENT_COMMANDS"
@@ -28,6 +31,43 @@ LOCAL_AGENT_TIERS = ("LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "L
 _PATCH_MARKER = "_yanami_sub_command_overrides"
 _ERROR_MODE_LOCK = threading.Lock()
 LOGGER = logging.getLogger(__name__)
+_PROBE_CONTEXT = ContextVar("yanami_agent_probe", default=None)
+
+
+class _ProbeSubprocess:
+    """Adapt only FineSub's CLI probes, never the shared subprocess module."""
+
+    def __getattr__(self, name):
+        return getattr(subprocess, name)
+
+    def run(self, *args, **kwargs):
+        context = _PROBE_CONTEXT.get()
+        if context is not None:
+            deadline, cancel = context
+            remaining = deadline - time.monotonic()
+            if remaining <= 0 or (cancel is not None and cancel.is_set()):
+                raise subprocess.TimeoutExpired(args[0], 0)
+            kwargs["timeout"] = min(kwargs.get("timeout") or 15, 15, remaining)
+            kwargs.setdefault("stdin", subprocess.DEVNULL)
+            if os.name == "nt":
+                kwargs["creationflags"] = kwargs.get("creationflags", 0) | subprocess.CREATE_NO_WINDOW
+        return subprocess.run(*args, **kwargs)
+
+
+@contextmanager
+def bounded_agent_probe(deadline: float, cancel: threading.Event | None = None):
+    # The pinned core has no probe-process injection seam. A module-local
+    # facade plus thread-local context leaves task and interactive calls alone.
+    from finesub.llm.agent import local_agent
+
+    if not isinstance(local_agent.subprocess, _ProbeSubprocess):
+        local_agent.subprocess = _ProbeSubprocess()
+    token = _PROBE_CONTEXT.set((deadline, cancel))
+    try:
+        with suppress_windows_child_error_dialogs():
+            yield
+    finally:
+        _PROBE_CONTEXT.reset(token)
 
 
 def _split_path(value: str) -> Iterator[Path]:

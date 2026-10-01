@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import json
 import os
+import threading
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
@@ -29,7 +32,7 @@ from desktop.backend.settings.config_file import update_config_file
 from desktop.backend.settings.local_agents import (
     COMMANDS_ENV,
     configure_local_agents,
-    suppress_windows_child_error_dialogs,
+    bounded_agent_probe,
 )
 
 
@@ -57,6 +60,9 @@ class SettingsStore:
     def __init__(self, user_data: Path) -> None:
         self.user_data = user_data.expanduser().resolve()
         self.env_path = self.user_data / ".env"
+        self._agent_probe_lock = threading.Lock()
+        self._agent_probe_results: list[LocalAgentStatus] | None = None
+        self._agent_probe_generation = 0
 
     def get_capabilities(self) -> CapabilityState:
         keys = self._read_keys()
@@ -694,7 +700,24 @@ class SettingsStore:
         default_model_routes.cache_clear()
         return self.routing_settings()
 
-    def probe_local_agents(self) -> list[LocalAgentStatus]:
+    def probe_local_agents(
+        self, *, progress: Callable[[str], None] | None = None,
+        cancel: threading.Event | None = None,
+    ) -> list[LocalAgentStatus]:
+        generation = self._agent_probe_generation
+        with self._agent_probe_lock:
+            # Coalesce concurrent requests; an explicit later scan is fresh.
+            if self._agent_probe_generation != generation and self._agent_probe_results is not None:
+                return list(self._agent_probe_results)
+            results = self._probe_local_agents(progress=progress, cancel=cancel)
+            self._agent_probe_results = results
+            self._agent_probe_generation += 1
+            return list(results)
+
+    def _probe_local_agents(
+        self, *, progress: Callable[[str], None] | None,
+        cancel: threading.Event | None,
+    ) -> list[LocalAgentStatus]:
         """Probe installed CLIs only; never spend an API/subscription call."""
 
         # Refresh the inherited desktop PATH and resolve supported source/npm
@@ -725,17 +748,26 @@ class SettingsStore:
             first_target.setdefault(fact.provider_tier, target_id)
 
         statuses: list[LocalAgentStatus] = []
-        for tier, row in sorted(grouped.items()):
+        deadline = time.monotonic() + 60
+        for index, (tier, row) in enumerate(sorted(grouped.items()), 1):
+            if cancel is not None and cancel.is_set():
+                break
+            label = tier.removeprefix("LOCAL_")
+            if progress is not None:
+                progress(f"正在检测 {label}（{index}/{len(grouped)}），请稍后…")
+            started = time.monotonic()
             fact = routes.target_fact(first_target[tier])
             command = commands.get(tier, ())
             command_detail = " ".join(command)
             try:
+                if started >= deadline:
+                    raise TimeoutError("本轮 Agent 检测已达到 60 秒上限，可在设置中重新检测。")
                 driver = driver_for_provider_tier(
                     execution,
                     provider_tier=tier,
                     model=fact.api_model_id,
                 )
-                with suppress_windows_child_error_dialogs():
+                with bounded_agent_probe(deadline, cancel):
                     probe = driver.probe()
                     if not probe.available:
                         status = probe.failure_kind or "broken"
@@ -786,6 +818,9 @@ class SettingsStore:
                         detail=f"{type(error).__name__}: {error}",
                     )
                 )
+            if progress is not None:
+                state = {"ready": "可用", "missing": "未安装", "broken": "运行异常", "unusable": "能力不满足", "error": "检测失败"}.get(statuses[-1].status, "检测结束")
+                progress(f"{label}：{state}，耗时 {time.monotonic() - started:.1f} 秒")
         return statuses
 
     def _write_keys(self, updates: dict[str, str | None]) -> None:

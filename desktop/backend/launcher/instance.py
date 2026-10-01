@@ -26,6 +26,7 @@ class InstanceGuard:
         self._owned = False
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+        self._window = None
         self._kernel = None
         self._mutex = self._event = None
         if os.name != "nt":
@@ -65,6 +66,7 @@ class InstanceGuard:
         raise ctypes.WinError(ctypes.get_last_error())
 
     def bind_window(self, window) -> None:
+        self._window = window
         if self._kernel is None or self._thread is not None:
             return
 
@@ -73,6 +75,7 @@ class InstanceGuard:
                 if self._kernel.WaitForSingleObject(self._event, 500) != 0:
                     continue
                 try:
+                    window = self._window
                     shown = getattr(getattr(window, "events", None), "shown", None)
                     if shown is not None:
                         shown.wait(10)

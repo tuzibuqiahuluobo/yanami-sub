@@ -132,22 +132,33 @@ def run() -> int:
     except Exception:
         session = SessionLog.disabled()
     session.write("bootstrap starting; ownership acquired")
+    from desktop.backend.launcher.startup import StartupCancelled, StartupWindow
+
+    startup = StartupWindow(session.write)
     try:
+        startup.start()
+        instance.bind_window(startup)
+        startup.update("正在检查安装文件，请稍后…")
         if not _preflight_packaged_install(log=session.write):
             session.finish("startup rejected before app import")
             return 0
+        startup.check_cancelled()
         # Frozen GUI imports do not need to write into the immutable snapshot.
         if getattr(sys, "frozen", False):
             sys.dont_write_bytecode = True
         _activate_packaged_source()
         from desktop.backend.launcher.main import main
 
-        return main(instance=instance, session=session, startup_prepared=bool(getattr(sys, "frozen", False)))
+        return main(instance=instance, session=session, startup_prepared=bool(getattr(sys, "frozen", False)), startup=startup)
+    except StartupCancelled:
+        session.finish("startup cancelled")
+        return 0
     except BaseException as error:
         session.exception("bootstrap", error)
         session.finish("bootstrap failed")
         raise
     finally:
+        startup.close()
         session.close()
         instance.close()
 

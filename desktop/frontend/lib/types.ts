@@ -584,6 +584,7 @@ export interface BootstrapState {
   app_version: string;
   system_logs_path?: string;
   startup_update_issue?: string;
+  startup_agent_statuses?: LocalAgentStatus[] | null;
   resources: ResourceStatus[];
   resource_installs: ResourceInstallSnapshot[];
   capabilities: CapabilityState;

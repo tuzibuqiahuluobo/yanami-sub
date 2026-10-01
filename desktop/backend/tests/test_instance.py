@@ -81,3 +81,21 @@ def test_instance_domain_is_shared_by_stable_and_preview_installs(tmp_path, monk
     first = instance_domain()
     monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path / "Preview"))
     assert instance_domain() == first == tmp_path / "FineSub" / "user-data"
+
+
+def test_activation_handoff_targets_main_window_not_the_closed_startup(tmp_path):
+    guard = InstanceGuard(tmp_path)
+    old_activated, new_activated = threading.Event(), threading.Event()
+    try:
+        assert guard.acquire()
+        guard.bind_window(SimpleNamespace(show=lambda: None, restore=old_activated.set))
+        guard.bind_window(SimpleNamespace(show=lambda: None, restore=new_activated.set))
+        # Windows mutex ownership is thread-specific, so use another process.
+        process = child(tmp_path, "print(g.acquire()); g.close()")
+        output, error = process.communicate(timeout=10)
+        assert process.returncode == 0, error
+        assert output.strip() == "False"
+        assert new_activated.wait(5)
+        assert not old_activated.is_set()
+    finally:
+        guard.close()

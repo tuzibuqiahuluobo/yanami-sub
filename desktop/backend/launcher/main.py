@@ -22,6 +22,7 @@ from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobManager
 from desktop.backend.launcher.bridge import DesktopBridge
 from desktop.backend.launcher.session_log import SessionLog
+from desktop.backend.launcher.startup import StartupCancelled, StartupWindow
 from desktop.backend.launcher.instance import InstanceGuard, RESTART_WAIT_ENV, acquire_instance
 from desktop.backend.launcher.tray import TrayController
 from desktop.backend.resources import gpus, install_log, python_interpreter
@@ -860,6 +861,7 @@ def create_application(
     session: SessionLog | None = None,
     *,
     startup_prepared: bool = False,
+    startup: StartupWindow | None = None,
 ) -> tuple[Any, DesktopBridge, bool]:
     import webview
 
@@ -903,6 +905,25 @@ def create_application(
         paths,
         development_python=Path(sys.executable) if development else None,
     )
+    startup_agent_statuses = None
+    if startup is not None:
+        try:
+            startup.check_cancelled()
+            startup.update("正在检测本地 Agent，请稍后…")
+            try:
+                startup_agent_statuses = settings.probe_local_agents(
+                    progress=startup.update, cancel=startup.cancelled,
+                )
+            except Exception as error:
+                session.exception("startup Agent detection", error)
+                startup_agent_statuses = []
+            startup.check_cancelled()
+            startup.update("检测已结束，正在打开主界面…")
+        except StartupCancelled:
+            resources.install_manager.shutdown()
+            jobs.shutdown()
+            batches.shutdown()
+            raise
     updates = None if development else load_update_service(paths)
     bridge = DesktopBridge(
         jobs=jobs,
@@ -919,12 +940,15 @@ def create_application(
         error_reporter=session.exception,
         app_version=resolve_app_version(paths),
         startup_update_issue=startup_update_issue,
+        startup_agent_statuses=startup_agent_statuses,
     )
     session.write(
         f"version={resolve_app_version(paths)} root={paths.root} "
         f"development={development}"
     )
-    window = webview.create_window(PRODUCT_NAME, frontend_url, **window_options())
+    window = webview.create_window(PRODUCT_NAME, frontend_url, **{
+        **window_options(), "hidden": startup is not None,
+    })
     bridge.window = window
     bridge.relauncher = lambda: relaunch_application(window)
     tray_icon_path = (
@@ -947,6 +971,16 @@ def create_application(
 
     bridge.health_confirmation = confirm_health
     window.events.loaded += lambda *_args: tray.start()
+    if startup is not None:
+        def finish_startup(*_args: object) -> None:
+            if startup.cancelled.is_set():
+                window.destroy()
+                return
+            startup.close()
+            window.show()
+            session.write("startup checks complete; main window shown")
+
+        window.events.loaded += finish_startup
 
     def on_closed(*_args: Any) -> None:
         # The one exit that leaves a trace. Minimising to the tray does not
@@ -1067,7 +1101,7 @@ def create_application(
     return window, bridge, development
 
 
-def _run_application(instance: InstanceGuard, *, startup_prepared: bool = False, session: SessionLog | None = None) -> int:
+def _run_application(instance: InstanceGuard, *, startup_prepared: bool = False, session: SessionLog | None = None, startup: StartupWindow | None = None) -> int:
     import webview
 
     # Opened first: a start-up that dies in `create_application` is precisely
@@ -1083,10 +1117,15 @@ def _run_application(instance: InstanceGuard, *, startup_prepared: bool = False,
             print(f"Warning: cannot open the session log: {error}", file=sys.stderr)
             session = SessionLog.disabled()
     session.write("starting")
+    if startup is None:
+        startup = StartupWindow(session.write)
+        startup.start()
+        instance.bind_window(startup)
     phase = "startup"
     try:
         install_frozen_pywebview_win32()
-        window, _, development = create_application(session, startup_prepared=startup_prepared)
+        startup.update("正在准备运行环境，请稍后…")
+        window, _, development = create_application(session, startup_prepared=startup_prepared, startup=startup)
         instance.bind_window(window)
         phase = "run"
         webview.start(
@@ -1095,6 +1134,9 @@ def _run_application(instance: InstanceGuard, *, startup_prepared: bool = False,
             gui="edgechromium",
             debug=development,
         )
+    except StartupCancelled:
+        session.finish("startup cancelled")
+        return 0
     except BaseException as error:
         # BaseException, not Exception: a Windows shutdown arrives as
         # KeyboardInterrupt, and "the machine went down" is exactly the kind of
@@ -1102,18 +1144,20 @@ def _run_application(instance: InstanceGuard, *, startup_prepared: bool = False,
         session.exception(phase, error)
         session.finish("exited with an error")
         raise
+    finally:
+        startup.close()
     session.finish("exited normally")
     return 0
 
 
-def main(*, startup_prepared: bool = False, instance: InstanceGuard | None = None, session: SessionLog | None = None) -> int:
+def main(*, startup_prepared: bool = False, instance: InstanceGuard | None = None, session: SessionLog | None = None, startup: StartupWindow | None = None) -> int:
     owned_here = instance is None
     if instance is None:
         instance = acquire_instance()
     if instance is None:
         return 0
     try:
-        return _run_application(instance, startup_prepared=startup_prepared, session=session)
+        return _run_application(instance, startup_prepared=startup_prepared, session=session, startup=startup)
     finally:
         if owned_here:
             instance.close()

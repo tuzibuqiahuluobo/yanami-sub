@@ -151,6 +151,8 @@ def _check_agent_tier(tier: str, command: str | list) -> AgentStatus:
             errors="replace",
             timeout=10,
             check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
+            stdin=subprocess.DEVNULL,
         )
 
         if result.returncode == 0:
