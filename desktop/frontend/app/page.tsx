@@ -264,7 +264,11 @@ function HomeContent() {
       maybeCheckForUpdates(payload.app_version);
       if (!startupAgentProbeFired.current) {
         startupAgentProbeFired.current = true;
-        void probeAgents().catch(() => undefined);
+        if (payload.startup_agent_statuses != null) {
+          setAgentStatuses(payload.startup_agent_statuses);
+        } else {
+          void probeAgents().catch(() => undefined);
+        }
       }
     } catch (error) {
       setBootstrapError(toBridgeError(error));

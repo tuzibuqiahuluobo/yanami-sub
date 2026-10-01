@@ -146,6 +146,7 @@ class DesktopBridge:
         health_confirmation: Callable[[], None] | None = None,
         app_version: str = "development",
         startup_update_issue: str = "",
+        startup_agent_statuses: list | None = None,
     ) -> None:
         self.jobs = jobs
         self.batches = batches
@@ -178,6 +179,7 @@ class DesktopBridge:
         self.health_confirmation = health_confirmation
         self.app_version = app_version
         self.startup_update_issue = startup_update_issue
+        self.startup_agent_statuses = startup_agent_statuses
         self._diagnostic_path: Path | None = None
         saved_route = self._stored_download_route()
         if saved_route is not None:
@@ -194,6 +196,7 @@ class DesktopBridge:
                     else ""
                 ),
                 "startup_update_issue": self.startup_update_issue,
+                "startup_agent_statuses": self.startup_agent_statuses,
                 "resources": self.resources.check_all(),
                 "resource_installs": (
                     self.resource_installs.list()

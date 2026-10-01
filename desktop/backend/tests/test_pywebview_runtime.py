@@ -10,8 +10,8 @@ import pytest
 from desktop.backend.launcher.main import choose_agent_file, choose_python_interpreter, install_frozen_pywebview_win32
 
 
-def test_frozen_win32_source_is_registered_as_pywebview_platform() -> None:
-    root = Path(__file__).resolve().parents[3] / "dist" / f"win32-load-{os.getpid()}"
+def test_frozen_win32_source_is_registered_as_pywebview_platform(tmp_path) -> None:
+    root = tmp_path / "win32-load"
     source = root / "win32.py"
     source.parent.mkdir(parents=True, exist_ok=True)
     source.write_text("MARKER = 'loaded-from-source'\n", encoding="utf-8")

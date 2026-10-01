@@ -272,8 +272,8 @@ def test_failed_health_check_restores_previous_version(tmp_path: Path) -> None:
     assert installer.read_pointer()["pendingHealth"] is False
 
 
-def test_pointer_reader_accepts_utf8_bom() -> None:
-    root = Path(__file__).resolve().parents[3] / "dist" / f"bom-test-{os.getpid()}"
+def test_pointer_reader_accepts_utf8_bom(tmp_path) -> None:
+    root = tmp_path / "bom-test"
     try:
         paths = AppPaths.for_root(root / "FineSub")
         installer = AppInstaller(paths)
