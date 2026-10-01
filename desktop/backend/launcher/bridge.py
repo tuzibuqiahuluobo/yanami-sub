@@ -34,6 +34,8 @@ from desktop.backend.settings.local_agents import (
     LOCAL_AGENT_TIERS, configure_local_agents, validated_agent_path, workbuddy_desktop_path,
 )
 from desktop.backend.settings.store import SettingsStore
+from desktop.backend.launcher import feedback
+from finesub_bootstrap import secrets
 
 
 LOGGER = logging.getLogger(__name__)
@@ -174,6 +176,7 @@ class DesktopBridge:
         self.health_confirmation = health_confirmation
         self.app_version = app_version
         self.startup_update_issue = startup_update_issue
+        self._diagnostic_path: Path | None = None
         saved_route = self._stored_download_route()
         if saved_route is not None:
             self._apply_download_route(saved_route)
@@ -1366,6 +1369,87 @@ class DesktopBridge:
             return {"url": url}
 
         return self._guard(open_page)
+
+    def _task_logs_root(self) -> Path:
+        value = self._storage_state().get("tasks")
+        if not value:
+            raise ValueError("Task directory is unavailable")
+        return Path(value)
+
+    def list_task_logs(self, query: str = "", offset: int = 0) -> dict[str, Any]:
+        def read():
+            if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+                raise ValueError("Invalid page")
+            rows = [row for row in feedback.log_catalog(self._task_logs_root())
+                    if query[:100].casefold() in row["name"].casefold()]
+            return {"items": rows[offset:offset + 25], "total": len(rows)}
+        return self._guard(read)
+
+    def open_task_log_location(self, identifier: str) -> dict[str, Any]:
+        def reveal():
+            root = self._task_logs_root()
+            rows = {row["id"]: row for row in feedback.log_catalog(root)}
+            if identifier not in rows:
+                raise ValueError("Task directory not found; refresh the list")
+            folder = feedback.safe_path(root, identifier)
+            log_path = rows[identifier]["log_path"]
+            target = feedback.safe_path(root, Path(log_path).relative_to(root).as_posix()) if log_path else folder
+            self.output_opener(target)
+            return {"path": str(target)}
+        return self._guard(reveal)
+
+    def collect_feedback_logs(self, selected: list[str]) -> dict[str, Any]:
+        def collect():
+            if not isinstance(selected, list):
+                raise ValueError("Invalid log selection")
+            runtime = getattr(self.resources, "runtime", None)
+            root = getattr(getattr(runtime, "paths", None), "root", self.settings.user_data)
+            log_dir = getattr(self.resource_installs, "log_dir", None) or self.settings.user_data / "logs"
+            values = self.settings._read_keys()
+            secret_values = [entry for value in values.values() for _, entry in secrets.iter_entries(value)]
+            result = feedback.collect_diagnostics(
+                tasks=self._task_logs_root(), logs=Path(log_dir), updates=Path(root) / ".update",
+                destination=self.settings.user_data / "diagnostics", selected=selected,
+                version=self.app_version, secrets=secret_values,
+                private_roots=[Path.home(), self.settings.user_data, self._task_logs_root(), Path(root)],
+            )
+            self._diagnostic_path = Path(result["path"])
+            return result
+        return self._guard(collect)
+
+    def open_feedback_report(self) -> dict[str, Any]:
+        def reveal():
+            if self._diagnostic_path is None or not self._diagnostic_path.is_file():
+                raise ValueError("Generate a diagnostic package first")
+            self.output_opener(self._diagnostic_path)
+            return {"path": str(self._diagnostic_path)}
+        return self._guard(reveal)
+
+    def open_feedback_issue(self, title: str = "", description: str = "", browser: bool = False) -> dict[str, Any]:
+        def open_issue():
+            url = feedback.issue_url(title, description, self.app_version)
+            if browser:
+                self.url_opener(url)
+            else:
+                import webview
+                # Remote GitHub must NEVER receive the main window's desktop API.
+                window = webview.create_window("Yanami Sub · GitHub Issues", url,
+                                               width=1000, height=760, js_api=None)
+                def restrict_navigation():
+                    from urllib.parse import urlsplit
+                    current = window.get_current_url()
+                    if current and current != "about:blank" and urlsplit(current).scheme != "https":
+                        window.destroy()
+                window.events.before_load += restrict_navigation
+                if self.window is not None:
+                    def close_feedback():
+                        try:
+                            window.destroy()
+                        except Exception:
+                            pass  # Already closed by the user.
+                    self.window.events.closed += close_feedback
+            return {"url": url, "opened": True}
+        return self._guard(open_issue)
 
     def open_tasks_directory(self, task_id: str = "") -> dict[str, Any]:
         """Reveal user-data/tasks, or one task's folder inside it.

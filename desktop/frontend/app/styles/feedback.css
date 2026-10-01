@@ -1,0 +1,21 @@
+.sound-settings { margin: 24px 0 0; border: 0; padding: 20px 0 0; border-top: 1px solid var(--border); min-width: 0; }
+.sound-settings legend { font-weight: 650; padding: 0 8px 0 0; }
+.sound-events, .feedback-actions, .log-browser-filter { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+.sound-settings .field { max-width: 360px; margin: 16px 0; }
+.task-log-browser details { margin-top: 20px; }
+.task-log-browser summary, .feedback-report summary { cursor: pointer; padding: 12px 0; font-weight: 600; }
+.log-location-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 0; border-bottom: 1px solid var(--border); }
+.log-location-row > div { min-width: 0; }
+.log-location-row small, .log-location-row code { display: block; margin-top: 6px; overflow-wrap: anywhere; color: var(--muted); }
+.feedback-page { max-width: 1000px; }
+.feedback-page .field { margin: 18px 0; }
+.feedback-log-list { max-height: 320px; overflow: auto; margin: 16px 0; }
+.feedback-log-list .switch-row { padding: 8px 0; }
+.feedback-log-list span { overflow-wrap: anywhere; }
+.feedback-report pre { background: var(--panel-subtle); padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 12px; font-size: 13px; }
+.result-path { display: block; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; color: var(--muted); margin-top: 6px; }
+.result-location { padding: 20px; }
+.result-location .button { margin-top: 12px; }
+.toast-message { overflow-wrap: anywhere; }
+.toast-notice .toast-status-icon { color: var(--warning); }
+@media (max-width: 700px) { .log-location-row { align-items: flex-start; flex-direction: column; } }

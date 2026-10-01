@@ -68,7 +68,7 @@ export function BatchQueue({
   apiKeys,
   onOpenSettings,
 }: BatchQueueProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showSuccess } = useToast();
   const [items, setItems] = useState<BatchItemRequest[]>([]);
   const [urlDraft, setUrlDraft] = useState("");
@@ -81,15 +81,6 @@ export function BatchQueue({
   const [retryFailed, setRetryFailed] = useState(1);
   const [manifestBusy, setManifestBusy] = useState(false);
   const [manifestNotice, setManifestNotice] = useState("");
-  const previousBatchState = useRef<BatchSnapshot["state"] | null>(null);
-
-  useEffect(() => {
-    const previous = previousBatchState.current;
-    if (previous === "running" && snapshot?.state === "completed") {
-      showSuccess(t.toast.batchCompleted, `batch-completed-${snapshot.batch_id}`);
-    }
-    previousBatchState.current = snapshot?.state ?? null;
-  }, [showSuccess, snapshot?.batch_id, snapshot?.state, t.toast.batchCompleted]);
 
   const appendSources = (incoming: string[]) => {
     const device = requestDeviceFields(readProcessingDevice());
@@ -484,6 +475,7 @@ export function BatchQueue({
                 <div className="batch-item-main">
                   <strong>{item.label}</strong>
                   <small title={item.skip_reason || item.input}>{item.error || item.skip_reason || (item.stage ? `${t.batch.stage}: ${item.stage}` : item.input)}</small>
+                  {item.state === "done" ? <><code className="result-path">{Object.values(item.outputs).join("\n")}</code><code className="result-path">{snapshot.log_path}</code><button type="button" className="button button-secondary button-compact" onClick={() => void desktopApi.openBatchLog(snapshot.batch_id)}>{language === "en" ? "Shared batch log" : "共享批次日志"}</button></> : null}
                 </div>
                 <span className={`resource-label is-${item.correction_skipped ? "advisory" : item.state === "done" ? "ready" : item.state === "failed" ? "failed" : "neutral"}`}>
                   {item.correction_skipped ? <><X size={12} />{t.batch.correctionSkipped}</> : t.batch.itemStates[item.state]}

@@ -17,6 +17,36 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.2-rc.7.post7",
+    title: { zh: "RC7.7 · 启动修复、日志与反馈", en: "RC7.7 · Startup fixes, logs and feedback" },
+    notes: {
+      zh: [
+        "修复 Numba JIT 缓存导致次日启动误报安装损坏，缓存迁出版本目录；源码缺失、篡改与链接仍严格校验。",
+        "增加单实例与重复启动唤醒，改善 WorkBuddy 登录失效提示及官方客户端登录入口，修复单任务/批处理手动路由一致性。",
+        "设置底部可查看任务日志；任务/批次完成显示结果与真实日志位置。",
+        "外观中新增完成音效，默认启用、音量 50%；失败或跳过不播放成功音效。",
+        "新增 GitHub Issues 反馈页与本机脱敏诊断包；附件须用户检查后手动上传，不自动发送凭据、媒体或字幕。",
+        "须使用完整更新包以同步修复冻结启动器。无法启动的旧版请退出后覆盖安装，保留设置、任务与模型。",
+      ],
+      en: [
+        "Fixes false installation-damage reports from Numba JIT caches; moves caches outside version folders while preserving source integrity checks.",
+        "Adds single-instance activation, WorkBuddy login repair guidance and consistent manual routing for tasks and batches.",
+        "Browse task logs from Settings; completed tasks/batches show output and actual log locations.",
+        "Completion sounds are enabled at 50% volume by default; failures and skipped correction do not play success sounds.",
+        "GitHub Issues feedback with local redacted diagnostic ZIPs. Review and upload attachments yourself; credentials, media and subtitles are excluded.",
+        "Requires a full launcher update. Exit and install in place if the previous version cannot start; settings, tasks and models are preserved.",
+      ],
+    },
+  },
+  {
+    version: "0.1.1.post2",
+    title: { zh: "0.1.1.post2 · 启动与路由修复", en: "0.1.1.post2 · Startup and routing fixes" },
+    notes: {
+      zh: ["修复 Numba 缓存完整性误报、重复启动冲突、WorkBuddy 登录失效分类及手动路由一致性；以完整包更新。"],
+      en: ["Fixes Numba cache integrity false positives, repeated launches, WorkBuddy login classification and manual routing consistency; uses a full update."],
+    },
+  },
+  {
     version: "0.1.2-rc.7.post6",
     title: { zh: "RC7.6 · 任务日志与启动兼容性", en: "RC7.6 · Task logs and startup compatibility" },
     notes: {

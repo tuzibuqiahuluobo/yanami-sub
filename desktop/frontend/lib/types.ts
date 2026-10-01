@@ -4,6 +4,7 @@ export type Route =
   | "history"
   | "knowledge"
   | "resources"
+  | "feedback"
   | "settings";
 
 export type PipelineStage =
@@ -635,6 +636,11 @@ export interface UpdateInstallSnapshot {
 }
 
 export interface DesktopApi {
+  listTaskLogs(query?: string, offset?: number): Promise<{ items: TaskLogLocation[]; total: number }>;
+  openTaskLogLocation(identifier: string): Promise<{ path: string }>;
+  collectFeedbackLogs(selected: string[]): Promise<DiagnosticPackage>;
+  openFeedbackReport(): Promise<{ path: string }>;
+  openFeedbackIssue(title?: string, description?: string, browser?: boolean): Promise<{ url: string; opened: boolean }>;
   getBootstrapState(): Promise<BootstrapState>;
   confirmAppHealth(): Promise<unknown>;
   getDiagnostics(): Promise<DiagnosticsReport>;
@@ -754,4 +760,20 @@ export interface DesktopApi {
   closeWindow(): Promise<unknown>;
   restartApplication(): Promise<unknown>;
   setWindowChrome(background: string, foreground: string): Promise<unknown>;
+}
+
+export interface TaskLogLocation {
+  id: string;
+  name: string;
+  path: string;
+  log_path: string;
+  modified: number;
+  batch: boolean;
+}
+
+export interface DiagnosticPackage {
+  path: string;
+  report: string;
+  files: number;
+  size: number;
 }

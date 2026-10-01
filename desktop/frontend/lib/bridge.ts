@@ -20,6 +20,8 @@ import type {
   RevealedApiKeys,
   TaskRequest,
   UpdateInstallSnapshot,
+  TaskLogLocation,
+  DiagnosticPackage,
 } from "./types";
 
 
@@ -847,6 +849,23 @@ function previewApi(): DesktopApi {
     async openTasksDirectory() {
       return { path: "C:\\Yanami Sub\\tasks" };
     },
+    async listTaskLogs() {
+      return { items: [], total: 0 };
+    },
+    async openTaskLogLocation(identifier) {
+      return { path: identifier };
+    },
+    async collectFeedbackLogs() {
+      return { path: "preview-diagnostics.zip", report: "Browser preview: no local logs collected.", files: 0, size: 0 };
+    },
+    async openFeedbackReport() {
+      return { path: "preview-diagnostics.zip" };
+    },
+    async openFeedbackIssue(title = "", description = "") {
+      const url = "https://github.com/tuzibuqiahuluobo/yanami-sub/issues/new?" + new URLSearchParams({ title, body: description });
+      window.open(url, "_blank", "noopener,noreferrer");
+      return { url, opened: true };
+    },
     async openOutput(path) {
       return { path };
     },
@@ -1054,6 +1073,11 @@ function nativeApi(): DesktopApi {
       call<{ url: string }>("open_external_url", url),
     openTasksDirectory: (taskId = "") =>
       call<{ path: string }>("open_tasks_directory", taskId),
+    listTaskLogs: (query = "", offset = 0) => call<{ items: TaskLogLocation[]; total: number }>("list_task_logs", query, offset),
+    openTaskLogLocation: (identifier) => call("open_task_log_location", identifier),
+    collectFeedbackLogs: (selected) => call<DiagnosticPackage>("collect_feedback_logs", selected),
+    openFeedbackReport: () => call("open_feedback_report"),
+    openFeedbackIssue: (title = "", description = "", browser = false) => call("open_feedback_issue", title, description, browser),
     openOutput: (path) => call<{ path: string }>("open_output", path),
     minimizeWindow: () => call("minimize_window"),
     minimizeToTray: () => call("minimize_to_tray"),

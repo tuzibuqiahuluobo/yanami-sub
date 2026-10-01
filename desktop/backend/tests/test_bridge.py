@@ -287,6 +287,33 @@ def test_workbuddy_login_opens_only_the_selected_official_gui(tmp_path, monkeypa
     assert calls == [([str(executable.resolve())], {"cwd": str(install.resolve()), "close_fds": True})]
 
 
+def test_github_feedback_has_no_desktop_api_and_closes_with_main_window(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    class Event:
+        def __init__(self): self.callbacks = []
+        def __iadd__(self, callback): self.callbacks.append(callback); return self
+    bridge, _ = _bridge(tmp_path)
+    bridge.window = SimpleNamespace(events=SimpleNamespace(closed=Event()))
+    destroyed = []
+    remote = SimpleNamespace(events=SimpleNamespace(before_load=Event()),
+                             get_current_url=lambda: "https://github.com/login",
+                             destroy=lambda: destroyed.append(True))
+    calls = []
+    def create(*args, **kwargs): calls.append((args, kwargs)); return remote
+    monkeypatch.setitem(sys.modules, "webview", SimpleNamespace(create_window=create))
+    assert bridge.open_feedback_issue("Bug", "No logs in URL")["ok"] is True
+    assert calls[0][1]["js_api"] is None
+    assert calls[0][0][1].startswith("https://github.com/tuzibuqiahuluobo/yanami-sub/issues/new?")
+    bridge.window.events.closed.callbacks[0]()
+    assert destroyed == [True]
+    calls.clear()
+    opened = []
+    bridge.url_opener = opened.append
+    assert bridge.open_feedback_issue("Bug", "Details", True)["ok"] is True
+    assert len(opened) == 1 and calls == []
+
+
 def test_health_requires_an_explicit_rendered_frontend_ack(tmp_path: Path) -> None:
     bridge, _jobs = _bridge(tmp_path)
     confirmed: list[bool] = []

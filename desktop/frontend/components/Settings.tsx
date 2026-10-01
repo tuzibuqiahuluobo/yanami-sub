@@ -54,6 +54,8 @@ import { runInterfaceTransition } from "@/lib/viewTransition";
 
 import { ApiKeyField } from "./ApiKeyField";
 import { WorkBuddyRepairDialog } from "./WorkBuddyRepairDialog";
+import { SoundSettings } from "./SoundSettings";
+import { TaskLogBrowser } from "./TaskLogBrowser";
 import { CustomSelect } from "./CustomSelect";
 import { useLanguage } from "./LanguageProvider";
 import { UpdateSection, type UpdateSectionProps } from "./UpdateSection";
@@ -294,7 +296,7 @@ export function Settings({
       <section className="settings-section">
         <div className="settings-section-heading">
           <div>
-            <h2>{t.settings.appearance.title}</h2>
+            <h2>{language === "en" ? "Appearance and sounds" : "外观与音效"}</h2>
             <p>{t.settings.appearance.description}</p>
           </div>
         </div>
@@ -386,6 +388,7 @@ export function Settings({
             </button>
           </div>
         </div>
+        <SoundSettings />
       </section>
 
       <section className="settings-section">
@@ -1089,6 +1092,7 @@ export function Settings({
         {logsError ? <p className="api-key-error" role="alert">{logsError}</p> : null}
       </section>
 
+      <TaskLogBrowser tasksPath={state.storage.tasks} />
       {docsOpen ? (
         <div className="dialog-overlay" onClick={() => setDocsOpen(false)}>
           <article
