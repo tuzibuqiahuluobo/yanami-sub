@@ -1291,7 +1291,8 @@ def test_export_task_log_copies_complete_disk_file(tmp_path) -> None:
     assert manager.export_task_log(task.task_id, destination) == destination.resolve()
     saved = (manager.task_directory(task.task_id) / "task-log.txt").read_bytes()
     assert destination.read_bytes() == saved, "export must not retime log lines"
-    assert saved.decode("utf-8").endswith("] working\n")
+    assert "] working\n" in saved.decode("utf-8")
+    assert saved.decode("utf-8").endswith(f"Task log: {manager.task_directory(task.task_id) / 'task-log.txt'}\n")
     with pytest.raises((ValueError, JobNotFound)):
         manager.export_task_log("../other", destination)
 
@@ -1433,7 +1434,8 @@ def test_the_task_log_keeps_lines_the_event_deque_drops(tmp_path) -> None:
     ).read_text(encoding="utf-8")
     assert "line 0" in written, "the deque dropped it; the file must not"
     assert "line 49" in written
-    assert len(written.splitlines()) == 50
+    assert len(written.splitlines()) == 51
+    assert written.endswith(f"Task log: {tmp_path / 'tasks' / snapshot.task_id / 'task-log.txt'}\n")
 
 
 def test_debug_detail_reaches_the_file_but_not_the_drawer(tmp_path) -> None:

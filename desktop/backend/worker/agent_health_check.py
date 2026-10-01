@@ -64,7 +64,7 @@ class AgentHealthReport:
 
         parts = []
         if available:
-            parts.append(f"可用：{', '.join(available)}")
+            parts.append(f"CLI 就绪：{', '.join(available)}（登录、模型权限与额度未验证）")
         if unavailable:
             parts.append(f"不可用：{', '.join(unavailable)}")
 
@@ -77,7 +77,7 @@ class AgentHealthReport:
 
         lines = ["本地 Agent 健康检查："]
         for status in self.statuses:
-            state = "✓ 可用" if status.available else "✗ 不可用"
+            state = "✓ CLI 就绪（账号未验证）" if status.available else "✗ 不可用"
             line = f"  {status.tier}: {state}"
             if status.reason:
                 line += f" ({status.reason})"
@@ -89,12 +89,13 @@ class AgentHealthReport:
 
 
 def _check_agent_tier(tier: str, command: str | list) -> AgentStatus:
-    """Check if one agent tier is actually usable.
+    """Check whether one agent CLI is runnable, not its account entitlement.
 
     Runs a lightweight health check command to verify:
     - The CLI executable exists and is runnable
     - The CLI can respond to basic commands
-    - No obvious configuration issues (missing auth, disabled provider, etc.)
+    Account errors are classified only if this command happens to report them.
+    A successful version command does not verify login, models or quota.
     """
 
     if not command:

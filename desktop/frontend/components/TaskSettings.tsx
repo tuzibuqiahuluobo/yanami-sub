@@ -31,6 +31,18 @@ interface TaskSettingsProps {
 
 type SettingsTab = "speech" | "llm";
 
+// Opt-in shortcut for the existing upstream efficiency flow, shared by single
+// tasks and batches. Keep budget gating automatic; never force one big window.
+export const WORKBUDDY_QUICK_SETTINGS = {
+  llm_difficulty: "efficiency",
+  llm_retrieval: "none",
+  llm_media: "text",
+  llm_correction_media: "text",
+  llm_planning_media: "text",
+  knowledge: "none",
+  llm_fast: "auto",
+} as const satisfies Partial<TaskRequest>;
+
 
 function optionalBooleanValue(value: boolean | null | undefined): string {
   if (value === true) return "on";
@@ -74,6 +86,11 @@ export function TaskSettings({
   );
   const selectedRoute =
     request.llm_model.find((value) => !value.includes("=")) ?? "";
+  const workBuddySelected = (source === "agent" && request.llm_agent === "LOCAL_WORKBUDDY") ||
+    (source === "manual" && selectedRoute.startsWith("local-workbuddy-"));
+  const workBuddyQuickActive = Object.entries(WORKBUDDY_QUICK_SETTINGS).every(
+    ([key, value]) => request[key as keyof typeof WORKBUDDY_QUICK_SETTINGS] === value,
+  );
   const agentBackends = new Set(["local_agent", "conversational_agent"]);
   const routeOptions = [
     { value: "", label: t.newTask.settings.llmRouteAuto },
@@ -307,6 +324,16 @@ export function TaskSettings({
               <small className="field-help">{t.newTask.settings.llmRouteHint}</small>
               <small className="field-help">{language === "en" ? "If any fallback candidate cannot process audio/video, correction and planning use text; local speech recognition is unaffected." : "如回退候选不能全部处理音频/视频，纠错与规划会改用纯文本；本地语音识别不受影响。"}</small>
             </div> : null}
+            {translationSelected && workBuddySelected ? (
+              <div className="field field-wide task-route-field">
+                <strong>{language === "en" ? "WorkBuddy quick workflow" : "WorkBuddy 快速流程"}</strong>
+                <small className="field-help">{language === "en" ? "Keep correction and translation; use text/efficiency mode without web research or knowledge-base processing. This reduces extra calls, but context and terminology checks may be less thorough. Model choice, concurrency and budget checks are unchanged." : "保留纠错翻译，使用纯文本效率模式，关闭联网调查和知识库处理。可减少额外调用，但背景与术语校验可能减少；不更换模型、不提高并发，保留窗口预算检查。"}</small>
+                <button type="button" className="button button-secondary button-compact" disabled={disabled || workBuddyQuickActive}
+                  onClick={() => onChange(WORKBUDDY_QUICK_SETTINGS)}>
+                  {workBuddyQuickActive ? (language === "en" ? "Quick settings applied" : "已应用快速设置") : (language === "en" ? "Apply quick settings" : "应用快速设置")}
+                </button>
+              </div>
+            ) : null}
             <label className="field field-wide">
               <span>{t.newTask.settings.extraInfo}</span>
               <textarea

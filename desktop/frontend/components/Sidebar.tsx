@@ -9,6 +9,7 @@ import {
   Plus,
   Settings2,
   Download,
+  MessageSquare,
 } from "lucide-react";
 
 import { isInstallActive } from "@/lib/resources";
@@ -45,7 +46,7 @@ export function Sidebar({
   updateAvailable,
   onNavigate,
 }: SidebarProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const navigation: Array<{
     route: Route;
@@ -58,6 +59,7 @@ export function Sidebar({
     { route: "knowledge", label: t.sidebar.knowledge, icon: BookOpenText },
     { route: "resources", label: t.sidebar.resources, icon: Boxes },
     { route: "settings", label: t.sidebar.settings, icon: Settings2 },
+    { route: "feedback", label: language === "en" ? "Feedback" : "反馈", icon: MessageSquare },
   ];
   const activeIndex = Math.max(
     0,

@@ -4,6 +4,10 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 
 import { AppShell } from "@/components/AppShell";
 import { BatchQueue } from "@/components/BatchQueue";
+import { BatchCompletionObserver } from "@/components/BatchCompletionObserver";
+import { Feedback } from "@/components/Feedback";
+import { playNotification } from "@/lib/notificationSound";
+import { preferredTaskOutput } from "@/lib/subtitleOutputs";
 import { BootstrapScreen } from "@/components/BootstrapScreen";
 import { CompletedView } from "@/components/CompletedView";
 import { ConfirmDialog, isConfirmRemembered } from "@/components/ConfirmDialog";
@@ -412,23 +416,33 @@ function HomeContent() {
   }, [hasActiveResourceInstall, state.bootstrapped, state.route]);
 
   const completedTaskToasts = useRef(new Set<string>());
+  const previousTaskPhase = useRef(state.task.phase);
+  const previousUpdateState = useRef(updateInstall?.state);
   useEffect(() => {
+    if (updateInstall?.state === "ready" && previousUpdateState.current === "running") void playNotification("download");
+    previousUpdateState.current = updateInstall?.state;
+  }, [updateInstall?.state]);
+  useEffect(() => {
+    const wasRunning = previousTaskPhase.current === "running";
+    previousTaskPhase.current = state.task.phase;
+    const notificationId = `${state.task.taskId}-${state.task.startedAt}`;
     if (
       state.task.phase !== "completed" ||
       !state.task.taskId ||
-      completedTaskToasts.current.has(state.task.taskId)
+      !wasRunning || completedTaskToasts.current.has(notificationId)
     ) {
       return;
     }
-    completedTaskToasts.current.add(state.task.taskId);
+    completedTaskToasts.current.add(notificationId);
     const rawFallback = ["translated-srt", "final-srt"].includes(state.task.request.stage)
       && Boolean(state.task.outputs.rawSrt)
       && !state.task.outputs.translatedSrt
       && !state.task.outputs.finalSrt;
     if (!rawFallback) {
-      showSuccess(t.toast.taskCompleted, `task-completed-${state.task.taskId}`);
+      showSuccess(t.toast.taskCompleted + " · " + (preferredTaskOutput(state.task.outputs) || ""), `task-completed-${notificationId}`);
+      void playNotification("task");
     }
-  }, [showSuccess, state.task.phase, state.task.taskId, t.toast.taskCompleted]);
+  }, [showSuccess, state.task.phase, state.task.taskId, state.task.startedAt, state.task.outputs, state.task.request.stage, t.toast.taskCompleted]);
 
   const previousResourceStates = useRef<Map<string, string> | null>(null);
   useEffect(() => {
@@ -437,6 +451,7 @@ function HomeContent() {
     if (previous) {
       for (const resource of state.resources) {
         if (resource.state === "ready" && previous.get(resource.id) === "downloading") {
+          void playNotification("download");
           showSuccess(
             t.toast.resourceInstalled.replace("{name}", resource.id),
             `resource-ready-${resource.id}-${resource.version}`,
@@ -735,6 +750,8 @@ function HomeContent() {
         }}
       />
     );
+  } else if (state.route === "feedback") {
+    content = <Feedback />;
   } else if (state.route === "settings") {
     content = (
       <Settings
@@ -906,6 +923,7 @@ function HomeContent() {
         </AppShell>
       )}
       <ToastViewport updateInstall={updateInstall} task={state.task} route={state.route} />
+      <BatchCompletionObserver enabled={state.bootstrapped} />
     </>
   );
 }

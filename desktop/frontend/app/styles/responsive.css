@@ -65,7 +65,7 @@
   .app-shell {
     grid-template:
       "titlebar" var(--titlebar-height) "workspace" minmax(0, 1fr) "sidebar" 50px
-      / 1fr;
+      / minmax(0, 1fr);
   }
 
   .titlebar {

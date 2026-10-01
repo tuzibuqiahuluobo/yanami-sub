@@ -34,6 +34,8 @@ from desktop.backend.settings.local_agents import (
     LOCAL_AGENT_TIERS, configure_local_agents, validated_agent_path, workbuddy_desktop_path,
 )
 from desktop.backend.settings.store import SettingsStore
+from desktop.backend.launcher import feedback
+from finesub_bootstrap import secrets
 
 
 LOGGER = logging.getLogger(__name__)
@@ -133,6 +135,7 @@ class DesktopBridge:
         directory_selector: Callable[[], str | None] | None = None,
         key_export_selector: Callable[[], str | None] | None = None,
         python_selector: Callable[[], str | None] | None = None,
+        agent_file_selector: Callable[[], str | None] | None = None,
         knowledge: Any | None = None,
         output_opener: Callable[[Path], None] | None = None,
         url_opener: Callable[[str], Any] | None = None,
@@ -161,6 +164,7 @@ class DesktopBridge:
         self.directory_selector = directory_selector
         self.key_export_selector = key_export_selector
         self.python_selector = python_selector
+        self.agent_file_selector = agent_file_selector
         self.knowledge = knowledge or KnowledgeService(
             settings.user_data / "knowledge",
             lambda: self.jobs.worker_context,
@@ -174,6 +178,7 @@ class DesktopBridge:
         self.health_confirmation = health_confirmation
         self.app_version = app_version
         self.startup_update_issue = startup_update_issue
+        self._diagnostic_path: Path | None = None
         saved_route = self._stored_download_route()
         if saved_route is not None:
             self._apply_download_route(saved_route)
@@ -1189,6 +1194,22 @@ class DesktopBridge:
             paths["LOCAL_DSH"] = ui["dshPath"]
         return _success({"paths": paths})
 
+    def select_agent_path(self, tier: str, kind: str = "file") -> dict[str, Any]:
+        """Choose and validate a supported CLI without executing or saving it."""
+        def choose() -> dict[str, Any]:
+            if tier not in LOCAL_AGENT_TIERS or kind not in {"file", "directory"}:
+                raise ValueError("不支持的 Agent 或路径选择方式。")
+            selector = self.agent_file_selector if kind == "file" else self.directory_selector
+            if selector is None:
+                raise ValueError("当前窗口无法打开路径选择器。 / Path picker unavailable.")
+            selected = selector()
+            if not selected:
+                return {"cancelled": True}
+            path, _command = validated_agent_path(tier, selected)
+            return {"cancelled": False, "path": path}
+
+        return self._guard(choose)
+
     def set_agent_path(self, tier: str, path: str) -> dict[str, Any]:
         def save() -> dict[str, str]:
             if tier not in LOCAL_AGENT_TIERS:
@@ -1366,6 +1387,71 @@ class DesktopBridge:
             return {"url": url}
 
         return self._guard(open_page)
+
+    def _task_logs_root(self) -> Path:
+        value = self._storage_state().get("tasks")
+        if not value:
+            raise ValueError("Task directory is unavailable")
+        return Path(value)
+
+    def list_task_logs(self, query: str = "", offset: int = 0) -> dict[str, Any]:
+        def read():
+            if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
+                raise ValueError("Invalid page")
+            rows = [row for row in feedback.log_catalog(self._task_logs_root())
+                    if query[:100].casefold() in row["name"].casefold()]
+            return {"items": rows[offset:offset + 25], "total": len(rows)}
+        return self._guard(read)
+
+    def open_task_log_location(self, identifier: str) -> dict[str, Any]:
+        def reveal():
+            root = self._task_logs_root()
+            rows = {row["id"]: row for row in feedback.log_catalog(root)}
+            if identifier not in rows:
+                raise ValueError("Task directory not found; refresh the list")
+            folder = feedback.safe_path(root, identifier)
+            log_path = rows[identifier]["log_path"]
+            target = feedback.safe_path(root, Path(log_path).relative_to(root).as_posix()) if log_path else folder
+            self.output_opener(target)
+            return {"path": str(target)}
+        return self._guard(reveal)
+
+    def collect_feedback_logs(self, selected: list[str]) -> dict[str, Any]:
+        def collect():
+            if not isinstance(selected, list):
+                raise ValueError("Invalid log selection")
+            runtime = getattr(self.resources, "runtime", None)
+            root = getattr(getattr(runtime, "paths", None), "root", self.settings.user_data)
+            log_dir = getattr(self.resource_installs, "log_dir", None) or self.settings.user_data / "logs"
+            values = self.settings._read_keys()
+            secret_values = [entry for value in values.values() for _, entry in secrets.iter_entries(value)]
+            result = feedback.collect_diagnostics(
+                tasks=self._task_logs_root(), logs=Path(log_dir), updates=Path(root) / ".update",
+                destination=self.settings.user_data / "diagnostics", selected=selected,
+                version=self.app_version, secrets=secret_values,
+                private_roots=[Path.home(), self.settings.user_data, self._task_logs_root(), Path(root)],
+            )
+            self._diagnostic_path = Path(result["path"])
+            return result
+        return self._guard(collect)
+
+    def open_feedback_report(self) -> dict[str, Any]:
+        def reveal():
+            if self._diagnostic_path is None or not self._diagnostic_path.is_file():
+                raise ValueError("Generate a diagnostic package first")
+            self.output_opener(self._diagnostic_path)
+            return {"path": str(self._diagnostic_path)}
+        return self._guard(reveal)
+
+    def open_feedback_issue(self, title: str = "", description: str = "", browser: bool = True) -> dict[str, Any]:
+        def open_issue():
+            url = feedback.issue_url(title, description, self.app_version)
+            # Keep the old third argument for cached frontends, but never create
+            # a second WebView or handle GitHub login inside the application.
+            if self.url_opener(url) is False:
+                raise ValueError("无法打开系统默认浏览器，请检查默认浏览器设置后重试。 / Could not open the default browser; check its system settings and retry.")
+            return {"url": url, "opened": True}
+        return self._guard(open_issue)
 
     def open_tasks_directory(self, task_id: str = "") -> dict[str, Any]:
         """Reveal user-data/tasks, or one task's folder inside it.

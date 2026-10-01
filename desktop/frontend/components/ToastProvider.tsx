@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, X } from "lucide-react";
+import { Check, CircleAlert, X } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -21,11 +21,13 @@ interface ToastItem {
   id: string;
   instance: number;
   message: string;
+  notice?: boolean;
 }
 
 interface ToastContextValue {
   toasts: ToastItem[];
   showSuccess: (message: string, id?: string) => void;
+  showNotice: (message: string, id?: string) => void;
   dismiss: (id: string) => void;
 }
 
@@ -40,17 +42,19 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   }, []);
 
-  const showSuccess = useCallback((message: string, stableId?: string) => {
+  const showToast = useCallback((message: string, stableId?: string, notice = false) => {
     const instance = nextId.current += 1;
     const id = stableId ?? `success-${instance}`;
     setToasts((current) => {
       const withoutDuplicate = current.filter((toast) => toast.id !== id);
-      return [...withoutDuplicate, { id, instance, message }].slice(-3);
+      return [...withoutDuplicate, { id, instance, message, notice }].slice(-3);
     });
   }, []);
+  const showSuccess = useCallback((message: string, id?: string) => showToast(message, id), [showToast]);
+  const showNotice = useCallback((message: string, id?: string) => showToast(message, id, true), [showToast]);
 
   return (
-    <ToastContext.Provider value={{ toasts, showSuccess, dismiss }}>
+    <ToastContext.Provider value={{ toasts, showSuccess, showNotice, dismiss }}>
       {children}
     </ToastContext.Provider>
   );
@@ -62,7 +66,7 @@ export function useToast() {
   if (!context) {
     throw new Error("useToast must be used inside ToastProvider");
   }
-  return { showSuccess: context.showSuccess };
+  return { showSuccess: context.showSuccess, showNotice: context.showNotice };
 }
 
 
@@ -81,9 +85,9 @@ function SuccessToast({
   }, [onDismiss, toast.id, toast.message]);
 
   return (
-    <div className="toast-item toast-success" role="status">
+    <div className={`toast-item ${toast.notice ? "toast-notice" : "toast-success"}`} role="status">
       <span className="toast-status-icon" aria-hidden="true">
-        <Check size={14} strokeWidth={2.4} />
+        {toast.notice ? <CircleAlert size={14} /> : <Check size={14} strokeWidth={2.4} />}
       </span>
       <span className="toast-message">{toast.message}</span>
       <button type="button" className="toast-dismiss" aria-label={t.toast.close} onClick={() => onDismiss(toast.id)}>

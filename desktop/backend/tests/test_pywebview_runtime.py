@@ -7,7 +7,7 @@ import sys
 from types import ModuleType
 import pytest
 
-from desktop.backend.launcher.main import choose_python_interpreter, install_frozen_pywebview_win32
+from desktop.backend.launcher.main import choose_agent_file, choose_python_interpreter, install_frozen_pywebview_win32
 
 
 def test_frozen_win32_source_is_registered_as_pywebview_platform() -> None:
@@ -71,3 +71,32 @@ def test_python_picker_does_not_swallow_a_native_dialog_error() -> None:
 
     with pytest.raises(RuntimeError, match="Native file picker"):
         choose_python_interpreter(Window())
+
+
+@pytest.mark.parametrize("result", [
+    (r"D:\Agent\codex.exe",), [r"D:\Agent\codex.exe"],
+    r"D:\Agent\codex.exe", None, (),
+])
+def test_agent_picker_uses_valid_native_filters_and_handles_cancel(result) -> None:
+    import webview
+    from webview.util import parse_file_type
+
+    calls = []
+
+    class Window:
+        def create_file_dialog(self, dialog_type, *, file_types):
+            calls.append((dialog_type, [parse_file_type(value) for value in file_types]))
+            return result
+
+    assert choose_agent_file(Window()) == (r"D:\Agent\codex.exe" if result else None)
+    assert calls[0][0] == webview.FileDialog.OPEN
+    assert [mask for _label, mask in calls[0][1]] == ["*.exe;*.js", "*.*"]
+
+
+def test_agent_picker_surfaces_native_dialog_errors() -> None:
+    class Window:
+        def create_file_dialog(self, *_args, **_kwargs):
+            raise RuntimeError("Native file picker unavailable")
+
+    with pytest.raises(RuntimeError, match="Native file picker"):
+        choose_agent_file(Window())

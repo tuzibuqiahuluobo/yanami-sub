@@ -149,6 +149,9 @@ def test_batch_manager_persists_core_worker_progress_and_owned_outputs(
     assert current is not None
     assert current.state == "completed"
     assert current.items[0].outputs == {"rawSrt": str(published)}
+    completed_log = Path(started.log_path).read_text(encoding="utf-8")
+    assert completed_log.count("Saved item 1:") == 1
+    assert str(published) in completed_log and f"Shared batch log: {started.log_path}" in completed_log
     assert Path(started.request.items[0].output or "").is_relative_to(
         tmp_path / "tasks" / "batches"
     )

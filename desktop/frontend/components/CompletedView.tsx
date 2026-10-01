@@ -16,6 +16,8 @@ import {
   taskOutputEntries,
 } from "@/lib/subtitleOutputs";
 import { useLanguage } from "./LanguageProvider";
+import { useEffect, useState } from "react";
+import { desktopApi } from "@/lib/bridge";
 
 
 interface CompletedViewProps {
@@ -30,7 +32,16 @@ export function CompletedView({
   onOpen,
   onReset,
 }: CompletedViewProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const [logPath, setLogPath] = useState("");
+  const [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    void desktopApi.listTaskLogs(task.taskId ?? "").then((result) => {
+      if (active) setLogPath(result.items.find((row) => row.id === task.taskId)?.log_path ?? "");
+    }).catch((caught) => { if (active) setError(String(caught)); });
+    return () => { active = false; };
+  }, [task.taskId]);
   const outputLabels: Record<string, string> = t.completed.labels;
   const outputs = taskOutputEntries(task.outputs);
   const preferred = preferredTaskOutput(task.outputs);
@@ -78,13 +89,15 @@ export function CompletedView({
               </span>
               <span>
                 <strong>{outputLabels[key] ?? key}</strong>
-                <small>{fileName(path)}</small>
+                <small className="result-path">{path}</small>
               </span>
               <ExternalLink size={14} />
             </button>
           ))}
         </div>
 
+        <div className="result-location"><strong>{language === "en" ? "Task log" : "任务日志"}</strong><code className="result-path">{logPath || (language === "en" ? "Log not available yet" : "日志暂不可用")}</code><button type="button" className="button button-secondary button-compact" disabled={!task.taskId} onClick={async () => { try { await desktopApi.openTaskLogLocation(task.taskId!); } catch (caught) { setError(String(caught)); } }}>{language === "en" ? "Open log location" : "打开日志位置"}</button></div>
+        {error ? <p role="alert" className="api-key-error">{error}</p> : null}
         <div className="completed-actions">
           <button
             type="button"

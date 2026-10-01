@@ -108,6 +108,7 @@ PUBLIC_BRIDGE_METHODS = (
     "get_dsh_path",
     "set_dsh_path",
     "get_agent_paths",
+    "select_agent_path",
     "set_agent_path",
     "get_knowledge_snapshot",
     "get_knowledge_entry",
@@ -122,6 +123,11 @@ PUBLIC_BRIDGE_METHODS = (
     "open_update_page",
     "open_external_url",
     "open_tasks_directory",
+    "list_task_logs",
+    "open_task_log_location",
+    "collect_feedback_logs",
+    "open_feedback_report",
+    "open_feedback_issue",
     "open_batch_directory",
     "open_batch_output",
     "open_batch_log",
@@ -837,6 +843,19 @@ def choose_python_interpreter(window: Any) -> str | None:
     return str(selected)
 
 
+def choose_agent_file(window: Any) -> str | None:
+    import webview
+
+    result = window.create_file_dialog(
+        webview.FileDialog.OPEN,
+        file_types=("Agent CLI (*.exe;*.js)", "所有文件 (*.*)"),
+    )
+    if not result:
+        return None
+    selected = result[0] if isinstance(result, (list, tuple)) else result
+    return str(selected)
+
+
 def create_application(
     session: SessionLog | None = None,
     *,
@@ -1044,6 +1063,7 @@ def create_application(
     bridge.key_export_selector = select_key_export
 
     bridge.python_selector = lambda: choose_python_interpreter(window)
+    bridge.agent_file_selector = lambda: choose_agent_file(window)
     return window, bridge, development
 
 

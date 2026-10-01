@@ -39,6 +39,13 @@ class TaskLog:
     def append(self, event: WorkerEvent) -> None:
         # `debug` reaches the file and nothing else: it is the verbose detail
         # the drawer cannot afford but a later diagnosis needs.
+        if event.type == "completed":
+            outputs = event.payload.get("outputs", {})
+            lines = [f"Saved output ({key}): {value}" for key, value in outputs.items()] if isinstance(outputs, dict) else []
+            if self.directory:
+                lines.append(f"Task log: {self.directory / 'task-log.txt'}")
+            message = "\n".join(lines)
+            event = WorkerEvent(type="log", task_id=event.task_id, timestamp=event.timestamp, payload={"message": message})
         if event.type not in {"log", "debug", "failed"}:
             return
         message = format_log_message(

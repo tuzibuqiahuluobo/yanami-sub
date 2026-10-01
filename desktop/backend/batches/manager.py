@@ -443,6 +443,7 @@ class BatchManager:
                 self._persist_history()
 
     def _apply_event(self, snapshot: BatchSnapshot, event: BatchWorkerEvent) -> None:
+        previously_done = {item.index for item in snapshot.items if item.state == "done"}
         if event.type == "snapshot":
             rows = event.payload.get("items", [])
             snapshot.items = [BatchItemSnapshot.model_validate(row) for row in rows]
@@ -457,6 +458,12 @@ class BatchManager:
             self._append_log(snapshot, event)
         elif event.type == "log":
             self._append_log(snapshot, event)
+        for item in snapshot.items:
+            if item.state == "done" and item.index not in previously_done and item.outputs:
+                self._append_log(snapshot, BatchWorkerEvent(
+                    type="log", batch_id=event.batch_id, timestamp=event.timestamp,
+                    payload={"message": f"Saved item {item.index + 1}: " + "; ".join(item.outputs.values()) + f"\nShared batch log: {snapshot.log_path}"},
+                ))
 
     @staticmethod
     def _append_log(snapshot: BatchSnapshot, event: BatchWorkerEvent) -> None:
