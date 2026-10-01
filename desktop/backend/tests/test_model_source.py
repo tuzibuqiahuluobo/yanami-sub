@@ -16,6 +16,36 @@ from desktop.backend.worker.main import _routing_override
 from desktop.backend.worker.model_source import source_route
 
 
+@pytest.mark.parametrize("tier,group", [("LOCAL_DSH", "dsh-capable"), ("LOCAL_WORKBUDDY", "workbuddy-capable")])
+def test_manual_text_only_route_adapts_both_axes_and_restores_overlay(tier, group):
+    from finesub.llm.routing.model_routes import runtime_preferred
+    before = runtime_preferred()
+    request = TaskRequest(input="视频.mp4", stage="final-srt", llm_source="manual", llm_model=[group], llm_media="audio")
+    with source_route(request) as route:
+        assert route.source == "manual"
+        assert route.models == [group]
+        assert route.correction_media == route.planning_media == "text"
+        assert all(default_model_routes().target_fact(target).provider_tier == tier for target in route.targets)
+        assert runtime_preferred() == before
+
+
+def test_manual_multimodal_target_keeps_audio():
+    request = TaskRequest(input="a.wav", stage="final-srt", llm_source="manual", llm_model=["gemini-free-3_6-flash"], llm_media="audio")
+    with source_route(request) as route:
+        assert route.correction_media == route.planning_media == "audio"
+
+
+def test_manual_scoped_media_pin_does_not_switch_to_default_api():
+    request = TaskRequest(input="a.wav", stage="final-srt", llm_source="manual", llm_model=[
+        "gemini-free-3_6-flash", "correction-mm=local-workbuddy-deepseek-v4-flash",
+    ], llm_media="audio")
+    with source_route(request) as route, _routing_override(route.models):
+        assert route.correction_media == "text"
+        assert route.planning_media == "audio"
+        group, _ = default_model_routes().resolve_binding("default", "correction-text", "quality")
+        assert group.target_ids == ("local-workbuddy-deepseek-v4-flash",)
+
+
 @pytest.fixture(autouse=True)
 def isolated_config(tmp_path, monkeypatch):
     config = tmp_path / "config.toml"

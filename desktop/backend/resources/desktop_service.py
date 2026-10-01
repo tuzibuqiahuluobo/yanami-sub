@@ -789,6 +789,9 @@ class DesktopResourceService:
             # The parent speaks UTF-8 on its pipes. This takes precedence over
             # an inherited Windows PYTHONIOENCODING=cp936/cp1252 for every worker.
             "PYTHONIOENCODING": "utf-8",
+            # Runtime JIT cache is mutable data, never part of the signed app
+            # snapshot. Shared by single, batch, prefetch and knowledge workers.
+            "NUMBA_CACHE_DIR": str(self.runtime.paths.cache / "numba"),
         }
         git_bin = self.tool_directory("git", "git.exe")
         # yt-dlp is imported, not executed, so it joins PYTHONPATH rather than

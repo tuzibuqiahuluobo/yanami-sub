@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+from collections.abc import Callable
 
 
 def _application_root() -> Path:
@@ -34,7 +35,7 @@ def _show_startup_message(message: str) -> None:
         print(message, file=sys.stderr)
 
 
-def _preflight_packaged_install() -> bool:
+def _preflight_packaged_install(*, log: Callable[[str], None] | None = None) -> bool:
     """Repair the active snapshot, or fail without a PyInstaller traceback."""
 
     if not getattr(sys, "frozen", False):
@@ -47,6 +48,8 @@ def _preflight_packaged_install() -> bool:
     )
 
     root = _application_root()
+    if log is not None:
+        log(f"packaged preflight root={root}")
     updater_relaunch = os.environ.pop(UPDATE_RELAUNCH_ENV, "") == "1"
     if not updater_relaunch and full_update_in_progress(root):
         _show_startup_message(
@@ -57,7 +60,7 @@ def _preflight_packaged_install() -> bool:
 
     # Health rollback must precede _activate_packaged_source, not change the
     # worker snapshot after the launcher has imported a different core.
-    if prepare_app_startup(root) is not None:
+    if prepare_app_startup(root, log=log) is not None:
         return True
 
     # Development-era/portable layouts predate versioned app snapshots. Keep
@@ -71,6 +74,8 @@ def _preflight_packaged_install() -> bool:
     ):
         return True
 
+    if log is not None:
+        log("startup rejected: no complete compatible app snapshot")
     _show_startup_message(
         "安装损坏，请重新安装 Yanami Sub。\n\n"
         "The installation is damaged. Please reinstall Yanami Sub."
@@ -108,14 +113,44 @@ def _activate_packaged_source() -> None:
     sys.path.insert(0, source_text)
 
 
-_STARTUP_ALLOWED = _preflight_packaged_install()
-if _STARTUP_ALLOWED:
-    _activate_packaged_source()
-    from desktop.backend.launcher.main import main  # noqa: E402
+def run() -> int:
+    # Acquire ownership before startup repair, pointer changes or core imports.
+    from desktop.backend.launcher.instance import acquire_instance
+
+    try:
+        instance = acquire_instance()
+    except (OSError, RuntimeError) as error:
+        _show_startup_message(str(error))
+        return 1
+    if instance is None:
+        return 0
+    from desktop.backend.launcher.instance import instance_domain
+    from desktop.backend.launcher.session_log import SessionLog
+
+    try:
+        session = SessionLog.open(instance_domain())
+    except Exception:
+        session = SessionLog.disabled()
+    session.write("bootstrap starting; ownership acquired")
+    try:
+        if not _preflight_packaged_install(log=session.write):
+            session.finish("startup rejected before app import")
+            return 0
+        # Frozen GUI imports do not need to write into the immutable snapshot.
+        if getattr(sys, "frozen", False):
+            sys.dont_write_bytecode = True
+        _activate_packaged_source()
+        from desktop.backend.launcher.main import main
+
+        return main(instance=instance, session=session, startup_prepared=bool(getattr(sys, "frozen", False)))
+    except BaseException as error:
+        session.exception("bootstrap", error)
+        session.finish("bootstrap failed")
+        raise
+    finally:
+        session.close()
+        instance.close()
 
 
 if __name__ == "__main__":
-    raise SystemExit(
-        main(startup_prepared=bool(getattr(sys, "frozen", False)))
-        if _STARTUP_ALLOWED else 0
-    )
+    raise SystemExit(run())

@@ -282,6 +282,37 @@ def validated_agent_path(
         raise ValueError(f"无法访问所选 Agent 路径：{error}") from error
 
 
+def workbuddy_desktop_path(
+    preferred_path: str = "", *, environ: Mapping[str, str] | None = None,
+) -> Path:
+    """Locate the official GUI beside a selected CLI; never execute a shell shim."""
+    target = environ if environ is not None else os.environ
+    candidates: list[Path] = []
+    if preferred_path.strip():
+        selected = Path(preferred_path.strip().strip('"')).expanduser().resolve()
+        if selected.is_dir():
+            candidates.append(selected / "WorkBuddy.exe")
+        # The supported desktop bundle embeds its CLI under resources.
+        for parent in selected.parents:
+            if parent.name.lower() == "resources":
+                candidates.append(parent.parent / "WorkBuddy.exe")
+                break
+    else:
+        local = target.get("LOCALAPPDATA", "").strip()
+        if local:
+            candidates.append(Path(local) / "Programs" / "WorkBuddy" / "WorkBuddy.exe")
+    for candidate in candidates:
+        try:
+            if candidate.is_file():
+                return candidate.resolve(strict=True)
+        except OSError:
+            continue
+    raise ValueError(
+        "未找到所选 WorkBuddy 的官方桌面程序；请手动打开 WorkBuddy 登录，"
+        "或在 Agent 安装路径中指定 WorkBuddy 安装目录。 / WorkBuddy desktop app not found."
+    )
+
+
 def discover_local_agent_commands(
     *,
     environ: dict[str, str] | None = None,

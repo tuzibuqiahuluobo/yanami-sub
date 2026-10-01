@@ -147,10 +147,12 @@ def full_update_in_progress(
     return running
 
 
-def _app_version_is_complete(version_directory: Path) -> bool:
+def _app_version_is_complete(version_directory: Path, *, log: LogCallback | None = None) -> bool:
     try:
         validate_app_directory(version_directory, version=version_directory.name)
-    except (OSError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError) as error:
+        if log is not None:
+            log(f"app snapshot rejected: {version_directory.name}: {type(error).__name__}: {error}")
         return False
     return True
 
@@ -169,7 +171,7 @@ def _version_sort_key(path: Path) -> tuple[int, Version, float]:
     return valid, version, modified
 
 
-def repair_active_app_version(root: Path) -> str | None:
+def repair_active_app_version(root: Path, *, log: LogCallback | None = None) -> str | None:
     """Keep a complete compatible snapshot, or repair a stale app pointer."""
 
     app_root = root / "app"
@@ -187,7 +189,7 @@ def repair_active_app_version(root: Path) -> str | None:
     if (
         isinstance(current, str)
         and app_version_is_compatible(root, current)
-        and _app_version_is_complete(versions / current)
+        and _app_version_is_complete(versions / current, log=log)
     ):
         return current
 
@@ -199,7 +201,7 @@ def repair_active_app_version(root: Path) -> str | None:
                 if entry.is_dir()
                 and not entry.name.endswith(".staging")
                 and app_version_is_compatible(root, entry.name)
-                and _app_version_is_complete(entry)
+                and _app_version_is_complete(entry, log=log)
             ),
             key=_version_sort_key,
             reverse=True,
@@ -239,7 +241,7 @@ def prepare_app_startup(root: Path, *, log: LogCallback | None = None) -> str | 
     except (OSError, ValueError):
         previous = {}
     recover_interrupted_update(root, log=log)
-    repaired = repair_active_app_version(root)
+    repaired = repair_active_app_version(root, log=log)
     if repaired is None:
         return None
     started = installer.prepare_startup()

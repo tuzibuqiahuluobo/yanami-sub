@@ -53,6 +53,7 @@ import {
 import { runInterfaceTransition } from "@/lib/viewTransition";
 
 import { ApiKeyField } from "./ApiKeyField";
+import { WorkBuddyRepairDialog } from "./WorkBuddyRepairDialog";
 import { CustomSelect } from "./CustomSelect";
 import { useLanguage } from "./LanguageProvider";
 import { UpdateSection, type UpdateSectionProps } from "./UpdateSection";
@@ -186,6 +187,7 @@ export function Settings({
   const [routingError, setRoutingError] = useState("");
   const [agentProbeBusy, setAgentProbeBusy] = useState(false);
   const [agentPathsOpen, setAgentPathsOpen] = useState(false);
+  const [workBuddyRepairOpen, setWorkBuddyRepairOpen] = useState(false);
   const [agentPaths, setAgentPaths] = useState<Record<string, string>>({});
   const [agentPathBusy, setAgentPathBusy] = useState("");
   const [agentPathError, setAgentPathError] = useState<Record<string, string>>({});
@@ -900,11 +902,13 @@ export function Settings({
                       <div><strong>{agent.provider_tier}</strong><small>{agent.driver || agent.models.join(", ")}</small></div>
                       <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{t.settings.routing.agentStatus[agent.status]}</span>
                       <small title={agent.detail}>{agent.version || agent.detail}</small>
-                      {agent.status !== "ready" ? <small className="agent-status-help">{agent.status === "missing" ? t.settings.routing.agentMissingHelp : t.settings.routing.agentBrokenHelp}</small> : null}
+                      {agent.status !== "ready" ? <small className="agent-status-help">{agent.status === "missing" ? t.settings.routing.agentMissingHelp : t.settings.routing.agentBrokenHelp}</small> : <small className="agent-status-help">{language === "en" ? "CLI available; login, model access and quota are not verified." : "CLI 可用；登录状态、模型权限与额度尚未验证。"}</small>}
                     </div>
                   ))}
                 </div>
               ) : null}
+              <button type="button" className="button button-secondary button-compact" onClick={() => setWorkBuddyRepairOpen(true)}>{language === "en" ? "WorkBuddy sign-in repair" : "WorkBuddy 登录修复"}</button>
+              <WorkBuddyRepairDialog open={workBuddyRepairOpen} onClose={() => setWorkBuddyRepairOpen(false)} onProbe={onProbeLocalAgents} />
             </div>
 
             {customProviders.length ? (

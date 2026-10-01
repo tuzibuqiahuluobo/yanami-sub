@@ -270,6 +270,23 @@ def test_agent_paths_are_saved_per_tier_and_invalid_choices_are_rejected(tmp_pat
     assert bridge.set_agent_path("UNKNOWN", str(cli))["error"]["code"] == "invalid_request"
 
 
+def test_workbuddy_login_opens_only_the_selected_official_gui(tmp_path, monkeypatch):
+    bridge, _ = _bridge(tmp_path)
+    install = tmp_path / "WorkBuddy"
+    entry = install / "resources/app.asar.unpacked/cli/bin/codebuddy"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("", encoding="utf-8")
+    executable = install / "WorkBuddy.exe"
+    executable.write_bytes(b"gui")
+    monkeypatch.setattr(bridge, "get_agent_paths", lambda: {"data": {"paths": {"LOCAL_WORKBUDDY": str(entry)}}})
+    calls = []
+    monkeypatch.setattr("desktop.backend.launcher.bridge.subprocess.Popen", lambda command, **kwargs: calls.append((command, kwargs)))
+    result = bridge.open_workbuddy_login()
+    assert result["ok"] is True
+    assert result["data"]["path"] == str(executable.resolve())
+    assert calls == [([str(executable.resolve())], {"cwd": str(install.resolve()), "close_fds": True})]
+
+
 def test_health_requires_an_explicit_rendered_frontend_ack(tmp_path: Path) -> None:
     bridge, _jobs = _bridge(tmp_path)
     confirmed: list[bool] = []

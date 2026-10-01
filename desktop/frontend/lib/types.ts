@@ -706,6 +706,7 @@ export interface DesktopApi {
   saveProviderKey(providerId: string, value: string): Promise<RoutingSettings>;
   deleteProviderKey(providerId: string): Promise<RoutingSettings>;
   probeLocalAgents(): Promise<LocalAgentStatus[]>;
+  openWorkBuddyLogin(): Promise<{ path: string }>;
   getDshPath(): Promise<{ path: string }>;
   setDshPath(path: string): Promise<{ path: string }>;
   getAgentPaths(): Promise<{ paths: Record<string, string> }>;

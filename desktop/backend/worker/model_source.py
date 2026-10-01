@@ -19,6 +19,7 @@ from finesub.llm.routing.model_routes import default_model_routes
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.settings.config_file import update_config_file
 from desktop.backend.settings.local_agents import COMMANDS_ENV
+from desktop.backend.worker.workbuddy_compat import install_workbuddy_auth_fix
 
 logger = logging.getLogger(__name__)
 
@@ -289,6 +290,48 @@ def _check_media_support(routes, targets: tuple[str, ...], media: str) -> bool:
 
 
 
+def _manual_route(request: TaskRequest) -> SourceRoute:
+    from finesub.llm.routing.model_routes import (
+        install_runtime_preferred, parse_llm_model_args, runtime_preferred,
+    )
+
+    previous = runtime_preferred()
+    overlay = parse_llm_model_args(request.llm_model)
+    models = list(request.llm_model)
+    targets: list[str] = []
+    media = [request.llm_correction_media or request.llm_media,
+             request.llm_planning_media or request.llm_media]
+    try:
+        install_runtime_preferred(overlay)
+        routes = default_model_routes()
+        for index, axis in enumerate(("correction", "planning")):
+            group, _ = routes.resolve_binding(
+                routes.active_preset_id,
+                f"{axis}-text" if media[index] == "text" else f"{axis}-mm",
+                request.llm_difficulty,
+            )
+            targets.extend(group.target_ids)
+            if not _check_media_support(routes, group.target_ids, media[index]):
+                logger.warning(
+                    "手动路由：%s 的候选模型不能全部处理 %s，改用纯文本；"
+                    "本地语音识别照常运行，不切换用户指定的模型来源。",
+                    axis, media[index],
+                )
+                media[index] = "text"
+                # A scoped -mm pin must remain on that chain after changing
+                # modality, not silently fall back to a different API/Agent.
+                # Explicit user -text bindings still take precedence.
+                if f"{axis}-text" not in overlay and (f"{axis}-mm" in overlay or "default" not in overlay):
+                    identifier = group.id.removeprefix("target:")
+                    models.append(f"{axis}-text={identifier}")
+    finally:
+        install_runtime_preferred(previous)
+    return SourceRoute(
+        models=models, source="manual", targets=tuple(dict.fromkeys(targets)),
+        correction_media=media[0], planning_media=media[1],
+    )
+
+
 @contextmanager
 def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     """Supply a private route group, never editing the shared config.toml.
@@ -300,12 +343,17 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     """
 
     _install_transport_fallback()
-    if request.stage not in {"translated-srt", "final-srt"} or request.llm_source == "manual":
+    install_workbuddy_auth_fix()
+    if request.stage not in {"translated-srt", "final-srt"}:
         yield SourceRoute(
             models=request.llm_model, source="manual",
             correction_media=request.llm_correction_media,
             planning_media=request.llm_planning_media,
         )
+        return
+
+    if request.llm_source == "manual":
+        yield _manual_route(request)
         return
 
     free_key = bool(os.environ.get("GEMINI_FREE", "").strip())

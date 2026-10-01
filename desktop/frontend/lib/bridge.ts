@@ -667,6 +667,9 @@ function previewApi(): DesktopApi {
     async deleteTaskRecord(taskId) {
       return { task_id: taskId };
     },
+    async openWorkBuddyLogin() {
+      return { path: "WorkBuddy.exe (preview)" };
+    },
     async confirmAppHealth() { return null; },
     async getDshPath() {
       return { path: String(preferences.ui.dshPath ?? "") };
@@ -1016,6 +1019,7 @@ function nativeApi(): DesktopApi {
     deleteProviderKey: (providerId) =>
       call("delete_provider_key", providerId),
     probeLocalAgents: () => call("probe_local_agents"),
+    openWorkBuddyLogin: () => call("open_workbuddy_login"),
     getDshPath: () => call("get_dsh_path"),
     setDshPath: (path) => call("set_dsh_path", path),
     getAgentPaths: () => call("get_agent_paths"),

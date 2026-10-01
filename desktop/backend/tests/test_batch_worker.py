@@ -13,6 +13,41 @@ from desktop.backend.common.models import BatchRequest
 from desktop.backend.worker import batch_main
 
 
+def test_manual_batch_adapts_media_for_every_item(monkeypatch, tmp_path):
+    from finesub.config import clear_config_cache
+    from finesub.llm.routing.model_routes import default_model_routes
+    config = tmp_path / "config.toml"
+    config.write_text('[llm]\nexecution_policy = "agent-only"\n', encoding="utf-8")
+    monkeypatch.setenv("FINESUB_CONFIG_FILE", str(config))
+    clear_config_cache(); default_model_routes.cache_clear()
+    inputs = [tmp_path / "a.wav", tmp_path / "b.wav"]
+    for path in inputs:
+        path.write_bytes(b"audio")
+    request = BatchRequest.model_validate({"items": [
+        {"input": str(path), "stage": "final-srt", "llm_source": "manual",
+         "llm_model": ["workbuddy-capable"], "llm_media": "audio"}
+        for path in inputs
+    ]})
+    seen = []
+
+    def build(options, *, claims):
+        seen.append(options)
+        return BatchItem(label=Path(options["source"]).name, stages={}, payload={})
+
+    try:
+        batch_main.run_batch_request(
+            request, batch_id="manual", batch_root=tmp_path / "batch", emit=lambda _: None,
+            build_item=build,
+            run_batch=lambda items, **kwargs: [ItemResult(label=item.label, status="done", payload={}) for item in items],
+            default_pipeline_paths=lambda *_args, **_kwargs: SimpleNamespace(final_srt=tmp_path / "out.srt"),
+            claims=object(),
+        )
+        assert len(seen) == 2
+        assert all(row["llm_correction_media"] == row["llm_planning_media"] == "text" for row in seen)
+    finally:
+        clear_config_cache(); default_model_routes.cache_clear()
+
+
 def test_batch_worker_uses_core_scheduler_and_isolates_a_bad_item(
     monkeypatch, tmp_path: Path
 ) -> None:

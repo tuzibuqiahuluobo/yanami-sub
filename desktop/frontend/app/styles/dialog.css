@@ -1,6 +1,22 @@
 /* 确认对话框。 */
 
 /* ─── Confirmation Dialog ─── */
+.dialog-card.workbuddy-repair-dialog {
+  width: min(560px, 92vw);
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+.workbuddy-repair-dialog ol {
+  padding-left: 22px;
+  color: var(--text);
+  line-height: 1.7;
+  font-size: 0.9333rem;
+}
+
+.workbuddy-repair-dialog li { margin-bottom: 10px; }
+.workbuddy-repair-dialog .dialog-actions { flex-wrap: wrap; }
+
 .dialog-overlay {
   position: fixed;
   z-index: 100;

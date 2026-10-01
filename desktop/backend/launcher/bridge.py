@@ -5,6 +5,7 @@ import logging
 import os
 from pathlib import Path
 import sys
+import subprocess
 import webbrowser
 from typing import Any, Literal
 
@@ -30,7 +31,7 @@ from desktop.backend.jobs.manager import JobAlreadyRunning, JobNotFound
 from desktop.backend.resources import python_interpreter
 from desktop.backend.settings.preferences import PreferencesStore
 from desktop.backend.settings.local_agents import (
-    LOCAL_AGENT_TIERS, configure_local_agents, validated_agent_path,
+    LOCAL_AGENT_TIERS, configure_local_agents, validated_agent_path, workbuddy_desktop_path,
 )
 from desktop.backend.settings.store import SettingsStore
 
@@ -1159,6 +1160,17 @@ class DesktopBridge:
 
     def get_dsh_path(self) -> dict[str, Any]:
         return _success({"path": self.get_agent_paths()["data"]["paths"]["LOCAL_DSH"]})
+
+    def open_workbuddy_login(self) -> dict[str, Any]:
+        def open_client() -> dict[str, str]:
+            selected = self.get_agent_paths()["data"]["paths"]["LOCAL_WORKBUDDY"]
+            executable = workbuddy_desktop_path(selected)
+            # This is the user-requested interactive vendor GUI, not a helper
+            # console. Credentials remain entirely within the official client.
+            subprocess.Popen([str(executable)], cwd=str(executable.parent), close_fds=True)
+            return {"path": str(executable)}
+
+        return self._guard(open_client)
 
     def set_dsh_path(self, path: str) -> dict[str, Any]:
         result = self.set_agent_path("LOCAL_DSH", path)
