@@ -722,7 +722,7 @@ def run_request(
                 raise ValueError(error_message)
 
         if should_check_agents:
-            report = check_agent_health()
+            report = check_agent_health(request.llm_agent) if request.llm_agent else check_agent_health()
             if report.statuses:
                 summary = report.format_summary()
                 emit(WorkerEvent.log(task_id, f"Agent 健康检查：{summary}"))

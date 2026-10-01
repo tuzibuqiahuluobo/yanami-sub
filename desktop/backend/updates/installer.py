@@ -60,6 +60,23 @@ def app_version_is_compatible(root: Path, version: str) -> bool:
         return False
 
 
+def _is_runtime_cache(relative: Path, files: dict) -> bool:
+    if relative.parent.name != "__pycache__":
+        return False
+    if re.fullmatch(r".+\.py[co](?:\.\d+)?", relative.name):
+        return True
+    # Numba JIT creates an index, overload binaries and atomic-write scratch
+    # files beside the source. Only accept its naming scheme for a hashed
+    # source module; do not exempt the whole directory or arbitrary .nbc files.
+    compiled = re.fullmatch(
+        r"([^.]+)\..+-\d+\.py\d+\.(?:nbi|[1-9]\d*\.nbc)(?:\.tmp\.[0-9a-f]{16})?",
+        relative.name,
+    )
+    return compiled is not None and (
+        relative.parent.parent / f"{compiled[1]}.py"
+    ).as_posix() in files
+
+
 def validate_app_directory(
     root: Path, *, version: str | None = None, platform: str | None = None
 ) -> None:
@@ -111,10 +128,15 @@ def validate_app_directory(
         if relative.as_posix() != "app-manifest.json"
         # Importing the unpacked app produces these after installation. They
         # are not release payloads and must not trigger a health rollback.
-        and not ("__pycache__" in relative.parts and path.suffix in {".pyc", ".pyo"})
+        and not (not path.is_symlink() and _is_runtime_cache(relative, files))
     }
     if actual_files != set(files):
-        raise ValueError("App integrity file list does not match the version directory")
+        unexpected = sorted(actual_files - set(files))
+        absent = sorted(set(files) - actual_files)
+        raise ValueError(
+            "App integrity file list does not match the version directory"
+            f"; unexpected={unexpected[:10]}, missing={absent[:10]}"
+        )
 
 
 class PendingSwitch(BaseModel):

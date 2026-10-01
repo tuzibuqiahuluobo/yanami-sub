@@ -38,6 +38,14 @@ def test_agent_status_to_dict():
     }
 
 
+def test_selected_agent_probe_does_not_launch_other_agents(monkeypatch):
+    monkeypatch.setenv(COMMANDS_ENV, json.dumps({"LOCAL_DSH": ["dsh.exe"], "LOCAL_WORKBUDDY": ["codebuddy.exe"]}))
+    with patch("desktop.backend.worker.agent_health_check._check_agent_tier", return_value=AgentStatus("LOCAL_DSH", True)) as probe:
+        report = check_agent_health("LOCAL_DSH")
+    probe.assert_called_once_with("LOCAL_DSH", ["dsh.exe"])
+    assert report.available_tiers() == ["LOCAL_DSH"]
+
+
 def test_health_report_available_tiers():
     """Test filtering available tiers from health report."""
     report = AgentHealthReport(

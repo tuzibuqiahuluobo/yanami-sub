@@ -14,6 +14,7 @@ from desktop.backend.settings.local_agents import (
     install_local_agent_command_overrides,
     validated_dsh_path,
     validated_agent_path,
+    workbuddy_desktop_path,
 )
 
 
@@ -186,6 +187,19 @@ def test_discovered_npm_dsh_entry_can_be_saved(tmp_path: Path) -> None:
     saved, command = validated_agent_path("LOCAL_DSH", str(entry), {"PATH": str(bin_dir)})
     assert saved == str(entry.resolve())
     assert command == (str(node.resolve()), str(entry.resolve()))
+
+
+def test_workbuddy_login_resolves_the_selected_official_install(tmp_path):
+    install = tmp_path / "Custom WorkBuddy"
+    entry = install / "resources/app.asar.unpacked/cli/bin/codebuddy"
+    entry.parent.mkdir(parents=True)
+    entry.write_text("", encoding="utf-8")
+    executable = install / "WorkBuddy.exe"
+    executable.write_bytes(b"gui")
+    assert workbuddy_desktop_path(str(entry), environ={}) == executable.resolve()
+    assert workbuddy_desktop_path(str(install), environ={}) == executable.resolve()
+    with pytest.raises(ValueError, match="official|官方"):
+        workbuddy_desktop_path(str(tmp_path / "Other CLI"), environ={})
 
 
 @pytest.mark.parametrize(

@@ -56,7 +56,7 @@ export function TaskSettings({
   onChange,
   onOpenSettings,
 }: TaskSettingsProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [tab, setTab] = useState<SettingsTab>("speech");
   const [advanced, setAdvanced] = useState(false);
   const [nameError, setNameError] = useState("");
@@ -277,6 +277,7 @@ export function TaskSettings({
                 ]}
               />
               <small className="field-help">{t.newTask.settings.agentChoiceHint}</small>
+              <small className="field-help">{language === "en" ? "Capabilities depend on the selected model: AGY can support audio/video; Codex, Claude, DSH and WorkBuddy use text in this integration. Native search requires a search-capable route and account access. CLI detection does not verify sign-in." : "能力以所选模型为准：AGY 部分模型支持音频/视频；Codex、Claude、DSH、WorkBuddy 在此集成中使用纯文本。原生搜索还需相应路由及账号权限；检测到 CLI 不代表已登录。"}</small>
               {onOpenSettings ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
             </div> : null}
             {source === "manual" ? <div className="field field-wide task-route-field">
@@ -304,6 +305,7 @@ export function TaskSettings({
                 options={routeOptions}
               />
               <small className="field-help">{t.newTask.settings.llmRouteHint}</small>
+              <small className="field-help">{language === "en" ? "If any fallback candidate cannot process audio/video, correction and planning use text; local speech recognition is unaffected." : "如回退候选不能全部处理音频/视频，纠错与规划会改用纯文本；本地语音识别不受影响。"}</small>
             </div> : null}
             <label className="field field-wide">
               <span>{t.newTask.settings.extraInfo}</span>

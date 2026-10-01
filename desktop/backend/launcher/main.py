@@ -22,6 +22,7 @@ from desktop.backend.jobs.launch import WorkerLaunchContext
 from desktop.backend.jobs.manager import JobManager
 from desktop.backend.launcher.bridge import DesktopBridge
 from desktop.backend.launcher.session_log import SessionLog
+from desktop.backend.launcher.instance import InstanceGuard, RESTART_WAIT_ENV, acquire_instance
 from desktop.backend.launcher.tray import TrayController
 from desktop.backend.resources import gpus, install_log, python_interpreter
 from desktop.backend.resources.desktop_service import DesktopResourceService
@@ -103,6 +104,7 @@ PUBLIC_BRIDGE_METHODS = (
     "save_provider_key",
     "delete_provider_key",
     "probe_local_agents",
+    "open_workbuddy_login",
     "get_dsh_path",
     "set_dsh_path",
     "get_agent_paths",
@@ -167,10 +169,13 @@ def relaunch_application(
     """Start the installed launcher, then let this instance close cleanly."""
 
     target = (executable or Path(sys.executable)).resolve()
+    environment = dict(os.environ)
+    environment[RESTART_WAIT_ENV] = "1"
     subprocess.Popen(
         [str(target)],
         cwd=str(target.parent),
         close_fds=True,
+        env=environment,
     )
     window.destroy()
 
@@ -1042,25 +1047,27 @@ def create_application(
     return window, bridge, development
 
 
-def main(*, startup_prepared: bool = False) -> int:
+def _run_application(instance: InstanceGuard, *, startup_prepared: bool = False, session: SessionLog | None = None) -> int:
     import webview
 
     # Opened first: a start-up that dies in `create_application` is precisely
     # the one with nothing else to show for itself. Resolving where to write is
     # itself something that can fail, and losing the log must not be what loses
     # the app -- so that part gets its own guard and degrades to no log at all.
-    try:
-        session = SessionLog.open(
-            resolve_application_paths(resolve_application_root()).user_data
-        )
-    except Exception as error:  # pragma: no cover - depends on a broken install
-        print(f"Warning: cannot open the session log: {error}", file=sys.stderr)
-        session = SessionLog.disabled()
+    if session is None:
+        try:
+            session = SessionLog.open(
+                resolve_application_paths(resolve_application_root()).user_data
+            )
+        except Exception as error:  # pragma: no cover - depends on a broken install
+            print(f"Warning: cannot open the session log: {error}", file=sys.stderr)
+            session = SessionLog.disabled()
     session.write("starting")
     phase = "startup"
     try:
         install_frozen_pywebview_win32()
         window, _, development = create_application(session, startup_prepared=startup_prepared)
+        instance.bind_window(window)
         phase = "run"
         webview.start(
             prepare_window,
@@ -1077,6 +1084,19 @@ def main(*, startup_prepared: bool = False) -> int:
         raise
     session.finish("exited normally")
     return 0
+
+
+def main(*, startup_prepared: bool = False, instance: InstanceGuard | None = None, session: SessionLog | None = None) -> int:
+    owned_here = instance is None
+    if instance is None:
+        instance = acquire_instance()
+    if instance is None:
+        return 0
+    try:
+        return _run_application(instance, startup_prepared=startup_prepared, session=session)
+    finally:
+        if owned_here:
+            instance.close()
 
 
 if __name__ == "__main__":

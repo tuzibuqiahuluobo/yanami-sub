@@ -405,6 +405,23 @@ def test_worker_context_uses_active_ffmpeg_and_user_settings(
     assert "HF_HUB_DISABLE_SYMLINKS" not in context.environment
 
 
+def test_worker_context_keeps_numba_cache_outside_app_after_data_relocation(
+    tmp_path: Path, monkeypatch,
+) -> None:
+    runtime = FakeRuntime(tmp_path / "Yanami Sub")
+    runtime.paths = runtime.paths.with_big_data(tmp_path / "数据 Data")
+    service = DesktopResourceService(
+        bootstrap=FakeBootstrap(runtime.root), runtime=runtime, system_tool_finders={},
+    )
+    inherited = str(runtime.app_source / "__pycache__")
+    monkeypatch.setenv("NUMBA_CACHE_DIR", inherited)
+    environment = {**os.environ, **service.worker_context({"NUMBA_CACHE_DIR": inherited}).environment}
+    assert environment["NUMBA_CACHE_DIR"] == str(runtime.paths.cache / "numba")
+    assert not Path(environment["NUMBA_CACHE_DIR"]).is_relative_to(runtime.app_source)
+    # Context refreshes for subsequent single and batch jobs retain this path.
+    assert service.worker_context({}).environment["NUMBA_CACHE_DIR"] == environment["NUMBA_CACHE_DIR"]
+
+
 def test_worker_context_respects_explicit_hub_warning_preference(
     tmp_path: Path, monkeypatch
 ) -> None:

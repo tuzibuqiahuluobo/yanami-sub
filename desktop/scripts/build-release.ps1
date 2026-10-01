@@ -7,7 +7,7 @@ param(
     [string]$VenvPath = "",
     [string]$BootstrapDirectory = "",
     [string]$UpstreamDirectory = "",
-    # RC7.6 fixes frozen startup ordering and app/worker compatibility. Older
+    # Startup, integrity and bridge fixes change the frozen launcher. Older
     # launchers must receive the full package, not an application-only delta.
     [string]$MinimumLauncherVersion = $Version,
     # RC3 is the first Yanami Sub-branded build that can use this updater.

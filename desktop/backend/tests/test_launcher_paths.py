@@ -81,9 +81,11 @@ def test_frozen_entrypoint_activates_the_versioned_core_before_startup(
     entrypoint = (Path(__file__).resolve().parents[2] / "YanamiSub.py").read_text(
         encoding="utf-8"
     )
-    assert entrypoint.index("\nif _STARTUP_ALLOWED:\n") < entrypoint.index(
-        "    _activate_packaged_source()"
-    ) < entrypoint.index("    from desktop.backend.launcher.main import main")
+    assert entrypoint.index("instance = acquire_instance()") < entrypoint.index(
+        "if not _preflight_packaged_install(log=session.write):"
+    ) < entrypoint.index("        _activate_packaged_source()") < entrypoint.index(
+        "        from desktop.backend.launcher.main import main"
+    )
 
 
 def test_personal_data_is_the_same_place_for_every_form(
@@ -109,6 +111,25 @@ def test_personal_data_is_the_same_place_for_every_form(
     assert resolve_application_paths(portable).models == (
         portable.resolve() / "models"
     )
+
+
+def test_preflight_reports_the_specific_integrity_failure(tmp_path, monkeypatch):
+    paths = AppPaths.for_root(tmp_path)
+    version = "0.1.2-rc.7.post6"
+    selected = paths.app_versions / version
+    for name, body in app_files(version=version).items():
+        path = selected / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(body)
+    paths.app_current.write_text(json.dumps({"current": version, "pendingHealth": False}), encoding="utf-8")
+    (tmp_path / "launcher.json").write_text(json.dumps({"appVersion": version}), encoding="utf-8")
+    (selected / "desktop/backend/worker/main.py").write_bytes(b"corrupted")
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setenv("FINESUB_APP_ROOT", str(tmp_path))
+    monkeypatch.setattr("desktop.YanamiSub._show_startup_message", lambda _: None)
+    messages = []
+    assert not _preflight_packaged_install(log=messages.append)
+    assert any("desktop/backend/worker/main.py" in message and "rejected" in message for message in messages)
 
 
 def test_bom_pointer_keeps_core_worker_frontend_and_version_in_sync(
@@ -164,13 +185,12 @@ def test_relaunch_starts_the_new_instance_before_closing_this_one(
 
     relaunch_application(FakeWindow(), executable=executable)
 
-    assert events == [
-        (
-            [str(executable.resolve())],
-            {"cwd": str(tmp_path.resolve()), "close_fds": True},
-        ),
-        "destroy",
-    ]
+    command, options = events[0]
+    assert command == [str(executable.resolve())]
+    assert options["cwd"] == str(tmp_path.resolve())
+    assert options["close_fds"] is True
+    assert options["env"]["YANAMI_SUB_RESTART_WAIT"] == "1"
+    assert events[1] == "destroy"
 
 
 def test_app_version_follows_installed_current_pointer(tmp_path: Path) -> None:
@@ -274,6 +294,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "save_provider_key",
         "delete_provider_key",
         "probe_local_agents",
+        "open_workbuddy_login",
         "get_dsh_path",
         "set_dsh_path",
         "get_agent_paths",

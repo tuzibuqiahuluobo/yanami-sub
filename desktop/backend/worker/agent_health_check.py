@@ -146,12 +146,14 @@ def _check_agent_tier(tier: str, command: str | list) -> AgentStatus:
             [*cmd_parts, "--version"],
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=10,
             check=False,
         )
 
         if result.returncode == 0:
-            return AgentStatus(tier=tier, available=True)
+            return AgentStatus(tier=tier, available=True, detail="CLI 可用；登录状态、模型权限与额度尚未验证")
 
         # Some CLIs might not support --version but still be functional
         # Check stderr for common error patterns
@@ -264,7 +266,7 @@ def _executable_exists(executable: str) -> bool:
     return False
 
 
-def check_agent_health() -> AgentHealthReport:
+def check_agent_health(selected_agent: str = "") -> AgentHealthReport:
     """Check health of all configured local agents.
 
     Returns an AgentHealthReport with status for each configured tier.
@@ -283,6 +285,8 @@ def check_agent_health() -> AgentHealthReport:
 
     statuses = []
     for tier in sorted(commands.keys()):
+        if selected_agent and tier != selected_agent:
+            continue
         command = commands[tier]
         if not command:
             continue

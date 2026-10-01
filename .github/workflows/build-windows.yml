@@ -1,0 +1,153 @@
+name: Build Windows installer
+
+on:
+  workflow_dispatch:
+    inputs:
+      signed_updates:
+        description: Also generate signed in-app update assets (requires release-build environment secret)
+        type: boolean
+        required: true
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    environment: release-build
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Check out Yanami Sub
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Check out pinned FineSub
+        uses: actions/checkout@v7
+        with:
+          repository: caca2331/finesub
+          ref: v0.5.1
+          path: upstream
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Prepare isolated build environment
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          python -m venv .venv-desktop
+          $Python = Join-Path $PWD '.venv-desktop\Scripts\python.exe'
+          & $Python -m pip install --upgrade pip
+          & $Python -m pip install -e ./upstream
+          & $Python -m pip install -e '.[desktop,dev]'
+          $Version = (Get-Content VERSION -Raw).Trim()
+          if ($Version -notmatch '^\d+\.\d+\.\d+(?:-rc\.\d+(?:\.post\d+)?|\.post\d+)?$') {
+            throw 'Invalid VERSION; build the selected committed source without overriding its version.'
+          }
+          "BUILD_VERSION=$Version" >> $env:GITHUB_ENV
+          "YANAMI_SUB_VENV=$PWD\.venv-desktop" >> $env:GITHUB_ENV
+          "PYTHONUTF8=1" >> $env:GITHUB_ENV
+
+      - name: Run backend and packaging tests
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          & .\.venv-desktop\Scripts\python.exe -m pytest -q
+
+      - name: Verify and build frontend
+        working-directory: desktop/frontend
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Ensure Inno Setup is installed
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not (Test-Path -LiteralPath "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) {
+            choco install innosetup --yes --no-progress
+          }
+
+      - name: Build launcher and installer
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & ./desktop/scripts/build-bootstrap.ps1 -UpstreamDirectory "$PWD\upstream" -Version $env:BUILD_VERSION -SkipFrontend
+          $Application = "$PWD\dist\bootstrap\Yanami Sub.dist"
+          & ./desktop/scripts/build-installer.ps1 -ApplicationDirectory $Application -Version $env:BUILD_VERSION
+          New-Item -ItemType Directory -Force -Path dist/portable | Out-Null
+          Compress-Archive -LiteralPath $Application -DestinationPath "dist/portable/Yanami-Sub-$env:BUILD_VERSION-windows-x64-portable.zip"
+
+      - name: Generate signed update assets (never publish)
+        if: ${{ inputs.signed_updates }}
+        env:
+          RELEASE_PRIVATE_KEY: ${{ secrets.YANAMI_RELEASE_PRIVATE_KEY }}
+          BUILD_REPOSITORY: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          if (-not $env:RELEASE_PRIVATE_KEY) { throw 'Configure YANAMI_RELEASE_PRIVATE_KEY in the protected release-build environment first.' }
+          $TemporaryRoot = [System.IO.Path]::GetFullPath($env:RUNNER_TEMP).TrimEnd('\')
+          $KeyFile = [System.IO.Path]::GetFullPath((Join-Path $TemporaryRoot 'yanami-release-key.pem'))
+          if (-not $KeyFile.StartsWith($TemporaryRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) { throw 'Invalid temporary key path.' }
+          try {
+            [System.IO.File]::WriteAllText($KeyFile, $env:RELEASE_PRIVATE_KEY, [System.Text.UTF8Encoding]::new($false))
+            Remove-Item Env:RELEASE_PRIVATE_KEY
+            $Keys = Get-Content desktop/resources/trusted-update-keys.json -Raw | ConvertFrom-Json
+            $KeyIds = @($Keys.keys.PSObject.Properties.Name)
+            if ($KeyIds.Count -ne 1) { throw 'Select a signing key explicitly before enabling multi-key cloud builds.' }
+            $KeyId = $KeyIds[0]
+            @'
+          import base64, json, sys
+          from pathlib import Path
+          from cryptography.hazmat.primitives import serialization
+          from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+          key = serialization.load_pem_private_key(Path(sys.argv[1]).read_bytes(), password=None)
+          if not isinstance(key, Ed25519PrivateKey):
+              raise SystemExit('Expected an Ed25519 release key')
+          trusted = json.loads(Path('desktop/resources/trusted-update-keys.json').read_text(encoding='utf-8-sig'))['keys']
+          public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+          if base64.b64encode(public).decode() != trusted[sys.argv[2]]:
+              raise SystemExit('Signing key does not match the shipped trust anchor')
+          '@ | & .\.venv-desktop\Scripts\python.exe - $KeyFile $KeyId
+            $Channel = if ($env:BUILD_VERSION -match '-rc\.') { 'beta' } else { 'stable' }
+            & ./desktop/scripts/build-release.ps1 -Version $env:BUILD_VERSION -Channel $Channel -KeyId $KeyId -PrivateKeyPath $KeyFile -Repository $env:BUILD_REPOSITORY -SkipBootstrap
+          } finally {
+            if (Test-Path -LiteralPath $KeyFile -PathType Leaf) { Remove-Item -LiteralPath $KeyFile -Force }
+            Remove-Item Env:RELEASE_PRIVATE_KEY -ErrorAction SilentlyContinue
+          }
+
+      - name: Downloadable build artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: Yanami-Sub-${{ env.BUILD_VERSION }}-windows-x64
+          path: |
+            dist/installer/*.exe
+            dist/installer/*.sha256
+            dist/portable/*.zip
+            dist/release/*.zip
+            dist/release/*.sha256
+            dist/release/*.json
+            dist/release/*.sig
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
