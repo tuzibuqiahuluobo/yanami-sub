@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -19,8 +18,8 @@ def _read_powershell_redirect(path: Path) -> str:
     )
 
 
-def test_native_command_uses_exit_code_when_stderr_contains_progress() -> None:
-    work = REPO_ROOT / "dist" / f"native-command-test-{os.getpid()}"
+def test_native_command_uses_exit_code_when_stderr_contains_progress(tmp_path: Path) -> None:
+    work = tmp_path / "native-command"
     work.mkdir(parents=True, exist_ok=True)
     stdout_path = work / "stdout.log"
     stderr_path = work / "stderr.log"
@@ -62,8 +61,8 @@ def test_native_command_uses_exit_code_when_stderr_contains_progress() -> None:
         shutil.rmtree(work, ignore_errors=True)
 
 
-def test_native_command_redacts_secrets_and_restores_parent_environment() -> None:
-    work = REPO_ROOT / "dist" / f"native-command-env-test-{os.getpid()}"
+def test_native_command_redacts_secrets_and_restores_parent_environment(tmp_path: Path) -> None:
+    work = tmp_path / "native-command-env"
     work.mkdir(parents=True, exist_ok=True)
     stdout_path = work / "stdout.log"
     stderr_path = work / "stderr.log"

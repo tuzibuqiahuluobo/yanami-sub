@@ -17,6 +17,42 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.1.post4",
+    title: { zh: "0.1.1.post4 · 隐藏检测窗口与启动进度", en: "0.1.1.post4 · Hidden probes and startup progress" },
+    notes: {
+      zh: [
+        "隐藏启动、设置页 Agent 检测和任务 CLI 预检的 CMD 窗口，保留用户主动打开的登录界面。",
+        "先显示原生启动进度小窗，逐项检测结束且主页面载入后再显示主界面；复用结果，不再自动重复扫描。",
+        "并发检测合并，手动检测仍会刷新；单个 CLI 子命令最多 15 秒，整轮能力检测预算 60 秒，并记录状态与耗时。",
+        "采用完整更新包同步冻结启动器修复；正式版默认只接收正式更新。检测不验证登录、模型权限或额度，也不请求模型。",
+      ],
+      en: [
+        "Hide CMD windows for startup/settings Agent probes and task CLI prechecks; explicit login interfaces remain visible.",
+        "Show a native startup progress window first, then the main UI after checks and page loading. Reuse results without a second automatic scan.",
+        "Coalesce concurrent scans but refresh on manual checks. Limit each CLI command to 15 seconds and the capability scan to a 60-second budget; log status and timing.",
+        "A full update carries the frozen-launcher fixes; stable-only updates remain the default. Checks do not verify login, model access or quota and do not call a model.",
+      ],
+    },
+  },
+  {
+    version: "0.1.2-rc.7.post9",
+    title: { zh: "RC7.9 · 隐藏检测窗口与启动进度", en: "RC7.9 · Hidden probes and startup progress" },
+    notes: {
+      zh: [
+        "隐藏启动、设置页 Agent 检测和任务 CLI 预检的 CMD 窗口，保留用户主动打开的登录界面。",
+        "先显示原生启动进度小窗，逐项检测结束且主页面载入后再显示主界面；复用结果，不再自动重复扫描。",
+        "并发检测合并，手动检测仍会刷新；单个 CLI 子命令最多 15 秒，整轮能力检测预算 60 秒，并记录状态与耗时。",
+        "本版采用完整更新包；正式版须主动开启预览更新才接收 RC。检测不验证登录、模型权限或额度，也不请求模型。",
+      ],
+      en: [
+        "Hide CMD windows for startup/settings Agent probes and task CLI prechecks; explicit login interfaces remain visible.",
+        "Show a native startup progress window first, then the main UI after checks and page loading. Reuse results without a second automatic scan.",
+        "Coalesce concurrent scans but refresh on manual checks. Limit each CLI command to 15 seconds and the capability scan to a 60-second budget; log status and timing.",
+        "Uses a full launcher update. Stable installs must opt into previews. Checks do not verify login, model access or quota and do not call a model.",
+      ],
+    },
+  },
+  {
     version: "0.1.1.post3",
     title: { zh: "0.1.1.post3 · 反馈、音效与 Agent 设置", en: "0.1.1.post3 · Feedback, sounds and Agent settings" },
     notes: {

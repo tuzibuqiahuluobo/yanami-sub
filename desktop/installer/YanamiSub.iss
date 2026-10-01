@@ -3,7 +3,7 @@
 #endif
 
 #ifndef AppVersion
-  #define AppVersion "0.1.1.post3"
+  #define AppVersion "0.1.1.post4"
 #endif
 
 #ifndef OutputDir

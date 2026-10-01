@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -11,8 +10,8 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "desktop" / "scripts" / "package-bootstrap.ps1"
 
 
-def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources() -> None:
-    work = REPO_ROOT / "dist" / f"package-bootstrap-test-{os.getpid()}"
+def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Path) -> None:
+    work = tmp_path / "package-bootstrap"
     fixture_repo = work / "repo"
     output = work / "output"
     launcher_dist = output / "Yanami Sub.dist"
