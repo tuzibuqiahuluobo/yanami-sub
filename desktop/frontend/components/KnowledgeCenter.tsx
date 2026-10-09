@@ -197,13 +197,13 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
     try {
       const result = await desktopApi.runKnowledgeMaintenance({ command, args, content });
       setOutput(result.output || `${command}: OK`);
-      const nextSnapshot = await loadSnapshot();
+      await loadSnapshot();
       if (selectedName && command === "edit") {
         const next = await desktopApi.getKnowledgeEntry(selectedName);
         setDocument(next);
         setDraft(next.text);
       }
-      showSuccess(nextSnapshot.revision !== snapshot?.revision ? t.toast.knowledgeUpdated : (language === "zh" ? "操作完成，知识库未变化；请查看报告" : "Operation finished; knowledge unchanged. Review the report."), `knowledge-maintenance-${command}`);
+      showSuccess(language === "zh" ? "操作完成，写入结果请查看报告" : "Operation finished; review the report for write results", `knowledge-maintenance-${command}`);
       return result;
     } catch (reason) {
       setError(errorMessage(reason));
