@@ -104,8 +104,9 @@ class GitHubUpdateService:
             if isinstance(asset, dict)
         }
         try:
-            manifest_url = assets["yanami-sub-update-manifest.json"]
-            signature_url = assets["yanami-sub-update-manifest.sig"]
+            manifest_name, signature_name = manifest_asset_names(assets)
+            manifest_url = assets[manifest_name]
+            signature_url = assets[signature_name]
         except KeyError as error:
             raise ValueError(
                 "GitHub Release is missing the signed Yanami Sub update manifest"
@@ -358,10 +359,20 @@ def is_desktop_release(
         return False
     if channel != "all" and bool(release.get("prerelease")) != (channel == "beta"):
         return False
-    return {
-        "yanami-sub-update-manifest.json",
-        "yanami-sub-update-manifest.sig",
-    } <= set(release_assets(release))
+    try:
+        manifest_asset_names(release_assets(release))
+        return True
+    except KeyError:
+        return False
+
+
+def manifest_asset_names(assets: object) -> tuple[str, str]:
+    """v2 is a discovery gate: old RC7 clients must install the 0.1.2 bridge first."""
+    for suffix in ("-v2", ""):
+        names = (f"yanami-sub-update-manifest{suffix}.json", f"yanami-sub-update-manifest{suffix}.sig")
+        if all(name in assets for name in names):
+            return names
+    raise KeyError("signed update manifest")
 
 
 def _fetch_release(

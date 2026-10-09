@@ -290,23 +290,11 @@ def _feedback(final_srt: str) -> dict[str, Any]:
 
 
 def _refined_update(payload: Mapping[str, Any]) -> dict[str, Any]:
-    from finesub.llm.knowledge.update import derive_task_paths, run_knowledge_update
+    from desktop.backend.worker.knowledge_workflow import generate_refined
 
-    values = [str(value) for value in payload.get("llm_model") or []]
-    artifact_dir = derive_task_paths(str(payload["final_srt"]))["artifact_dir"]
-    with _routing_override(values):
-        report = run_knowledge_update(
-            final_srt=str(payload["final_srt"]),
-            artifact_dir=artifact_dir,
-            refined_srt=str(payload["refined_srt"]),
-            task_id=str(payload["task_id"]),
-            task_summary=str(payload.get("task_summary") or ""),
-            knowledge_root=_root(),
-            execute=True,
-            apply=bool(payload.get("apply", True)),
-            resume=bool(payload.get("resume", True)),
-        )
-    return _json_safe(report)
+    if payload.get("apply"):
+        raise ValueError("请先生成并审阅提案，再按编号应用 / Review a proposal before applying it")
+    return generate_refined(_root(), dict(payload))
 
 
 def _dispatch(payload: Mapping[str, Any]) -> dict[str, Any]:
@@ -333,6 +321,18 @@ def _dispatch(payload: Mapping[str, Any]) -> dict[str, Any]:
         return _feedback(str(payload.get("final_srt") or ""))
     if action == "refined_update":
         return _refined_update(payload)
+    if action == "bilingual":
+        from desktop.backend.worker.knowledge_workflow import inspect_pair, generate_pair
+
+        if not payload.get("execute"):
+            report = inspect_pair(dict(payload))
+            report["pairs"] = report["pairs"][:10]
+            return report
+        return generate_pair(_root(), dict(payload))
+    if action == "apply_proposal":
+        from desktop.backend.worker.knowledge_workflow import apply_draft
+
+        return apply_draft(_root(), str(payload.get("draft_id") or ""))
     raise ValueError(f"unsupported knowledge action: {action}")
 
 

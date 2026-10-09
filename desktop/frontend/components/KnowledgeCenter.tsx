@@ -26,10 +26,13 @@ import type {
   KnowledgeShareCommand,
   KnowledgeSnapshot,
   TaskRequest,
+  RefinedKnowledgeUpdateReport,
 } from "@/lib/types";
 
 import { useLanguage } from "./LanguageProvider";
 import { useToast } from "./ToastProvider";
+import { ConfirmDialog } from "./ConfirmDialog";
+import { BilingualKnowledgeImport, ProposalReview, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
 
 type KnowledgeTab = "library" | "feedback" | "maintenance" | "sharing";
@@ -71,7 +74,7 @@ function taskLabel(task: CompletedKnowledgeTask): string {
 
 
 export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showSuccess } = useToast();
   const [tab, setTab] = useState<KnowledgeTab>("library");
   const [snapshot, setSnapshot] = useState<KnowledgeSnapshot | null>(null);
@@ -105,6 +108,11 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
   const [feedbackTaskId, setFeedbackTaskId] = useState("");
   const [feedback, setFeedback] = useState<KnowledgeFeedback | null>(null);
   const [refinedPath, setRefinedPath] = useState("");
+  const [refinedProposal, setRefinedProposal] = useState<RefinedKnowledgeUpdateReport | null>(null);
+  const [confirmation, setConfirmation] = useState<{ message: string; action: () => void } | null>(null);
+  const confirmAction = (message: string, action: () => void) => setConfirmation({ message, action });
+
+  useEffect(() => { setRefinedProposal(null); }, [refinedPath, feedbackTaskId]);
 
   const [candidateReason, setCandidateReason] = useState("");
   const [restoreId, setRestoreId] = useState("");
@@ -189,13 +197,13 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
     try {
       const result = await desktopApi.runKnowledgeMaintenance({ command, args, content });
       setOutput(result.output || `${command}: OK`);
-      await loadSnapshot();
+      const nextSnapshot = await loadSnapshot();
       if (selectedName && command === "edit") {
         const next = await desktopApi.getKnowledgeEntry(selectedName);
         setDocument(next);
         setDraft(next.text);
       }
-      showSuccess(t.toast.knowledgeUpdated, `knowledge-maintenance-${command}`);
+      showSuccess(nextSnapshot.revision !== snapshot?.revision ? t.toast.knowledgeUpdated : (language === "zh" ? "操作完成，知识库未变化；请查看报告" : "Operation finished; knowledge unchanged. Review the report."), `knowledge-maintenance-${command}`);
       return result;
     } catch (reason) {
       setError(errorMessage(reason));
@@ -212,7 +220,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
       const result = await desktopApi.runKnowledgeShare({ command, args });
       setOutput(result.output || `share ${command}: OK`);
       await loadSnapshot();
-      showSuccess(t.toast.knowledgeUpdated, `knowledge-share-${command}`);
+      showSuccess(language === "zh" ? "共享操作已完成，请查看报告" : "Sharing operation finished; review the report", `knowledge-share-${command}`);
       return result;
     } catch (reason) {
       setError(errorMessage(reason));
@@ -254,7 +262,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
 
   const chooseFile = async (target: "refined" | "material") => {
     try {
-      const chosen = await desktopApi.selectInputFile();
+      const chosen = await desktopApi.selectSubtitleFile();
       if (!chosen.path) return;
       if (target === "refined") setRefinedPath(chosen.path);
       else setIngest((current) => ({ ...current, material: chosen.path || "" }));
@@ -265,21 +273,23 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
 
   const applyRefined = async (apply: boolean) => {
     if (!selectedTask || !refinedPath.trim()) return;
-    if (apply && !window.confirm(t.knowledge.feedback.applyConfirm)) return;
+    if (apply && !refinedProposal?.draft_id) return;
+    if (!apply) setRefinedProposal(null);
     setBusy(true);
     setError("");
     try {
-      const report = await desktopApi.runRefinedKnowledgeUpdate({
+      const report = apply && refinedProposal?.draft_id ? await desktopApi.applyKnowledgeProposal(refinedProposal.draft_id) : await desktopApi.runRefinedKnowledgeUpdate({
         task_id: selectedTask.task_id,
         refined_srt: refinedPath.trim(),
         task_summary: selectedTask.request.task_summary,
         llm_model: selectedTask.request.llm_model,
-        apply,
+        apply: false,
         resume: true,
       });
+      setRefinedProposal(report);
       setOutput(JSON.stringify(report, null, 2));
       await loadSnapshot();
-      showSuccess(t.toast.knowledgeUpdated, "knowledge-refined-update");
+      if (report.status === "applied" || report.status === "generated") showSuccess(knowledgeOutcome(report, language === "zh"), "knowledge-refined-update");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -444,9 +454,9 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
                       className="button button-secondary button-danger-text"
                       disabled={busy}
                       onClick={() => {
-                        if (window.confirm(t.knowledge.editor.retireConfirm)) {
+                        confirmAction(`${document.key}\n\n${t.knowledge.editor.retireConfirm}`, () => {
                           void runMaintenance("retire", [document.qualified_name, "--reason", "desktop"]);
-                        }
+                        });
                       }}
                     >
                       {t.knowledge.editor.retire}
@@ -476,7 +486,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
             <div className="knowledge-action-grid">
               <label className="field">
                 <span>{t.knowledge.feedback.task}</span>
-                <select value={feedbackTaskId} onChange={(event) => { setFeedbackTaskId(event.target.value); setFeedback(null); }}>
+                <select disabled={busy} value={feedbackTaskId} onChange={(event) => { setFeedbackTaskId(event.target.value); setFeedback(null); }}>
                   <option value="">{t.knowledge.feedback.noTask}</option>
                   {completedTasks.map((task) => <option key={task.task_id} value={task.task_id}>{taskLabel(task)}</option>)}
                 </select>
@@ -511,13 +521,14 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
             </div>
             <div className="knowledge-workflow-row">
               <div className="knowledge-file-row">
-                <input value={refinedPath} placeholder={t.knowledge.feedback.refinedPlaceholder} aria-label={t.knowledge.feedback.refinedPlaceholder} onChange={(event) => setRefinedPath(event.target.value)} />
-                <button type="button" className="button button-secondary" onClick={() => void chooseFile("refined")}>{t.knowledge.browse}</button>
+                <input disabled={busy} value={refinedPath} placeholder={t.knowledge.feedback.refinedPlaceholder} aria-label={t.knowledge.feedback.refinedPlaceholder} onChange={(event) => setRefinedPath(event.target.value)} />
+                <button type="button" disabled={busy} className="button button-secondary" onClick={() => void chooseFile("refined")}>{t.knowledge.browse}</button>
               </div>
               <div className="knowledge-actions">
                 <button type="button" className="button button-secondary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(false)}>{t.knowledge.feedback.propose}</button>
-                <button type="button" className="button button-primary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(true)}>{t.knowledge.feedback.apply}</button>
+                <button type="button" className="button button-primary" disabled={busy || refinedProposal?.status !== "generated" || !refinedProposal.proposal_count} onClick={() => confirmAction(t.knowledge.feedback.applyConfirm, () => void applyRefined(true))}>{language === "zh" ? "应用已审阅提案" : "Apply reviewed proposal"}</button>
               </div>
+              {refinedProposal ? <ProposalReview report={refinedProposal} /> : null}
             </div>
           </section>
         </div>
@@ -530,7 +541,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
             <div className="knowledge-command-row">
               <button type="button" className="button button-secondary" disabled={busy} onClick={() => void runMaintenance("refresh")}><RefreshCw size={15} />{t.knowledge.maintenance.rebuild}</button>
               <button type="button" className="button button-secondary" disabled={busy} onClick={() => void runMaintenance("phase-b")}>{t.knowledge.maintenance.phasePreview}</button>
-              <button type="button" className="button button-secondary" disabled={busy} onClick={() => { if (window.confirm(t.knowledge.maintenance.phaseConfirm)) void runMaintenance("phase-b", ["--execute"]); }}>{t.knowledge.maintenance.phaseApply}</button>
+              <button type="button" className="button button-secondary" disabled={busy} onClick={() => confirmAction(t.knowledge.maintenance.phaseConfirm, () => void runMaintenance("phase-b", ["--execute"]))}>{t.knowledge.maintenance.phaseApply}</button>
             </div>
             <div className="knowledge-command-group">
               <strong>{t.knowledge.maintenance.verify}</strong>
@@ -566,7 +577,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
               {(snapshot?.revisions || []).map((revision) => (
                 <article key={revision.rev}>
                   <div><strong>rev {revision.rev} · {revision.kind}</strong><p>{revision.note || revision.task_id || revision.created_at}</p></div>
-                  <button type="button" className="button button-secondary button-danger-text" disabled={busy} onClick={() => { if (window.confirm(t.knowledge.maintenance.revertConfirm.replace("{rev}", String(revision.rev)))) void runMaintenance("revert", [String(revision.rev)]); }}>{t.knowledge.maintenance.revert}</button>
+                  <button type="button" className="button button-secondary button-danger-text" disabled={busy} onClick={() => confirmAction(t.knowledge.maintenance.revertConfirm.replace("{rev}", String(revision.rev)), () => void runMaintenance("revert", [String(revision.rev)]))}>{t.knowledge.maintenance.revert}</button>
                 </article>
               ))}
             </div>
@@ -674,6 +685,8 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
           <pre>{output}</pre>
         </section>
       ) : null}
+      {tab === "feedback" ? <BilingualKnowledgeImport snapshot={snapshot} tasks={tasks} onApplied={() => loadSnapshot()} /> : null}
+      <ConfirmDialog config={{ id: "knowledge-action", title: language === "zh" ? "确认知识库操作" : "Confirm knowledge operation", message: confirmation?.message || "", allowRemember: false, tone: "danger" }} open={Boolean(confirmation)} onCancel={() => setConfirmation(null)} onConfirm={() => { const action = confirmation?.action; setConfirmation(null); action?.(); }} />
       {busy ? <div className="knowledge-busy" role="status"><RefreshCw size={15} />{t.knowledge.running}</div> : null}
     </div>
   );

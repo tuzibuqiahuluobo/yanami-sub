@@ -808,8 +808,11 @@ function previewApi(): DesktopApi {
     },
     async runRefinedKnowledgeUpdate() {
       return {
+        draft_id: "00000000000000000000000000000001",
+        status: "generated" as const,
+        proposal_count: 1,
         mode: "refined_aligned",
-        chunks: [{ status: "applied" }],
+        chunks: [{ proposal_text: '{"op":"append_lines","category":"common","entry":"FineSub","section":"档案","content":"[译名] Yanami Sub"}' }],
         warnings: [],
       };
     },
@@ -853,6 +856,13 @@ function previewApi(): DesktopApi {
     async openTasksDirectory() {
       return { path: "C:\\Yanami Sub\\tasks" };
     },
+    async selectSubtitleFile() { return { path: String.raw`D:\subtitles\refined.srt` }; },
+    async runBilingualKnowledgeUpdate(request) {
+      return { status: "generated" as const, count: 48, pairs: [],
+        ...(request.execute ? { draft_id: "00000000000000000000000000000002", proposal_count: 1,
+          chunks: [{ proposal_text: '<knowledge_proposals>\n{"op":"append_lines","category":"common","entry":"FineSub","section":"档案","content":"[定名] FineSub"}\n</knowledge_proposals>' }] } : {}) };
+    },
+    async applyKnowledgeProposal(draftId) { return { draft_id: draftId, status: "applied" as const, committed_chunks: 1, revision: 13 }; },
     async listTaskLogs() {
       return { items: [], total: 0 };
     },
@@ -1058,6 +1068,9 @@ function nativeApi(): DesktopApi {
       call("get_task_knowledge_feedback", taskId),
     runRefinedKnowledgeUpdate: (request) =>
       call("run_refined_knowledge_update", request),
+    selectSubtitleFile: () => call("select_subtitle_file"),
+    runBilingualKnowledgeUpdate: (request) => call("run_bilingual_knowledge_update", request),
+    applyKnowledgeProposal: (draftId) => call("apply_knowledge_proposal", draftId),
     openKnowledgeDirectory: () => call("open_knowledge_directory"),
     relocateData: (reset = false) => call("relocate_data", reset),
     purgeRebuildableData: (confirmation) =>

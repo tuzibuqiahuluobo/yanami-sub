@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from typing import Literal
 from zipfile import ZIP_DEFLATED, ZipFile, ZipInfo
+from packaging.version import Version
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import (
@@ -153,10 +154,11 @@ def build_release(config: ReleaseBuildConfig) -> ReleaseArtifacts:
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    manifest = output / "yanami-sub-update-manifest.json"
+    discovery_suffix = "-v2" if config.channel == "beta" and Version(config.version) >= Version("0.1.3rc1") else ""
+    manifest = output / f"yanami-sub-update-manifest{discovery_suffix}.json"
     manifest.write_bytes(manifest_bytes)
     signature = _load_private_key(config.private_key_path).sign(manifest_bytes)
-    manifest_sig = output / "yanami-sub-update-manifest.sig"
+    manifest_sig = output / f"yanami-sub-update-manifest{discovery_suffix}.sig"
     manifest_sig.write_bytes(base64.b64encode(signature) + b"\n")
     (output / f"{app_name}.sha256").write_text(
         f"{_sha256(app_zip)}  {app_name}\n",

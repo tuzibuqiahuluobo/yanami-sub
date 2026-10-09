@@ -80,6 +80,7 @@ class KnowledgeService:
         llm_model: list[str],
         apply: bool,
         resume: bool,
+        request: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         return self._invoke(
             {
@@ -91,8 +92,15 @@ class KnowledgeService:
                 "llm_model": llm_model,
                 "apply": apply,
                 "resume": resume,
+                "request": request,
             }
         )
+
+    def bilingual(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._invoke({**payload, "action": "bilingual"})
+
+    def apply_proposal(self, draft_id: str) -> dict[str, Any]:
+        return self._invoke({"action": "apply_proposal", "draft_id": draft_id})
 
     def _invoke(self, payload: Mapping[str, Any]) -> dict[str, Any]:
         context = self.context_provider()

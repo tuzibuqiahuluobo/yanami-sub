@@ -20,6 +20,7 @@ from desktop.backend.common.models import (
     KnowledgeCommandRequest,
     KnowledgeShareCommandRequest,
     RefinedKnowledgeUpdateRequest,
+    BilingualKnowledgeRequest,
     LocalAgentStatus,
     RoutingUpdate,
     SharedSettings,
@@ -157,6 +158,7 @@ class DesktopBridge:
         self.updates = updates
         self.update_installs = update_installs
         self.file_selector = file_selector
+        self.subtitle_file_selector: Callable[[], str | None] | None = None
         self.batch_file_selector = batch_file_selector
         self.batch_manifest_selector = batch_manifest_selector
         self.batch_manifest_export_selector = batch_manifest_export_selector
@@ -297,6 +299,11 @@ class DesktopBridge:
                 )
             )
         return self._guard(lambda: {"path": self.file_selector()})
+
+    def select_subtitle_file(self) -> dict[str, Any]:
+        if self.subtitle_file_selector is None:
+            return _failure(BridgeError(code="unavailable", message="字幕选择窗口不可用"))
+        return self._guard(lambda: {"path": self.subtitle_file_selector()})
 
     def select_batch_files(self) -> dict[str, Any]:
         if self.batch_file_selector is None:
@@ -1301,9 +1308,23 @@ class DesktopBridge:
                 llm_model=values.llm_model,
                 apply=values.apply,
                 resume=values.resume,
+                request=request.model_dump(mode="json"),
             )
 
         return self._knowledge_guard(update)
+
+    def run_bilingual_knowledge_update(self, payload: dict[str, Any]) -> dict[str, Any]:
+        def run() -> dict[str, Any]:
+            values = BilingualKnowledgeRequest.model_validate(payload)
+            if values.execute and not values.subject.strip():
+                raise ValueError("请选择目标知识条目 / Select a target entry")
+            if values.style_subject and not values.style_subject.startswith("style/"):
+                raise ValueError("请选择 style 分类的风格条目")
+            return self.knowledge.bilingual(values.model_dump(mode="json"))
+        return self._knowledge_guard(run)
+
+    def apply_knowledge_proposal(self, draft_id: str) -> dict[str, Any]:
+        return self._knowledge_guard(lambda: self.knowledge.apply_proposal(draft_id))
 
     def open_knowledge_directory(self) -> dict[str, Any]:
         def open_directory() -> dict[str, str]:

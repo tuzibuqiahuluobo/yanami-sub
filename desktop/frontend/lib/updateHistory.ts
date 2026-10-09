@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.2",
+    title: { zh: "0.1.2 · 人工精修双语字幕与知识提案", en: "0.1.2 · Bilingual subtitles and reviewed knowledge proposals" },
+    notes: {
+      zh: ["新增独立双语 SRT 导入，严格核对时间轴与编码；无需重跑音视频。", "精修回灌继承任务模型来源、指定 Agent、路由、难度与风格写入权限。", "保存提案后再审阅与提交；应用同一份提案，不重复调用模型，冲突与无变化分别提示。", "知识库确认弹窗使用应用主题，支持键盘操作。旧正式版和 RC7.9 先升级本版，再主动开启预览更新获取 0.1.3 RC1.0。"],
+      en: ["Import aligned bilingual SRTs without original tasks or media; validate timings and encodings.", "Refined updates inherit task source, Agent, routing, difficulty and style write permissions.", "Review a saved proposal before applying the same text without another model call; distinguish conflicts and no changes.", "Themed, keyboard-accessible confirmations. Older stable and RC7.9 clients install this bridge before opting into 0.1.3 RC1.0."],
+    },
+  },
+  {
     version: "0.1.2-rc.7.post9",
     title: { zh: "RC7.9 · 隐藏检测窗口与启动进度", en: "RC7.9 · Hidden probes and startup progress" },
     notes: {

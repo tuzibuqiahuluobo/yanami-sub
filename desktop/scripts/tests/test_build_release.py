@@ -89,6 +89,24 @@ def test_release_builder_emits_signed_assets(tmp_path: Path) -> None:
     assert parsed.assets.app.size == result.app_zip.stat().st_size
 
 
+def test_new_preview_uses_signed_v2_discovery_gate(tmp_path: Path) -> None:
+    version = "0.1.3-rc.1"
+    private = Ed25519PrivateKey.generate()
+    key = tmp_path / "key.pem"
+    key.write_bytes(private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
+    app, full = tmp_path / "app", tmp_path / "full"
+    _write_app_source(app, version)
+    _write_full_source(full, version)
+    result = build_release(ReleaseBuildConfig(version=version, channel="beta", key_id="test", private_key_path=key,
+        app_source=app, full_source=full, output_dir=tmp_path / "release", minimum_launcher_version="0.1.2",
+        minimum_supported_version="0.1.2", app_supported_from=[], release_notes="RC1.0"))
+    assert result.manifest.name == "yanami-sub-update-manifest-v2.json"
+    assert result.manifest_sig.name == "yanami-sub-update-manifest-v2.sig"
+    assert not (result.manifest.parent / "yanami-sub-update-manifest.json").exists()
+    public = base64.b64encode(private.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)).decode()
+    assert verify_manifest(result.manifest.read_bytes(), result.manifest_sig.read_bytes(), {"test": public}, expected_channel="beta").version == version
+
+
 def test_release_zip_is_reproducible(tmp_path: Path) -> None:
     private = Ed25519PrivateKey.generate()
     private_path = tmp_path / "release-key.pem"

@@ -523,7 +523,7 @@ class RefinedKnowledgeUpdateRequest(DesktopModel):
     refined_srt: str = Field(min_length=1, max_length=32_768)
     task_summary: str = Field(default="", max_length=20_000)
     llm_model: list[str] = Field(default_factory=list)
-    apply: bool = True
+    apply: bool = False
     resume: bool = True
 
     @field_validator("task_id", "refined_srt")
@@ -543,6 +543,18 @@ class RefinedKnowledgeUpdateRequest(DesktopModel):
     @classmethod
     def validate_llm_model(cls, value: list[str]) -> list[str]:
         return TaskRequest.validate_llm_model(value)
+
+
+class BilingualKnowledgeRequest(DesktopModel):
+    source_srt: str = Field(min_length=1, max_length=32_768)
+    refined_srt: str = Field(min_length=1, max_length=32_768)
+    source_encoding: Literal["auto", "utf-8-sig", "utf-16", "gb18030", "cp932"] = "auto"
+    refined_encoding: Literal["auto", "utf-8-sig", "utf-16", "gb18030", "cp932"] = "auto"
+    subject: str = Field(default="", max_length=200)
+    style_subject: str = Field(default="", max_length=200)
+    prompt: str = Field(default="", max_length=20_000)
+    request: TaskRequest
+    execute: bool = False
 
 
 class BatchItemRequest(TaskRequest):
