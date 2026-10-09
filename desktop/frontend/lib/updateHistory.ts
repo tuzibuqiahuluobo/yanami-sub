@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.1.3-rc.1",
+    title: { zh: "0.1.3 RC1.0 · 双语字幕知识导入", en: "0.1.3 RC1.0 · Bilingual knowledge import" },
+    notes: {
+      zh: ["包含 0.1.2 的双语 SRT 导入、模型与风格继承、保存提案后提交和主题化确认弹窗。", "RC7.9 必须先升 0.1.2，再开启预览更新获取本版；本预览使用签名 v2 清单发现入口和完整更新包。"],
+      en: ["Includes 0.1.2 bilingual SRT import, model/style inheritance, saved-proposal apply and themed confirmations.", "RC7.9 installs 0.1.2 first, then opts into previews. Uses signed v2 discovery assets and a full update."],
+    },
+  },
+  {
     version: "0.1.2",
     title: { zh: "0.1.2 · 人工精修双语字幕与知识提案", en: "0.1.2 · Bilingual subtitles and reviewed knowledge proposals" },
     notes: {
