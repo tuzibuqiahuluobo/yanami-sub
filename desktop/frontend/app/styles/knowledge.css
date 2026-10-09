@@ -691,3 +691,41 @@
     animation: none;
   }
 }
+.knowledge-bilingual fieldset {
+  padding: 0;
+  margin: 1.5rem 0;
+  border: 0;
+  min-width: 0;
+}
+
+.knowledge-proposal-review {
+  margin-top: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--panel-subtle);
+}
+
+.knowledge-proposal-review pre {
+  max-height: 320px;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 0.8rem;
+}
+
+.knowledge-confirm-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  margin-bottom: 1rem;
+  border-radius: 14px;
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.knowledge-confirm-danger p {
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}

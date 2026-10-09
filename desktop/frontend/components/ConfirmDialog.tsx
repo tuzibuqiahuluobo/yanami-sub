@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef, useId } from "react";
+import { ShieldAlert } from "lucide-react";
 
 import { saveUi, uiValue } from "@/lib/preferences";
 import { useLanguage } from "./LanguageProvider";
@@ -13,6 +14,7 @@ export interface ConfirmDialogConfig {
   confirmLabel?: string;
   cancelLabel?: string;
   allowRemember?: boolean;
+  tone?: "danger";
 }
 
 interface ConfirmDialogProps {
@@ -54,6 +56,25 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useLanguage();
   const [remember, setRemember] = useState(false);
+  const card = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+    setRemember(false);
+    const previous = document.activeElement as HTMLElement | null;
+    card.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); onCancel(); }
+      if (event.key !== "Tab") return;
+      const controls = Array.from(card.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled)") || []);
+      const first = controls[0], last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener("keydown", keydown);
+    return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
+  }, [open, onCancel]);
 
   // A modal has to own the scroll wheel. Without this the form underneath kept
   // scrolling while the dialog was up, so the page could move out from behind
@@ -81,7 +102,7 @@ export function ConfirmDialog({
       saveUi({ dismissedConfirms: [...dismissed(), config.id] });
     }
     onConfirm();
-  }, [remember, config.id, onConfirm]);
+  }, [remember, config.id, config.allowRemember, onConfirm]);
 
   if (!open) {
     return null;
@@ -89,8 +110,9 @@ export function ConfirmDialog({
 
   return (
     <div className="dialog-overlay" onClick={onCancel}>
-      <div className="dialog-card" onClick={(e) => e.stopPropagation()}>
-        <h3>{config.title}</h3>
+      <div ref={card} className={`dialog-card ${config.tone === "danger" ? "knowledge-confirm-danger" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+        {config.tone === "danger" ? <div className="knowledge-confirm-icon"><ShieldAlert size={24} /></div> : null}
+        <h3 id={titleId}>{config.title}</h3>
         <p>{config.message}</p>
         {config.allowRemember !== false ? <label className="dialog-remember">
           <input

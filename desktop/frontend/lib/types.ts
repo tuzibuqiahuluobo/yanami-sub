@@ -489,6 +489,9 @@ export interface RefinedKnowledgeUpdateRequest {
 }
 
 export interface RefinedKnowledgeUpdateReport {
+  draft_id?: string;
+  status?: "generated" | "applied" | "partial" | "blocked" | "no_change" | "already_applied";
+  proposal_count?: number;
   mode?: string;
   task_fingerprint?: string;
   chunks?: unknown[];
@@ -637,6 +640,9 @@ export interface UpdateInstallSnapshot {
 }
 
 export interface DesktopApi {
+  selectSubtitleFile(): Promise<{ path: string | null }>;
+  runBilingualKnowledgeUpdate(request: BilingualKnowledgeRequest): Promise<RefinedKnowledgeUpdateReport>;
+  applyKnowledgeProposal(draftId: string): Promise<RefinedKnowledgeUpdateReport>;
   listTaskLogs(query?: string, offset?: number): Promise<{ items: TaskLogLocation[]; total: number }>;
   openTaskLogLocation(identifier: string): Promise<{ path: string }>;
   collectFeedbackLogs(selected: string[]): Promise<DiagnosticPackage>;
@@ -762,6 +768,18 @@ export interface DesktopApi {
   closeWindow(): Promise<unknown>;
   restartApplication(): Promise<unknown>;
   setWindowChrome(background: string, foreground: string): Promise<unknown>;
+}
+
+export interface BilingualKnowledgeRequest {
+  source_srt: string;
+  refined_srt: string;
+  source_encoding?: string;
+  refined_encoding?: string;
+  subject: string;
+  style_subject?: string;
+  prompt?: string;
+  request: Partial<TaskRequest> & { input: string };
+  execute: boolean;
 }
 
 export interface TaskLogLocation {

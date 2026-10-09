@@ -1016,6 +1016,15 @@ def create_application(
 
     bridge.file_selector = select_file
 
+    def select_subtitle_file() -> str | None:
+        result = window.create_file_dialog(
+            webview.FileDialog.OPEN,
+            file_types=("字幕与文本 (*.srt;*.txt;*.md)", "所有文件 (*.*)"),
+        )
+        return str(result[0]) if result else None
+
+    bridge.subtitle_file_selector = select_subtitle_file
+
     def select_batch_files() -> list[str]:
         result = window.create_file_dialog(
             webview.FileDialog.OPEN,
