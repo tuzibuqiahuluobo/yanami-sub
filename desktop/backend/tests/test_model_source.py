@@ -11,31 +11,33 @@ from finesub.llm.routing.execution_policy import load_execution_settings
 from finesub.llm.routing.model_routes import default_model_routes
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.core_compat import profile_for_request, unified_llm_contract
 from desktop.backend.settings.local_agents import COMMANDS_ENV
 from desktop.backend.worker.main import _routing_override
 from desktop.backend.worker.model_source import source_route
 
+CODEBUDDY_TIER = "LOCAL_CODEBUDDY" if unified_llm_contract() else "LOCAL_WORKBUDDY"
+CODEBUDDY_GROUP = "codebuddy-capable" if unified_llm_contract() else "workbuddy-capable"
+CODEBUDDY_TARGET = "local-codebuddy-glm-5_3-flash" if unified_llm_contract() else "local-workbuddy-deepseek-v4-flash"
+
 
 def test_workbuddy_efficiency_shortcut_is_a_valid_text_only_profile():
-    from finesub.llm.routing.profiles import resolve_profile
-
     request = TaskRequest(
-        input="视频.mp4", stage="final-srt", llm_source="agent", llm_agent="LOCAL_WORKBUDDY",
+        input="视频.mp4", stage="final-srt", llm_source="agent", llm_agent=CODEBUDDY_TIER,
         llm_difficulty="efficiency", llm_retrieval="none", llm_media="text",
         llm_correction_media="text", llm_planning_media="text", knowledge="none", llm_fast="auto",
     )
-    profile = resolve_profile(
-        media=request.llm_media, retrieval=request.llm_retrieval, difficulty=request.llm_difficulty,
-        correction_media=request.llm_correction_media, planning_media=request.llm_planning_media,
-    )
+    profile = profile_for_request(request)
     assert profile.external_injection is False
     assert profile.native_search is False
-    assert profile.correction_media == profile.planning_media == "text"
+    assert profile.correction_media == "text"
+    if not unified_llm_contract():
+        assert profile.planning_media == "text"
     assert request.knowledge == "none"
     assert request.llm_fast == "auto"
 
 
-@pytest.mark.parametrize("tier,group", [("LOCAL_DSH", "dsh-capable"), ("LOCAL_WORKBUDDY", "workbuddy-capable")])
+@pytest.mark.parametrize("tier,group", [("LOCAL_DSH", "dsh-capable"), (CODEBUDDY_TIER, CODEBUDDY_GROUP)])
 def test_manual_text_only_route_adapts_both_axes_and_restores_overlay(tier, group):
     from finesub.llm.routing.model_routes import runtime_preferred
     before = runtime_preferred()
@@ -43,7 +45,9 @@ def test_manual_text_only_route_adapts_both_axes_and_restores_overlay(tier, grou
     with source_route(request) as route:
         assert route.source == "manual"
         assert route.models == [group]
-        assert route.correction_media == route.planning_media == "text"
+        assert route.correction_media == "text"
+        if not unified_llm_contract():
+            assert route.planning_media == "text"
         assert all(default_model_routes().target_fact(target).provider_tier == tier for target in route.targets)
         assert runtime_preferred() == before
 
@@ -56,13 +60,13 @@ def test_manual_multimodal_target_keeps_audio():
 
 def test_manual_scoped_media_pin_does_not_switch_to_default_api():
     request = TaskRequest(input="a.wav", stage="final-srt", llm_source="manual", llm_model=[
-        "gemini-free-3_6-flash", "correction-mm=local-workbuddy-deepseek-v4-flash",
+        "gemini-free-3_6-flash", f"correction-mm={CODEBUDDY_TARGET}",
     ], llm_media="audio")
     with source_route(request) as route, _routing_override(route.models):
         assert route.correction_media == "text"
         assert route.planning_media == "audio"
         group, _ = default_model_routes().resolve_binding("default", "correction-text", "quality")
-        assert group.target_ids == ("local-workbuddy-deepseek-v4-flash",)
+        assert group.target_ids == (CODEBUDDY_TARGET,)
 
 
 @pytest.fixture(autouse=True)
@@ -136,7 +140,7 @@ def test_agent_source_tries_installed_agents_in_settings_order_with_vetted_model
         assert tiers[-1] == "LOCAL_DSH"
         assert tiers == sorted(tiers)
         assert "local-dsh-deepseek-v4-pro" in route.targets
-        assert "local-dsh-deepseek-v4-flash" in route.targets
+        assert ("local-dsh-deepseek-v4_1-flash" if unified_llm_contract() else "local-dsh-deepseek-v4-flash") in route.targets
         assert default_model_routes().model_groups[route.models[0]].target_ids == route.targets
         assert load_execution_settings().policy_id == "agent-only"
 

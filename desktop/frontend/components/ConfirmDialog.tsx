@@ -113,7 +113,7 @@ export function ConfirmDialog({
       <div ref={card} className={`dialog-card ${config.tone === "danger" ? "knowledge-confirm-danger" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         {config.tone === "danger" ? <div className="knowledge-confirm-icon"><ShieldAlert size={24} /></div> : null}
         <h3 id={titleId}>{config.title}</h3>
-        <p>{config.message}</p>
+        <p style={{ overflowWrap: "anywhere" }}>{config.message}</p>
         {config.allowRemember !== false ? <label className="dialog-remember">
           <input
             type="checkbox"

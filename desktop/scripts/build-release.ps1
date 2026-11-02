@@ -22,6 +22,7 @@ param(
 $ErrorActionPreference = "Stop"
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 . (Join-Path $PSScriptRoot "authenticode.ps1")
+. (Join-Path $PSScriptRoot "source-tree.ps1")
 $SigningCertificate = Get-YanamiSubCodeSigningCertificate `
     -Required:$RequireAuthenticode
 if (-not $VenvPath) {
@@ -59,6 +60,7 @@ $AppSource = Join-Path $Bootstrap "app\versions\$Version"
 if (-not (Test-Path -LiteralPath $AppSource -PathType Container)) {
     throw "App source does not exist: $AppSource"
 }
+Assert-PackagedCoreSource -RepoRoot $RepoRoot -VersionRoot $AppSource
 $Arguments = @(
     "-m", "desktop.scripts.build_release",
     "--version", $Version,

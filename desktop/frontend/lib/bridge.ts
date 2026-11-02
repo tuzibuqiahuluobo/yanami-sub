@@ -623,6 +623,12 @@ function previewApi(): DesktopApi {
     async getRoutingSettings() {
       return structuredClone(routing);
     },
+    async previewConfigMigration() {
+      return { status: "legacy", config_path: routing.config_path, changes: [], issues: [], token: "" };
+    },
+    async applyConfigMigration() {
+      throw new Error("Preview mode cannot modify configuration");
+    },
     async saveRoutingSettings(values) {
       routing = {
         ...routing,
@@ -672,6 +678,9 @@ function previewApi(): DesktopApi {
     async openWorkBuddyLogin() {
       return { path: "WorkBuddy.exe (preview)" };
     },
+    async openCodeBuddyLogin() {
+      return { path: "codebuddy (preview)" };
+    },
     async confirmAppHealth() { return null; },
     async getDshPath() {
       return { path: String(preferences.ui.dshPath ?? "") };
@@ -682,7 +691,7 @@ function previewApi(): DesktopApi {
     },
     async getAgentPaths() {
       return { paths: {
-        LOCAL_AGY: "", LOCAL_CLAUDE: "", LOCAL_CODEX: "", LOCAL_WORKBUDDY: "",
+        LOCAL_AGY: "", LOCAL_CLAUDE: "", LOCAL_CODEX: "", LOCAL_WORKBUDDY: "", LOCAL_CODEBUDDY: "",
         ...(preferences.ui.agentPaths as Record<string, string> ?? {}),
         LOCAL_DSH: String((preferences.ui.agentPaths as Record<string, string> | undefined)?.LOCAL_DSH ?? preferences.ui.dshPath ?? ""),
       } };
@@ -1002,8 +1011,8 @@ function nativeApi(): DesktopApi {
       call<{ path: string }>("open_batch_output", batchId, path),
     openBatchLog: (batchId) =>
       call<{ path: string }>("open_batch_log", batchId),
-    installResource: (resourceId) =>
-      call<ResourceInstallSnapshot>("install_resource", resourceId),
+    installResource: (resourceId, automatic = false) =>
+      call<ResourceInstallSnapshot>("install_resource", resourceId, automatic),
     getResourceInstall: (resourceId) =>
       call<ResourceInstallSnapshot | null>("get_resource_install", resourceId),
     listResourceInstalls: () =>
@@ -1046,6 +1055,8 @@ function nativeApi(): DesktopApi {
     revealApiKeys: () => call<RevealedApiKeys>("reveal_api_keys"),
     exportApiKeys: () => call("export_api_keys"),
     getRoutingSettings: () => call("get_routing_settings"),
+    previewConfigMigration: () => call("preview_config_migration"),
+    applyConfigMigration: (token, confirmed) => call("apply_config_migration", token, confirmed),
     saveRoutingSettings: (values) => call("save_routing_settings", values),
     saveProviderKey: (providerId, value) =>
       call("save_provider_key", providerId, value),
@@ -1053,6 +1064,7 @@ function nativeApi(): DesktopApi {
       call("delete_provider_key", providerId),
     probeLocalAgents: () => call("probe_local_agents"),
     openWorkBuddyLogin: () => call("open_workbuddy_login"),
+    openCodeBuddyLogin: () => call("open_codebuddy_login"),
     getDshPath: () => call("get_dsh_path"),
     setDshPath: (path) => call("set_dsh_path", path),
     getAgentPaths: () => call("get_agent_paths"),

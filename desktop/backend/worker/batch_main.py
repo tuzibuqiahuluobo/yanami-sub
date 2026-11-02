@@ -11,7 +11,6 @@ import traceback
 from typing import Any
 
 from finesub.reporting import quieted_libraries
-from finesub_bootstrap.artifacts import cleanup_intermediate
 from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE, holding_activity
 
 from desktop.backend.batches.protocol import BatchWorkerEvent, encode_batch_event
@@ -21,7 +20,9 @@ from desktop.backend.common.models import (
     BatchRequest,
 )
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
+from desktop.backend.common.core_compat import llm_call_options, unified_llm_contract
 from desktop.backend.worker.main import (
+    cleanup_task_intermediates,
     _agent_error_message,
     _agent_route_failures,
     _artifact_agent_route_failures,
@@ -29,11 +30,13 @@ from desktop.backend.worker.main import (
     _expected_subtitles,
     _failed_post_correction_knowledge_update,
     _publish_output,
+    _prepare_task_knowledge,
     _route_artifact_log,
     _routing_override,
 )
 from desktop.backend.worker.model_source import source_route
 from desktop.backend.worker.protocol import EventLogWriter
+from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
 
 
 def _parse_args() -> argparse.Namespace:
@@ -46,6 +49,10 @@ def _item_options(
     item: BatchItemRequest, workers: dict[str, int], *, task_id: str
 ) -> dict[str, Any]:
     options = item.model_dump(mode="python")
+    options.update(llm_call_options(item))
+    if unified_llm_contract():
+        options.pop("llm_correction_media", None)
+        options.pop("llm_planning_media", None)
     options["source"] = options.pop("input")
     options.pop("cleanup_intermediate", None)
     options.pop("llm_model", None)
@@ -147,6 +154,8 @@ def run_batch_request(
                 if route.skip_reason and row.stage in {"translated-srt", "final-srt"}:
                     skip_reasons[index] = route.skip_reason
                     effective_row = row.model_copy(update={"stage": "raw-srt"})
+                _prepare_task_knowledge(effective_row, stage=effective_row.stage,
+                    config_files=getattr(route, "backup_files", None))
                 item = build_item(
                     _item_options(
                         effective_row, workers, task_id=f"{batch_id}-{index + 1}"
@@ -275,7 +284,7 @@ def run_batch_request(
                         published[key] = outputs
                         save_published()
                         if item_request.cleanup_intermediate and outputs:
-                            cleanup_intermediate(
+                            cleanup_task_intermediates(
                                 paths.final_srt,
                                 preserve=outputs.values(),
                             )
@@ -351,12 +360,15 @@ def main() -> int:
         with activity, redirect_stdout(log_writer), redirect_stderr(log_writer), quieted_libraries(
             "normal"
         ):
-            run_batch_request(
+            initialize_native_paths()
+            final = run_batch_request(
                 request,
                 batch_id=args.batch_id,
                 batch_root=batch_root,
                 emit=emit,
             )
+            if final and all(row.state == "done" for row in final):
+                record_runtime_success()
         return 0
     except BaseException as error:
         traceback.print_exc(file=log_writer)

@@ -14,96 +14,14 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "source-tree.ps1")
 $RepoRoot = [System.IO.Path]::GetFullPath($RepoRoot)
-$CoreRoot = if ($CoreRoot) {
-    [System.IO.Path]::GetFullPath($CoreRoot)
-} else {
-    $RepoRoot
-}
+$CoreSource = Get-VerifiedCoreSource -RepoRoot $RepoRoot -CoreRoot $CoreRoot
+$CoreRoot = $CoreSource.Root
 $OutputDirectory = [System.IO.Path]::GetFullPath($OutputDirectory)
-
-function Get-CleanSourceCommit {
-    param([Parameter(Mandatory = $true)][string]$Path)
-    Push-Location -LiteralPath $Path
-    try {
-        $Changes = @(& git status --porcelain --untracked-files=no)
-        if ($LASTEXITCODE -ne 0 -or $Changes.Count -gt 0) {
-            throw "Release source has uncommitted tracked changes: $Path"
-        }
-        $Commit = (& git rev-parse HEAD).Trim()
-        if ($LASTEXITCODE -ne 0 -or $Commit -notmatch '^[0-9a-f]{40}$') {
-            throw "Cannot determine release source commit: $Path"
-        }
-        return $Commit
-    }
-    finally {
-        Pop-Location
-    }
-}
 $SourceCommit = Get-CleanSourceCommit -Path $RepoRoot
-if ($CoreRoot -ne $RepoRoot) {
-    $CoreCommit = Get-CleanSourceCommit -Path $CoreRoot
-}
 
-# What ships is decided by git, not by whatever happens to be on disk.
-#
-# This used to walk the source tree with -Force and copy everything whose
-# extension was not .pyc/.pyo, skipping only three directory names. It never
-# consulted .gitignore, so anything a maintainer left under src/ -- a *.log of
-# real API responses, a .bak of a prompt, a scratch module -- went into a
-# signed, publicly downloadable zip, invisible to `git status`, to the CI gate
-# and to review. The local build already carried `finesub.egg-info/` and a
-# gitignored `utils/` for exactly this reason.
-function Get-TrackedRelativePaths {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RepoRoot,
-        [Parameter(Mandatory = $true)]
-        [string]$RelativeRoot
-    )
-
-    Push-Location -LiteralPath $RepoRoot
-    try {
-        $Tracked = & git ls-files --cached --full-name -- $RelativeRoot
-        if ($LASTEXITCODE -ne 0) {
-            throw "git ls-files failed for $RelativeRoot; refusing to guess what to ship"
-        }
-    }
-    finally {
-        Pop-Location
-    }
-    return @($Tracked | Where-Object { $_ })
-}
-
-function Copy-TrackedTree {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$RepoRoot,
-        [Parameter(Mandatory = $true)]
-        [string]$RelativeRoot,
-        [Parameter(Mandatory = $true)]
-        [string]$Destination
-    )
-
-    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    $Prefix = $RelativeRoot.Replace('\', '/').TrimEnd('/') + '/'
-    foreach ($Relative in Get-TrackedRelativePaths -RepoRoot $RepoRoot -RelativeRoot $RelativeRoot) {
-        $Normalized = $Relative.Replace('\', '/')
-        if (-not $Normalized.StartsWith($Prefix)) { continue }
-        $Tail = $Normalized.Substring($Prefix.Length)
-        # Tests are the one tracked thing an end user has no use for.
-        if ($Tail -match '(^|/)tests(/|$)') { continue }
-        # Belt and braces: byte-code should already be gitignored, but a
-        # force-added one must still never reach a release.
-        if ($Tail -match '(^|/)__pycache__(/|$)') { continue }
-        if ($Tail -match '[.](pyc|pyo)$') { continue }
-        $Target = Join-Path $Destination ($Tail.Replace('/', '\'))
-        New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Target) | Out-Null
-        Copy-Item -LiteralPath (Join-Path $RepoRoot ($Normalized.Replace('/', '\'))) `
-            -Destination $Target -Force
-    }
-}
-
+# Source trees use the shared git whitelist; local leftovers must not ship.
 # Build outputs and secrets that are deliberately untracked yet must ship. Each
 # is asserted to exist: a naive `git ls-files` whitelist would silently drop
 # them and produce a package with no interface (frontend/out) or no update
@@ -146,6 +64,7 @@ if (Test-Path -LiteralPath $VersionRoot) {
     Remove-Item -LiteralPath $VersionRoot -Recurse -Force
 }
 New-Item -ItemType Directory -Force -Path $VersionRoot | Out-Null
+Write-Utf8NoBom -Path (Join-Path $VersionRoot "VERSION") -Content $Version
 # Build inputs that are deliberately untracked. Named here so a missing one
 # fails the build instead of shipping a package with no interface, or with
 # no trust anchor for verifying its own updates.
@@ -232,6 +151,8 @@ $AppManifest = @{
     version = $Version
     platform = "windows-x64"
     sourceCommit = $SourceCommit
+    coreVersion = $CoreSource.Version
+    coreCommit = $CoreSource.Commit
     files = $IntegrityFiles
 } | ConvertTo-Json -Depth 6 -Compress
 Write-Utf8NoBom `

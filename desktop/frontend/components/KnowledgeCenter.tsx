@@ -32,7 +32,7 @@ import type {
 import { useLanguage } from "./LanguageProvider";
 import { useToast } from "./ToastProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
-import { BilingualKnowledgeImport, ProposalReview, knowledgeOutcome } from "./BilingualKnowledgeImport";
+import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
 
 type KnowledgeTab = "library" | "feedback" | "maintenance" | "sharing";
@@ -289,7 +289,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
       setRefinedProposal(report);
       setOutput(JSON.stringify(report, null, 2));
       await loadSnapshot();
-      if (report.status === "applied" || report.status === "generated") showSuccess(knowledgeOutcome(report, language === "zh"), "knowledge-refined-update");
+      if (report.status === "applied" || report.status === "generated" || report.status === "evidence_only") showSuccess(knowledgeOutcome(report, language === "zh"), "knowledge-refined-update");
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -526,7 +526,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
               </div>
               <div className="knowledge-actions">
                 <button type="button" className="button button-secondary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(false)}>{t.knowledge.feedback.propose}</button>
-                <button type="button" className="button button-primary" disabled={busy || refinedProposal?.status !== "generated" || !refinedProposal.proposal_count} onClick={() => confirmAction(t.knowledge.feedback.applyConfirm, () => void applyRefined(true))}>{language === "zh" ? "应用已审阅提案" : "Apply reviewed proposal"}</button>
+                <button type="button" className="button button-primary" disabled={busy || !canApplyProposal(refinedProposal)} onClick={() => confirmAction(t.knowledge.feedback.applyConfirm, () => void applyRefined(true))}>{language === "zh" ? "应用已审阅提案" : "Apply reviewed proposal"}</button>
               </div>
               {refinedProposal ? <ProposalReview report={refinedProposal} /> : null}
             </div>

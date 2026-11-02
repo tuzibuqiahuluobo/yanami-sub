@@ -30,11 +30,19 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Read pinned FineSub source
+        id: core
+        run: |
+          $Core = Get-Content desktop/resources/core-source.json -Raw | ConvertFrom-Json
+          if ($Core.commit -notmatch '^[0-9a-f]{40}$') { throw 'Invalid FineSub commit pin.' }
+          "repository=$($Core.repository)" >> $env:GITHUB_OUTPUT
+          "commit=$($Core.commit)" >> $env:GITHUB_OUTPUT
+
       - name: Check out pinned FineSub
         uses: actions/checkout@v7
         with:
-          repository: caca2331/finesub
-          ref: v0.5.1
+          repository: ${{ steps.core.outputs.repository }}
+          ref: ${{ steps.core.outputs.commit }}
           path: upstream
           persist-credentials: false
 
@@ -54,6 +62,8 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
+          . ./desktop/scripts/source-tree.ps1
+          Get-VerifiedCoreSource -RepoRoot $PWD -CoreRoot "$PWD/upstream" | Out-Null
           python -m venv .venv-desktop
           $Python = Join-Path $PWD '.venv-desktop\Scripts\python.exe'
           & $Python -m pip install --upgrade pip

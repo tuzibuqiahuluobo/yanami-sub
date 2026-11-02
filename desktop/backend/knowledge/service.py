@@ -8,6 +8,8 @@ import subprocess
 from typing import Any
 
 from desktop.backend.jobs.launch import WorkerLaunchContext
+from desktop.backend.worker.runtime import runtime_activity
+from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE
 
 
 class KnowledgeOperationError(RuntimeError):
@@ -110,23 +112,24 @@ class KnowledgeService:
         creationflags = (
             getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0
         )
-        result = self.process_runner(
-            [
-                context.python_executable,
-                "-m",
-                "desktop.backend.worker.knowledge_main",
-            ],
-            input=json.dumps(payload, ensure_ascii=False) + "\n",
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            cwd=context.working_directory,
-            env=environment,
-            creationflags=creationflags,
-            timeout=self.timeout_seconds,
-            check=False,
-        )
+        with runtime_activity(environment.get(TASK_ACTIVITY_ROOT_VARIABLE, "")):
+            result = self.process_runner(
+                [
+                    context.python_executable,
+                    "-m",
+                    "desktop.backend.worker.knowledge_main",
+                ],
+                input=json.dumps(payload, ensure_ascii=False) + "\n",
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=context.working_directory,
+                env=environment,
+                creationflags=creationflags,
+                timeout=self.timeout_seconds,
+                check=False,
+            )
         envelope = self._decode_envelope(result.stdout)
         if envelope is None:
             detail = (result.stderr or result.stdout or "").strip()

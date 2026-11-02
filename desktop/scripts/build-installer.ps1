@@ -19,6 +19,7 @@ $Definition = Join-Path $RepoRoot "desktop\installer\YanamiSub.iss"
 $SetupIcon = Join-Path $RepoRoot "desktop\assets\yanami-sub.ico"
 $ChineseLanguageFile = Join-Path $RepoRoot "desktop\installer\ChineseSimplified.isl"
 . (Join-Path $PSScriptRoot "authenticode.ps1")
+. (Join-Path $PSScriptRoot "source-tree.ps1")
 
 function Resolve-InnoCompiler {
     param([string]$RequestedPath)
@@ -96,6 +97,7 @@ $CurrentPointer = Get-Content `
 if ($CurrentPointer.current -ne $Version) {
     throw "Packaged app version '$($CurrentPointer.current)' does not match installer version '$Version'."
 }
+Assert-PackagedCoreSource -RepoRoot $RepoRoot -VersionRoot (Join-Path $ApplicationDirectory "app\versions\$Version")
 if ($SigningCertificate) {
     Set-YanamiSubAuthenticodeSignature `
         -FilePath (Get-YanamiSubPackagedExecutables $ApplicationDirectory) `

@@ -110,7 +110,7 @@ _FETCHERS = {
 }
 
 
-def main() -> int:
+def _run_prefetch() -> int:
     requested = sys.argv[1:] or list(PIPELINE_MODEL_IDS)
     unknown = [model_id for model_id in requested if model_id not in _FETCHERS]
     if unknown:
@@ -140,6 +140,14 @@ def main() -> int:
         print(f"{label}已就绪", flush=True)
     _announce(total, total, "模型已全部就绪")
     return 0
+
+
+def main() -> int:
+    from desktop.backend.worker.runtime import initialize_native_paths, runtime_activity
+
+    with runtime_activity():
+        initialize_native_paths()
+        return _run_prefetch()
 
 
 if __name__ == "__main__":

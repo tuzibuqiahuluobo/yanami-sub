@@ -11,6 +11,9 @@ import tempfile
 import uuid
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.worker.knowledge_feedback import (
+    book_refined_evidence, book_style_evidence, capture_materials, freeze_style_evidence, task_style, validate_style_scope,
+)
 
 
 def _save(path: Path, value: dict) -> None:
@@ -85,14 +88,21 @@ def _route(values: dict):
 
 def _draft(root: Path, chunks: list[dict], metadata: dict) -> dict:
     from finesub.llm.knowledge.node.proposals import parse_model_proposals
+    from finesub.llm.knowledge.node.repo import KnowledgeRepo
 
     if len({chunk["read_rev"] for chunk in chunks}) > 1:
         raise ValueError("生成期间知识库已变化，请重新生成 / Knowledge changed during generation")
     draft_id = uuid.uuid4().hex
     result = {**metadata, "draft_id": draft_id, "status": "generated", "chunks": chunks,
+              "expected_rev": chunks[0]["read_rev"] if chunks else KnowledgeRepo.open(root).rev,
+              "has_feedback_evidence": bool(metadata.get("refined_evidence")),
               "proposal_count": sum(len(parse_model_proposals(chunk["proposal_text"])) for chunk in chunks)}
     _save(_path(root, draft_id), result)
-    return result
+    # The renderer reviews text; frozen CSVs and bindings stay in the local
+    # receipt, not in a potentially huge UI/debug payload.
+    public = {key: value for key, value in result.items() if key not in {"refined_evidence", "evidence_task_id", "expected_rev"}}
+    public["chunks"] = [{key: value for key, value in chunk.items() if key not in {"bindings", "style_evidence", "allow_categories"}} for chunk in chunks]
+    return public
 
 
 class CapturingClient:
@@ -114,20 +124,25 @@ class CapturingClient:
 
 def generate_refined(root: Path, payload: dict) -> dict:
     from finesub.llm.client import RoleClient
-    from finesub.llm.knowledge.style import resolve_style_selection
-    from finesub.llm.knowledge.update import derive_task_paths, run_knowledge_update
+    from finesub.llm.knowledge.update import derive_task_paths, ensure_research_context_path, run_knowledge_update
 
     values = dict(payload.get("request") or {"input": payload["final_srt"], "llm_model": payload.get("llm_model", [])})
     if payload.get("llm_model"):
         values["llm_model"] = payload["llm_model"]
     with _route(values) as (request, route):
-        style = resolve_style_selection(request.style, request.style_mode, knowledge_root=root, difficulty=request.llm_difficulty)
+        paths = derive_task_paths(payload["final_srt"])
+        paths["research_context"] = ensure_research_context_path(artifact_dir=paths["artifact_dir"],
+            stem=paths["final_srt"].stem, run_dir=paths["final_srt"].parent)
+        style_names, style_metadata = task_style(request, root, paths)
+        materials = capture_materials(paths, payload["refined_srt"])
         client = CapturingClient(RoleClient())
         report = run_knowledge_update(final_srt=payload["final_srt"], refined_srt=payload["refined_srt"],
-            artifact_dir=derive_task_paths(payload["final_srt"])["artifact_dir"], task_id=payload["task_id"],
+            artifact_dir=paths["artifact_dir"], research_context=paths["research_context"], task_id=payload["task_id"],
             task_summary=payload.get("task_summary", ""), knowledge_root=root, execute=True, apply=False,
             resume=payload.get("resume", True), client=client, difficulty=request.llm_difficulty,
-            style_names=style.names if style.mode == "update" else ())
+            style_names=style_names)
+        if capture_materials(paths, payload["refined_srt"])["fingerprint"] != materials["fingerprint"]:
+            raise ValueError("生成期间字幕或任务材料已变化，请重新生成 / Task feedback materials changed")
         chunks = []
         for chunk in report.get("chunks", []):
             text = chunk.get("proposal_text")
@@ -136,10 +151,17 @@ def generate_refined(root: Path, payload: dict) -> dict:
             match = next((call for call in reversed(client.calls) if call["proposal_text"] == text and call["window"] == f"chunk-{chunk['chunk']}"), None)
             if match is None:
                 raise RuntimeError("Cannot freeze proposal bindings")
-            chunks.append({**match, "allow_categories": ["common", "streamer"] + (["style"] if style.mode == "update" else [])})
-        return _draft(root, chunks, {"mode": report.get("mode"), "warnings": report.get("warnings", []),
+            windows = [materials["windows"][window_id] for window_id in chunk["window_ids"]]
+            frozen = {**match, "allow_categories": ["common", "streamer"] + (["style"] if style_names else [])}
+            validate_style_scope(root, frozen, style_names)
+            if materials["mode"] == "refined_aligned":
+                frozen["style_evidence"] = freeze_style_evidence(root, match, windows, style_names)
+            chunks.append(frozen)
+        warnings = [*report.get("warnings", []), *([style_metadata["style_warning"]] if style_metadata.get("style_warning") else [])]
+        return _draft(root, chunks, {"mode": report.get("mode"), "warnings": warnings,
             "skipped": report.get("skipped"), "source": route.source, "models": list(route.targets or request.llm_model),
-            "style_names": list(style.names), "style_mode": style.mode})
+            **style_metadata, "evidence_task_id": payload["task_id"],
+            "refined_evidence": list(materials["windows"].values()) if materials["mode"] == "refined_aligned" else []})
 
 
 def generate_pair(root: Path, payload: dict) -> dict:
@@ -236,6 +258,14 @@ def apply_draft(root: Path, draft_id: str) -> dict:
                 expected = repo.rev
         if repo.rev != expected:
             raise ValueError("知识库已变化，请重新生成提案 / Knowledge changed; regenerate the proposal")
+        if saved.get("refined_evidence") and "refined_report" not in saved:
+            saved["refined_report"] = book_refined_evidence(repo, saved)
+            _save(path, saved)
+        # A revision may have landed before its receipt. Evidence uses core
+        # dedupe keys, so the same frozen response is safe to book on recovery.
+        for index, report in enumerate(reports):
+            if saved["chunks"][index].get("style_evidence") and "style_marks" not in report:
+                report["style_marks"] = book_style_evidence(repo, saved["chunks"][index], saved["evidence_task_id"])
         for index in range(len(reports), len(saved["chunks"])):
             chunk = saved["chunks"][index]
             handles = HandleMap()
@@ -243,6 +273,8 @@ def apply_draft(root: Path, draft_id: str) -> dict:
             report = apply_model_proposals(chunk["proposal_text"], repo=repo, handles=handles,
                 allow_categories=chunk["allow_categories"], task_id=f"desktop-{draft_id}-{index}",
                 knowledge_read_rev=chunk["read_rev"], proposal_text_hash=hashlib.sha256(chunk["proposal_text"].encode()).hexdigest()).to_dict()
+            if chunk.get("style_evidence"):
+                report["style_marks"] = book_style_evidence(repo, chunk, saved["evidence_task_id"])
             reports.append(report)
             saved["expected_rev"] = repo.rev
             _save(path, saved)
@@ -250,8 +282,13 @@ def apply_draft(root: Path, draft_id: str) -> dict:
                 break
         committed = sum(report.get("rev") is not None for report in reports)
         issues = sum(bool(report.get("rolled_back") or report.get("skipped") or report.get("conflicts")) for report in reports)
-        result = {"draft_id": draft_id, "status": "partial" if committed and issues else "applied" if committed else "blocked" if issues else "no_change",
-                  "committed_chunks": committed, "revision": repo.rev, "apply_reports": reports}
+        evidence = saved.get("refined_report", {})
+        evidence_count = evidence.get("confirmed", 0) + evidence.get("refuted", 0)
+        evidence_count += sum(report.get("style_marks", {}).get("booked", 0) + report.get("style_marks", {}).get("duplicates", 0) for report in reports)
+        evidence_errors = [row["error"] for row in [evidence, *(report.get("style_marks", {}) for report in reports)] if row.get("error")]
+        result = {"draft_id": draft_id, "status": "partial" if committed and issues else "applied" if committed else "blocked" if issues else "evidence_only" if evidence_count else "no_change",
+                  "committed_chunks": committed, "revision": repo.rev, "apply_reports": reports,
+                  "refined_report": evidence, "warnings": [*saved.get("warnings", []), *evidence_errors]}
         saved["result"] = result
         _save(path, saved)
         return result

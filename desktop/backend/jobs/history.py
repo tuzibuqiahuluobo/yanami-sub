@@ -80,7 +80,7 @@ def read_history_file(
     snapshots: list[JobSnapshot] = []
     for entry in task_index.read(history_path, output_root):
         try:
-            snapshots.append(JobSnapshot.model_validate(entry))
+            snapshots.append(JobSnapshot.model_validate(entry, context={"archive": True}))
         except Exception:
             continue
     return snapshots

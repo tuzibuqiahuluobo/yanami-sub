@@ -57,7 +57,8 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 
 各页面的实际操作、数据位置和常见问题见
 [中文使用说明](docs/usage.zh-CN.md)。桌面与核心的功能边界见
-[FineSub v0.5.1 兼容矩阵](docs/core-compatibility.md)。
+[FineSub 核心兼容矩阵](docs/core-compatibility.md)。本开发分支正在迁移至固定 0.6.0 源码；
+尚未发布，离线检查和实际验收边界见 [迁移记录](docs/core-060-migration.md)。
 
 ## 系统要求
 
@@ -70,7 +71,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 | 磁盘 | 完整运行资源约 5 GB，模型和缓存可迁移到其他磁盘 |
 
 更完整的显卡、模型和资源要求以 FineSub 上游的
-[资源说明](https://github.com/caca2331/finesub/blob/v0.5.1/docs/manual/resources.md) 为准。
+[资源说明](https://github.com/caca2331/finesub/blob/v0.6.0/docs/manual/resources.md) 为准。
 
 ## 数据与上游共享
 
@@ -85,7 +86,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 
 - **Yanami Sub 仓库**：<https://github.com/tuzibuqiahuluobo/yanami-sub>
 - **FineSub 上游 / CLI**：<https://github.com/caca2331/finesub>
-- **当前固定核心版本**：[`FineSub v0.5.1`](https://github.com/caca2331/finesub/tree/v0.5.1)
+- **本分支构建候选核心**：[`FineSub v0.6.0`](https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197)，未发布；身份固定在 `desktop/resources/core-source.json`
 - **桌面端迁移锚点**：[`FineSub 0.5.0pre/desktop`](https://github.com/caca2331/finesub/tree/0.5.0pre/desktop)
 
 桌面端从 FineSub `0.5.0pre` 的 `desktop/` 目录独立出来，从 `0.1.0` 开始维护自己的版本号。
@@ -97,7 +98,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 - [桌面端维护与发布](desktop/README_DEV.md)
 - [核心功能兼容矩阵](docs/core-compatibility.md)
 - [来源与第三方许可](NOTICE.md)
-- [FineSub 上游文档](https://github.com/caca2331/finesub/tree/v0.5.1/docs/manual)
+- [FineSub 上游文档](https://github.com/caca2331/finesub/tree/v0.6.0/docs/manual)
 
 ## 作者与贡献者
 
@@ -110,5 +111,5 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 Yanami Sub 遵循上游当前使用的
 [GNU General Public License v3.0 or later](LICENSE)（SPDX：`GPL-3.0-or-later`）。
 本仓库保留上游来源、作者和许可证信息。随包分发的 FineSub prompt 模板另按其目录中的
-[CC BY-SA 4.0](https://github.com/caca2331/finesub/blob/v0.5.1/src/finesub/llm/prompt_templates/LICENSE.md)
+[CC BY-SA 4.0](https://github.com/caca2331/finesub/blob/v0.6.0/src/finesub/llm/prompt_templates/LICENSE.md)
 授权。再分发或修改时请一并保留对应声明。

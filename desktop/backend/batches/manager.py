@@ -10,7 +10,7 @@ import threading
 import time
 from typing import Any
 
-from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE
+from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE, holding_activity
 from finesub_bootstrap.processes import terminate_process_tree
 from finesub_bootstrap import task_output
 
@@ -21,6 +21,7 @@ from desktop.backend.common.models import (
     BatchRequest,
     BatchSnapshot,
 )
+from desktop.backend.common.core_compat import llm_call_options, unified_llm_contract
 from desktop.backend.jobs.launch import (
     ProcessFactory,
     ProcessTerminator,
@@ -102,6 +103,7 @@ class BatchManager:
         available_gpus: Callable[[], Any] = lambda: None,
         process_factory: ProcessFactory = subprocess.Popen,
         terminate_process_tree: ProcessTerminator = terminate_process_tree,
+        on_runtime_failure: Callable[[], str] | None = None,
         history_path: str | Path,
         output_root: str | Path,
     ) -> None:
@@ -115,9 +117,11 @@ class BatchManager:
         self.process_factory = process_factory
         self.available_gpus = available_gpus
         self.terminate_process_tree = terminate_process_tree
+        self.on_runtime_failure = on_runtime_failure
         self.history_path = Path(history_path).expanduser().resolve()
         self.output_root = Path(output_root).expanduser().resolve()
         self._lock = threading.RLock()
+        self._runtime_activities = {}
         self._process: Any | None = None
         self._snapshot: BatchSnapshot | None = None
         self._history: list[BatchSnapshot] = []
@@ -282,6 +286,10 @@ class BatchManager:
         }
         for index, item in enumerate(request.items):
             row = item.model_dump(mode="json", exclude_none=True)
+            row.update(llm_call_options(item))
+            if unified_llm_contract():
+                row.pop("llm_correction_media", None)
+                row.pop("llm_planning_media", None)
             row.pop("output", None)
             desktop = {field: row.pop(field) for field in _DESKTOP_ROW_FIELDS if field in row}
             if index == 0:
@@ -369,6 +377,17 @@ class BatchManager:
         ]
 
     def _spawn(self, batch_id: str, request: BatchRequest) -> Any:
+        activity = holding_activity(self.history_path.parent)
+        activity.__enter__()
+        try:
+            process = self._spawn_process(batch_id, request)
+        except BaseException:
+            activity.__exit__(None, None, None)
+            raise
+        self._runtime_activities[id(process)] = activity
+        return process
+
+    def _spawn_process(self, batch_id: str, request: BatchRequest) -> Any:
         context = self._worker_context
         environment = os.environ.copy()
         environment.update(context.environment)
@@ -402,10 +421,14 @@ class BatchManager:
             creationflags=creationflags,
             start_new_session=os.name != "nt",
         )
-        if process.stdin is None or process.stdout is None:
-            raise RuntimeError("batch worker process pipes were not created")
-        process.stdin.write(request.model_dump_json() + "\n")
-        process.stdin.flush()
+        try:
+            if process.stdin is None or process.stdout is None:
+                raise RuntimeError("batch worker process pipes were not created")
+            process.stdin.write(request.model_dump_json() + "\n")
+            process.stdin.flush()
+        except BaseException:
+            self.terminate_process_tree(process)
+            raise
         return process
 
     def _start_reader(self, batch_id: str, process: Any) -> None:
@@ -416,12 +439,35 @@ class BatchManager:
         ).start()
 
     def _read_worker(self, batch_id: str, process: Any) -> None:
+        try:
+            failed = self._consume_worker(batch_id, process)
+            if failed and self.on_runtime_failure is not None:
+                try:
+                    note = self.on_runtime_failure()
+                except Exception:
+                    LOGGER.exception("post-failure batch runtime check failed")
+                    note = ""
+                with self._lock:
+                    if note and self._process is process and self._snapshot is not None:
+                        self._append_log(self._snapshot, BatchWorkerEvent.log(batch_id, note))
+        except BaseException:
+            self.terminate_process_tree(process)
+            raise
+        finally:
+            with self._lock:
+                activity = self._runtime_activities.pop(id(process), None)
+                if self._process is process:
+                    self._process = None
+            if activity is not None:
+                activity.__exit__(None, None, None)
+
+    def _consume_worker(self, batch_id: str, process: Any) -> bool:
         assert process.stdout is not None
         for line in process.stdout:
             event = parse_batch_event(line, batch_id=batch_id)
             with self._lock:
                 snapshot = self._snapshot
-                if snapshot is None or snapshot.batch_id != batch_id:
+                if snapshot is None or snapshot.batch_id != batch_id or self._process is not process:
                     continue
                 self._apply_event(snapshot, event)
                 snapshot.updated_at = time.time()
@@ -429,7 +475,7 @@ class BatchManager:
         return_code = process.wait()
         with self._lock:
             snapshot = self._snapshot
-            if snapshot is not None and snapshot.batch_id == batch_id:
+            if snapshot is not None and snapshot.batch_id == batch_id and self._process is process:
                 if snapshot.state == "running":
                     snapshot.state = "failed"
                     snapshot.error = f"批处理进程意外退出（代码 {return_code}）。"
@@ -438,9 +484,10 @@ class BatchManager:
                         payload={"message": snapshot.error},
                     ))
                     snapshot.updated_at = time.time()
-                if self._process is process:
-                    self._process = None
                 self._persist_history()
+                return snapshot.state == "failed" or (
+                    snapshot.state == "completed" and any(item.state == "failed" for item in snapshot.items))
+        return False
 
     def _apply_event(self, snapshot: BatchSnapshot, event: BatchWorkerEvent) -> None:
         previously_done = {item.index for item in snapshot.items if item.state == "done"}
@@ -497,7 +544,7 @@ class BatchManager:
         try:
             body = json.loads(self.history_path.read_text(encoding="utf-8"))
             rows = body if isinstance(body, list) else []
-            self._history = [BatchSnapshot.model_validate(row) for row in rows]
+            self._history = [BatchSnapshot.model_validate(row, context={"archive": True}) for row in rows]
         except (OSError, ValueError):
             self._history = []
         if self._history:

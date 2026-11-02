@@ -720,7 +720,7 @@ export const en: Translations = {
 e.g. Reaction stream, someone moved to tears. From https://www.youtube.com/watch?v=xxxx`,
       knowledge: "Knowledge Base",
       knowledgeNone: "Do not update automatically",
-      knowledgeCollect: "Collect without committing updates",
+      knowledgeCollect: "Read knowledge without updates",
       knowledgeUpdate: "Update automatically",
       cleanup: "Clean up intermediates when finished",
       cleanupHint: "Runs only after the task finishes, so a mid-way failure can still resume; removes the vocal audio and the LLM checkpoints, keeps stable.json so a rerun stays cheap",

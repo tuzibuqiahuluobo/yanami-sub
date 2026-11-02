@@ -71,7 +71,7 @@ test("WorkBuddy quick settings are explicit, preserve safety gates and cover bot
   assert.equal("llm_agent" in WORKBUDDY_QUICK_SETTINGS, false);
   assert.equal("llm_parallel_windows" in WORKBUDDY_QUICK_SETTINGS, false);
   const source = readFileSync(new URL("../components/TaskSettings.tsx", import.meta.url), "utf8");
-  assert.match(source, /source === "agent" && request.llm_agent === "LOCAL_WORKBUDDY"/);
+  assert.match(source, /source === "agent" && \["LOCAL_WORKBUDDY", "LOCAL_CODEBUDDY"\]\.includes/);
   assert.match(source, /selectedRoute.startsWith\("local-workbuddy-"\)/);
   assert.match(source, /onClick=\{\(\) => onChange\(WORKBUDDY_QUICK_SETTINGS\)\}/);
   for (const form of ["NewTask", "BatchQueue"]) {

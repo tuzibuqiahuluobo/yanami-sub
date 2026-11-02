@@ -200,6 +200,13 @@ def test_worker_maps_request_to_pipeline_keywords(tmp_path: Path) -> None:
         "max_replacements_per_window": 2,
         "resume": False,
     }
+    from desktop.backend.common.core_compat import unified_llm_contract
+    if unified_llm_contract():
+        expected["llm_media"] = expected.pop("llm_correction_media")
+        expected.pop("llm_planning_media")
+        expected["knowledge"] = "read"
+        assert "llm_planning_media" not in kwargs
+        assert "llm_correction_media" not in kwargs
     for key, value in expected.items():
         assert kwargs[key] == value
     assert kwargs["task_id"] == "task-1"

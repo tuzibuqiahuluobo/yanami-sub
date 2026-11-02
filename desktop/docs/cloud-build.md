@@ -3,7 +3,8 @@
 工作流：`.github/workflows/build-windows.yml`，名称 **Build Windows installer**。
 只接受手动运行，不响应 push/tag，不创建 Release，不修改用户更新频道。
 测试、前端构建、PyInstaller 和 Inno Setup 均在 GitHub 的 Windows runner 中执行，不占用本地构建资源。
-FineSub 固定为 v0.5.1；版本取选中分支的已提交 VERSION，不在 CI 临时改号。
+本开发分支的 FineSub 构建候选固定为 v0.6.0，完整提交见 `desktop/resources/core-source.json`；不是跟随 main/tag 的浮动拉取。
+工作流按该提交 checkout，再核对核心版本、提交及受跟踪的运行时清单/两份锁。应用版本仍取选中分支的已提交 VERSION，不在 CI 临时改号；尚未发布本次内核升级。
 
 ## 使用
 
@@ -29,6 +30,9 @@ FineSub 固定为 v0.5.1；版本取选中分支的已提交 VERSION，不在 CI
 - 首次没有 npm 缓存会较慢；后续仅复用 npm 缓存，不缓存个人数据或签名文件。
 - Windows runner 的空间、网络和 Actions 使用额度受 GitHub 限制；失败时可查看具体步骤后重新手动运行。
 - 构建脚本仍可本地使用；此工作流不改变本地发布工具，不自动上传本机凭据。
+- `build-bootstrap.ps1 -UpstreamDirectory <固定核心 checkout>` 与云端共用源码核对和受跟踪文件列表；不会把未提交的草稿、日志、缓存塞入冻结包。最终打包仍要求桌面与核心的 tracked source 干净，不能拿未提交的迁移工作区直接发布。
+- `app-manifest.json` 同时记录桌面与核心提交。安装器和 `-SkipBootstrap` 更新构建会核对核心身份及清单/锁文件摘要，拒绝误用上一次核心的旧产物。
+- 运行环境两份锁直接来自被验证的核心，不在下游重新解析 torch/CT2。0.6.0 更换补丁版 CT2，会触发既有托管环境重建；未做真实安装、CPU/GPU 解码和升级验收前，不应发布给用户。
 - 正式发布前应在真实 Windows 机器验证安装、升级、卸载及至少一轮实际字幕任务；云端打包成功不等于 GPU/账号流程均经过实测。
 
 参考：[GitHub-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/use-github-hosted-runners)、[workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts)。

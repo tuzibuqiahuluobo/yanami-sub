@@ -15,7 +15,7 @@ authors = [
   { name = "回不去的星光" },
 ]
 maintainers = [{ name = "tuzibuqiahuluobo" }]
-dependencies = ["finesub==0.5.1"]
+dependencies = ["finesub==0.6.0"]
 
 [project.urls]
 Homepage = "https://github.com/tuzibuqiahuluobo/yanami-sub"

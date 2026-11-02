@@ -28,9 +28,9 @@ def test_windows_build_uses_pyinstaller_onedir() -> None:
 
 
 def test_windows_build_stages_only_release_sources() -> None:
-    assert "Copy-PythonTree" in SCRIPT
-    assert '"tests"' in SCRIPT
-    assert '"__pycache__"' in SCRIPT
+    assert "Copy-TrackedTree" in SCRIPT
+    assert "-PythonOnly" in SCRIPT
+    assert "source-tree.ps1" in SCRIPT
     assert '".pyinstaller-stage"' in SCRIPT
 
 
@@ -39,9 +39,8 @@ def test_windows_build_stages_the_shared_bootstrap_package() -> None:
     # install; without staging src/finesub_bootstrap the frozen launcher would
     # depend on whatever the venv happens to expose.
     assert '[string]$UpstreamDirectory = ""' in SCRIPT
-    assert "FINESUB_UPSTREAM_SOURCE" in SCRIPT
-    assert "$ExpectedCoreVersion" in SCRIPT
-    assert "-Source $CorePackage" in SCRIPT
+    assert "Get-VerifiedCoreSource" in SCRIPT
+    assert '-RelativeRoot "src/finesub_bootstrap"' in SCRIPT
     assert 'Join-Path $StageDirectory "finesub_bootstrap"' in SCRIPT
     assert "-CoreRoot $CoreRoot" in SCRIPT
 

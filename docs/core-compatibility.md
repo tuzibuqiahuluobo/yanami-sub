@@ -1,11 +1,17 @@
 # FineSub core compatibility
 
-Yanami Sub `0.1.x` is built and tested against the exact upstream
-[FineSub `v0.5.1`](https://github.com/caca2331/finesub/tree/v0.5.1)
-source snapshot. The desktop repository owns presentation, Windows integration,
+This development branch targets the exact upstream
+[FineSub `v0.6.0`](https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197)
+source snapshot in `desktop/resources/core-source.json`; this is not a released
+core switch. The desktop repository owns presentation, Windows integration,
 resource installation, and update delivery; FineSub core remains the only owner
 of subtitle processing, scheduling, model routing, knowledge semantics, and
 storage migration.
+
+The staged 0.6.0 migration is tracked in
+[core-060-migration.md](core-060-migration.md). It is not a released core switch;
+the local build dependency/workflows now use the verified 0.6.0 snapshot, while
+published installations remain unchanged pending native/runtime acceptance.
 
 ## Coverage
 
@@ -14,7 +20,7 @@ storage migration.
 | Local audio/video and URL inputs | Supported | URL jobs request `yt-dlp` only when needed. |
 | Every production pipeline stage | Supported | Vocal, aligned, stable, raw SRT, translated SRT, and final SRT are selectable. |
 | ASR and separation tuning | Supported | Model, language, device/GPU tier, separation/rate, VAD assist, Qwen verification, language re-decode, context, decode batch, gap, stabilization, word timestamps, and split scale are forwarded to core. |
-| LLM correction/translation tuning | Supported | Media per phase, retrieval, difficulty, continuity, parallel windows, fast mode, output scale, per-task model routes, retry budgets, extra context/style, named styles, and resume are forwarded to core. |
+| LLM correction/translation tuning | Supported | Unified media, retrieval, difficulty, continuity, parallel windows, output scale, per-task model routes, retry budgets, extra context/style, named styles, and resume are forwarded to core. Removed planning/media and old fast-mode arguments are not sent to 0.6.0. |
 | Knowledge collection/update and refined-SRT feedback | Supported | The task form and Knowledge Center use the core knowledge implementation in an isolated worker. |
 | Multiple files/URLs | Supported | The batch page uses the core scheduler, worker limits, queue back-pressure, priorities, retries, failure isolation, durable progress, cancel, resume, and core-compatible static JSONL manifest import/export. |
 | API-key pools and custom providers | Supported | Free/paid Gemini pools, Exa, Tavily, and provider keys from the core catalog use the same encrypted `.env`; plaintext export is available through a native Save dialog. |
@@ -34,7 +40,7 @@ desktop product policy, not a second pipeline implementation.
 
 These are not missing subtitle-processing features:
 
-- `agent-join` and `agent-task` remain CLI-only. Core `v0.5.1` exposes them as
+- `agent-join` and `agent-task` remain CLI-only. Core exposes them as
   terminal-oriented runtime modules, not a structured service suitable for a
   long-lived GUI. Desktop can configure Agent routes and verify local CLIs.
 - `agent-ping` spends quota. Desktop currently performs the safe, non-spending
@@ -57,7 +63,7 @@ These are not missing subtitle-processing features:
 Desktop adapters call or project these upstream surfaces instead of copying
 their business logic:
 
-- `finesub.pipeline.pipeline` and shared validation/constants for one task;
+- `finesub.stages.run_pipeline` and shared validation/constants for one task;
 - `finesub.scheduler.run_batch` plus batch state/control files for queues;
 - `finesub_bootstrap.ResourceManager`, `RuntimeEnvironment`, resource manifests,
   download routing, locks, paths, and `Shell` storage maintenance;

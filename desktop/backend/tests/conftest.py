@@ -16,6 +16,9 @@ def managed_data_root(tmp_path_factory, monkeypatch) -> None:
     monkeypatch.setenv(
         "LOCALAPPDATA", str(tmp_path_factory.mktemp("LocalAppData"))
     )
+    monkeypatch.setenv("FINESUB_TASK_ACTIVITY_ROOT", str(tmp_path_factory.mktemp("TaskActivity")))
+    monkeypatch.delenv("YANAMI_RUNTIME_ROOT", raising=False)
+    monkeypatch.delenv("YANAMI_RUNTIME_VERSION", raising=False)
     # The developer machine may opt out of .env protection globally
     # (FINESUB_ENV_PROTECT=0, a transition hatch); tests need the default.
     monkeypatch.delenv("FINESUB_ENV_PROTECT", raising=False)

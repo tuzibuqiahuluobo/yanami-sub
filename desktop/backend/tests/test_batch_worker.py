@@ -10,6 +10,7 @@ from finesub.llm.routing.model_routes import runtime_preferred
 
 from desktop.backend.batches.protocol import BatchWorkerEvent
 from desktop.backend.common.models import BatchRequest
+from desktop.backend.common.core_compat import unified_llm_contract
 from desktop.backend.worker import batch_main
 
 
@@ -25,7 +26,7 @@ def test_manual_batch_adapts_media_for_every_item(monkeypatch, tmp_path):
         path.write_bytes(b"audio")
     request = BatchRequest.model_validate({"items": [
         {"input": str(path), "stage": "final-srt", "llm_source": "manual",
-         "llm_model": ["workbuddy-capable"], "llm_media": "audio"}
+         "llm_model": ["codebuddy-capable" if unified_llm_contract() else "workbuddy-capable"], "llm_media": "audio"}
         for path in inputs
     ]})
     seen = []
@@ -43,7 +44,11 @@ def test_manual_batch_adapts_media_for_every_item(monkeypatch, tmp_path):
             claims=object(),
         )
         assert len(seen) == 2
-        assert all(row["llm_correction_media"] == row["llm_planning_media"] == "text" for row in seen)
+        if unified_llm_contract():
+            assert all(row["llm_media"] == "text" for row in seen)
+            assert all("llm_correction_media" not in row and "llm_planning_media" not in row for row in seen)
+        else:
+            assert all(row["llm_correction_media"] == row["llm_planning_media"] == "text" for row in seen)
     finally:
         clear_config_cache(); default_model_routes.cache_clear()
 

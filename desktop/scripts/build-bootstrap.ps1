@@ -12,43 +12,16 @@ param(
 
 $ErrorActionPreference = "Stop"
 . (Join-Path $PSScriptRoot "native-command.ps1")
+. (Join-Path $PSScriptRoot "source-tree.ps1")
 $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
 if (-not $Version) {
     $Version = (
         Get-Content -LiteralPath (Join-Path $RepoRoot "VERSION") -Raw
     ).Trim()
 }
-$CoreRoot = $RepoRoot
-if (-not (Test-Path -LiteralPath (Join-Path $CoreRoot "src\finesub_bootstrap") -PathType Container)) {
-    if (-not $UpstreamDirectory) {
-        $UpstreamDirectory = $env:FINESUB_UPSTREAM_SOURCE
-    }
-    if (-not $UpstreamDirectory) {
-        throw @"
-FineSub core source was not found in this standalone desktop repository.
-Pass -UpstreamDirectory (or set FINESUB_UPSTREAM_SOURCE) to a clean checkout
-whose version matches the finesub dependency in pyproject.toml.
-"@
-    }
-    $CoreRoot = [System.IO.Path]::GetFullPath($UpstreamDirectory)
-}
-$CorePackage = Join-Path $CoreRoot "src\finesub_bootstrap"
-$CoreVersionFile = Join-Path $CoreRoot "VERSION"
-if (-not (Test-Path -LiteralPath $CorePackage -PathType Container)) {
-    throw "FineSub bootstrap source not found: $CorePackage"
-}
-if (-not (Test-Path -LiteralPath $CoreVersionFile -PathType Leaf)) {
-    throw "FineSub source VERSION file not found: $CoreVersionFile"
-}
-$DesktopProject = Get-Content -LiteralPath (Join-Path $RepoRoot "pyproject.toml") -Raw
-if ($DesktopProject -notmatch '"finesub==(?<version>[^"; ]+)"') {
-    throw "Desktop pyproject.toml must pin one exact FineSub version."
-}
-$ExpectedCoreVersion = $Matches.version
-$ActualCoreVersion = (Get-Content -LiteralPath $CoreVersionFile -Raw).Trim()
-if ($ActualCoreVersion -ne $ExpectedCoreVersion) {
-    throw "FineSub source version '$ActualCoreVersion' does not match desktop dependency '$ExpectedCoreVersion'."
-}
+$CoreSource = Get-VerifiedCoreSource -RepoRoot $RepoRoot -CoreRoot $UpstreamDirectory
+$CoreRoot = $CoreSource.Root
+Get-CleanSourceCommit -Path $RepoRoot | Out-Null
 $IconPath = Join-Path $RepoRoot "desktop\assets\yanami-sub.ico"
 $TrayIconPath = Join-Path $RepoRoot "desktop\assets\source\yanami-sub.png"
 $LauncherVersionTemplate = Join-Path $RepoRoot "desktop\assets\yanami-sub-version.txt"
@@ -63,40 +36,6 @@ foreach (
 ) {
     if (-not (Test-Path -LiteralPath $BrandAsset -PathType Leaf)) {
         throw "Yanami Sub brand asset not found: $BrandAsset"
-    }
-}
-
-function Copy-PythonTree {
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Source,
-        [Parameter(Mandatory = $true)]
-        [string]$Destination
-    )
-
-    New-Item -ItemType Directory -Force -Path $Destination | Out-Null
-    foreach ($Item in Get-ChildItem -LiteralPath $Source -Force) {
-        if ($Item.PSIsContainer) {
-            if (
-                $Item.Name -eq "tests" -or
-                $Item.Name -eq "__pycache__" -or
-                $Item.Name.StartsWith(
-                    ".tmp",
-                    [System.StringComparison]::OrdinalIgnoreCase
-                )
-            ) {
-                continue
-            }
-            Copy-PythonTree `
-                -Source $Item.FullName `
-                -Destination (Join-Path $Destination $Item.Name)
-        }
-        elseif ($Item.Extension -eq ".py") {
-            Copy-Item `
-                -LiteralPath $Item.FullName `
-                -Destination $Destination `
-                -Force
-        }
     }
 }
 
@@ -245,6 +184,7 @@ foreach ($Candidate in @(
 if (-not $Python) {
     throw "Desktop Python environment not found under: $VenvPath"
 }
+Assert-PythonCoreSource -Python $Python -CoreSource $CoreSource
 if (-not $SkipFrontend) {
     & (Join-Path $PSScriptRoot "build-frontend.ps1") -PythonPath $Python
 }
@@ -289,15 +229,13 @@ foreach ($EntryPoint in @("__init__.py", "YanamiSub.py", "YanamiSubUpdater.py"))
         -Destination $StageDesktop `
         -Force
 }
-Copy-PythonTree `
-    -Source (Join-Path $RepoRoot "desktop\backend") `
-    -Destination (Join-Path $StageDesktop "backend")
+Copy-TrackedTree -RepoRoot $RepoRoot -RelativeRoot "desktop/backend" `
+    -Destination (Join-Path $StageDesktop "backend") -PythonOnly
 # The shared provisioning package lives under src/ but must be importable from
 # the stage: PyInstaller resolves imports via --paths, not the build venv's
 # editable install.
-Copy-PythonTree `
-    -Source $CorePackage `
-    -Destination (Join-Path $StageDirectory "finesub_bootstrap")
+Copy-TrackedTree -RepoRoot $CoreRoot -RelativeRoot "src/finesub_bootstrap" `
+    -Destination (Join-Path $StageDirectory "finesub_bootstrap") -PythonOnly
 
 $PreviousPyInstallerConfig = $env:PYINSTALLER_CONFIG_DIR
 $env:PYINSTALLER_CONFIG_DIR = Join-Path $OutputDirectory ".pyinstaller-cache"

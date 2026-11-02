@@ -27,6 +27,7 @@ from finesub_bootstrap.model_caches import (
 from finesub_bootstrap.downloader import DownloadPaused
 from finesub_bootstrap.http_client import network_routes
 from finesub_bootstrap.models import DownloadProgress, ResourceStatus
+from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE, holding_activity
 from desktop.backend.resources import manual_wheels, python_interpreter
 from desktop.backend.resources.model_prefetch import (
     ModelPrefetchFailed,
@@ -34,6 +35,7 @@ from desktop.backend.resources.model_prefetch import (
     run_model_prefetch,
 )
 from desktop.backend.resources.local_reuse import LocalResourceReuse
+from desktop.backend.resources.runtime_health import RuntimeHealth
 from finesub_bootstrap.system_tools import (
     SystemTool,
     find_system_ffmpeg,
@@ -114,6 +116,7 @@ class DesktopResourceService:
     ) -> None:
         self.bootstrap = bootstrap
         self.runtime = runtime
+        self.runtime_health = RuntimeHealth(runtime)
         self.interpreter_prober = interpreter_prober
         # Injectable for the same reason as the tool finders: otherwise testing
         # the `models` branch means spawning an interpreter and downloading
@@ -158,7 +161,7 @@ class DesktopResourceService:
 
     def status(self, resource_id: str) -> ResourceStatus:
         if resource_id == "uv":
-            return self._runtime_status()
+            return self.runtime_health.status(self._runtime_status())
         if resource_id == MODELS_RESOURCE:
             return self._models_status()
         if resource_id not in BOOTSTRAP_RESOURCES:
@@ -404,20 +407,21 @@ class DesktopResourceService:
         missing = missing_pipeline_models(self.runtime.paths.models)
         if not missing:
             return self._models_status()
-        if not self._runtime_status().usable:
+        if not self.status("uv").usable:
             raise RuntimeError("需要先安装 Python 运行环境，再下载模型权重。")
         # One process per model, and one endpoint decision per process. The
         # endpoint is read at import time by huggingface_hub, so falling back
         # means starting again; batching all three would then re-download the
         # ones that had already finished.
         for index, model_id in enumerate(missing, start=1):
-            self._prefetch_one(
-                model_id,
-                position=(index, len(missing)),
-                stage=stage,
-                log=log,
-                should_pause=should_pause,
-            )
+            with holding_activity(self.runtime.paths.user_data):
+                self._prefetch_one(
+                    model_id,
+                    position=(index, len(missing)),
+                    stage=stage,
+                    log=log,
+                    should_pause=should_pause,
+                )
         status = self._models_status()
         if not status.usable:
             # A zero exit code is not enough: an upstream downloader can change
@@ -437,6 +441,7 @@ class DesktopResourceService:
         stage: Callable[[str, str], None] | None = None,
         log: Callable[[str], None] | None = None,
         should_pause: Callable[[], bool] | None = None,
+        automatic: bool = False,
     ) -> ResourceStatus:
         if resource_id == MODELS_RESOURCE:
             return self._install_models(stage, log, should_pause)
@@ -445,6 +450,7 @@ class DesktopResourceService:
             for callback in (stage, log, should_pause)
         )
         if resource_id == "uv":
+            options = self.runtime_health.install_options(stage=stage, log=log, automatic=automatic)
             if self.interpreter_prober is not None and not self.interpreter_prober.done:
                 if stage is not None:
                     stage(
@@ -474,13 +480,18 @@ class DesktopResourceService:
                     stage=stage,
                     should_pause=should_pause,
                 )
-                return self.runtime.install(
+                result = self.runtime.install(
                     stage=stage,
                     log=log,
                     should_pause=should_pause,
+                    **options,
                 )
+                self.runtime_health.installed()
+                return result
             self.bootstrap.install("uv", progress)
-            return self.runtime.install()
+            result = self.runtime.install(**options)
+            self.runtime_health.installed()
+            return result
         if resource_id not in BOOTSTRAP_RESOURCES:
             raise KeyError(f"Unknown desktop resource: {resource_id}")
         if self.system_tool(resource_id) is not None:
@@ -580,13 +591,17 @@ class DesktopResourceService:
         )
         return not self.ensure(required)
 
+    def prepare_runtime(self):
+        return self.runtime_health.assess()
+
     def diagnostics(self) -> dict[str, object]:
         """Run the expensive health probe and return frontend-neutral facts."""
 
         # A manual diagnostic means "look again", including system tools that
         # were installed after launch.
         self._system_tools.clear()
-        forced_runtime = self._runtime_status(force_probe=True)
+        health_error = self.runtime_health.assess(explicit=True)
+        forced_runtime = self.runtime_health.status(self._runtime_status(force_probe=True))
         resources = [
             forced_runtime if resource_id == "uv" else self.status(resource_id)
             for resource_id in ALWAYS_REQUIRED
@@ -616,6 +631,7 @@ class DesktopResourceService:
             core_version = "source"
         return {
             "healthy": not blocking,
+            "runtime_check_error": health_error.message if health_error is not None else "",
             "core_version": core_version,
             "resources": resources,
             "blocking_resources": blocking,
@@ -792,6 +808,9 @@ class DesktopResourceService:
             # Runtime JIT cache is mutable data, never part of the signed app
             # snapshot. Shared by single, batch, prefetch and knowledge workers.
             "NUMBA_CACHE_DIR": str(self.runtime.paths.cache / "numba"),
+            TASK_ACTIVITY_ROOT_VARIABLE: str(self.runtime.paths.user_data),
+            "YANAMI_RUNTIME_ROOT": str(self.runtime.runtime_root),
+            "YANAMI_RUNTIME_VERSION": self.runtime_health.version if self.runtime_health.enabled else "",
         }
         git_bin = self.tool_directory("git", "git.exe")
         # yt-dlp is imported, not executed, so it joins PYTHONPATH rather than

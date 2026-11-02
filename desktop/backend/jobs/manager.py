@@ -76,6 +76,7 @@ class JobManager:
         history_path: str | Path | None = None,
         output_root: str | Path | None = None,
         output_root_resolver: OutputRootResolver | None = None,
+        on_runtime_failure: Callable[[], str] | None = None,
     ) -> None:
         self._worker_context = WorkerLaunchContext(
             python_executable=str(python_executable),
@@ -85,6 +86,7 @@ class JobManager:
             environment=dict(worker_env),
         )
         self.available_gpus = available_gpus
+        self.on_runtime_failure = on_runtime_failure
         self.process_factory = process_factory
         self.terminate_process_tree = terminate_process_tree
         self.event_limit = max(1, int(event_limit))
@@ -650,9 +652,21 @@ class JobManager:
         assert process.stdout is not None
         task_log = self._open_task_log(task_id)
         try:
-            self._read_worker_to_end(
+            failed = self._read_worker_to_end(
                 task_id, process, task_log, generation_started_at
             )
+            if failed and self.on_runtime_failure is not None:
+                try:
+                    note = self.on_runtime_failure()
+                except Exception:
+                    LOGGER.exception("post-failure runtime check failed")
+                    note = ""
+                if note:
+                    with self._lock:
+                        if self._process is process:
+                            event = WorkerEvent.log(task_id, note)
+                            self._record_event(event)
+                            task_log.append(event)
         finally:
             # Each reader owns its own lease. A following task may start as
             # soon as this one reports a terminal event, while this thread is
@@ -670,7 +684,7 @@ class JobManager:
         process: Any,
         task_log: TaskLog,
         generation_started_at: float,
-    ) -> None:
+    ) -> bool:
         assert process.stdout is not None
         for line in process.stdout:
             event = parse_worker_line(line, task_id=task_id)
@@ -731,7 +745,7 @@ class JobManager:
                 or self._snapshot.task_id != task_id
                 or self._process is not process
             ):
-                return
+                return False
             if self._snapshot.state == "running":
                 last_log = next(
                     (
@@ -764,6 +778,8 @@ class JobManager:
             # Inside the lock, so the log is named before anything can observe
             # the state leaving "running" and go looking for the file.
             task_log.finish()
+            failed = self._snapshot.state == "failed"
+        return failed
 
     def _open_task_log(self, task_id: str) -> TaskLog:
         return TaskLog(

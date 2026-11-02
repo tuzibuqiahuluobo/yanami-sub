@@ -8,12 +8,15 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
-from finesub.config import (
-    clear_config_cache,
-    config_float,
-    validate_split_length_scale,
-)
-from finesub.paths import resolve_config_file
+from finesub.config import clear_config_cache
+try:
+    from finesub.settings import SPLIT_LENGTH_SCALE
+except ModuleNotFoundError as error:
+    if error.name != "finesub.settings":
+        raise
+    # Keep the published 0.5.1 core usable until the staged switch is complete.
+    from finesub.config import config_float, validate_split_length_scale
+    SPLIT_LENGTH_SCALE = None
 from desktop.backend.common.models import (
     BridgeError,
     CapabilityState,
@@ -26,9 +29,11 @@ from desktop.backend.common.models import (
     RoutingTargetSummary,
     RoutingUpdate,
     SharedSettings,
+    TaskRequest,
 )
+from desktop.backend.common.core_compat import check_retired_route_choices, profile_for_request, unified_llm_contract
 from finesub_bootstrap import secrets
-from desktop.backend.settings.config_file import update_config_file
+from desktop.backend.settings.config_file import shared_config_path, update_config_file
 from desktop.backend.settings.local_agents import (
     COMMANDS_ENV,
     configure_local_agents,
@@ -100,6 +105,20 @@ class SettingsStore:
     def validate_request(self, request) -> BridgeError | None:
         """Validate launch-time capabilities before the worker starts."""
 
+        if request.stage in {"translated-srt", "final-srt"}:
+            try:
+                from desktop.backend.settings.core_migration import check_config_migration
+                check_config_migration(self.config_path)
+            except (OSError, ValueError, RuntimeError) as error:
+                return BridgeError(code="configuration_review_required", message=str(error), action="open_settings")
+            try:
+                check_retired_route_choices(request)
+                # Retry/resume receives already-instantiated archival models.
+                # Revalidate their live routes before resources/workers start;
+                # display-only archive context must never authorize execution.
+                TaskRequest.model_validate(request.model_dump())
+            except ValueError as error:
+                return BridgeError(code="route_unavailable", message=str(error), action="open_agents" if request.llm_agent else "open_settings")
         if request.stage in {"translated-srt", "final-srt"} and request.llm_source != "manual":
             # The per-task source group is resolved inside the isolated worker;
             # the shared settings route is not the route this run will use.
@@ -133,7 +152,6 @@ class SettingsStore:
             )
             from finesub.llm.routing.profiles import (
                 SwitchConflictError,
-                resolve_profile,
             )
             from finesub.llm.routing.model_routes import (
                 install_runtime_preferred,
@@ -148,15 +166,7 @@ class SettingsStore:
         previous_routes = runtime_preferred()
         try:
             install_runtime_preferred(parse_llm_model_args(request.llm_model))
-            profile = resolve_profile(
-                media=request.llm_media,
-                retrieval=request.llm_retrieval,
-                difficulty=request.llm_difficulty,
-                continuity=request.llm_continuity,
-                correction_media=request.llm_correction_media,
-                planning_media=request.llm_planning_media,
-                output_scale=request.llm_output_scale,
-            )
+            profile = profile_for_request(request)
             if request.llm_retrieval == "native" and not self._has_native_route(
                 profile,
                 fast_enabled=request.llm_fast == "on",
@@ -171,7 +181,7 @@ class SettingsStore:
                 )
             validate_profile_capabilities(
                 profile,
-                fast_enabled=request.llm_fast == "on",
+                **({} if unified_llm_contract() else {"fast_enabled": request.llm_fast == "on"}),
             )
         except CapabilityUnavailableError as error:
             if (
@@ -226,7 +236,7 @@ class SettingsStore:
 
         routes = default_model_routes()
         keys = self._read_keys()
-        for requirement in required_chains(profile, fast_enabled=fast_enabled):
+        for requirement in required_chains(profile, **({} if unified_llm_contract() else {"fast_enabled": fast_enabled})):
             if not requirement.needs_native_search:
                 continue
             for endpoint in requirement.endpoints:
@@ -328,15 +338,12 @@ class SettingsStore:
         a checkout edits the checkout's file and not the installed app's.
         """
 
-        configured = os.environ.get("FINESUB_CONFIG_FILE", "").strip()
-        if configured:
-            return Path(configured).expanduser().resolve()
-        found = resolve_config_file()
-        return found if found is not None else self.user_data / "config.toml"
+        return shared_config_path(self.user_data)
 
     def shared_settings(self) -> SharedSettings:
         return SharedSettings(
-            split_length_scale=config_float(
+            split_length_scale=SPLIT_LENGTH_SCALE.configured(path=self.config_path)
+            if SPLIT_LENGTH_SCALE is not None else config_float(
                 "segmentation", "length_scale", path=self.config_path
             )
         )
@@ -355,7 +362,13 @@ class SettingsStore:
         if scale is not None:
             # Reject here rather than at the next run: this is the only place
             # that can tell the user which value was refused and why.
-            scale = validate_split_length_scale(scale)
+            if SPLIT_LENGTH_SCALE is not None:
+                try:
+                    scale = SPLIT_LENGTH_SCALE.check(scale)
+                except ValueError as error:
+                    raise ValueError(f"Invalid split length scale: {error}") from error
+            else:
+                scale = validate_split_length_scale(scale)
         update_config_file(
             self.config_path,
             {"segmentation": {"length_scale": scale}},
@@ -612,6 +625,7 @@ class SettingsStore:
                     )
                 )
             return RoutingSettings(
+                unified_llm_media=unified_llm_contract(),
                 active_preset_id=routes.active_preset_id,
                 execution_policy=execution.policy_id,
                 local_agent_timeout_seconds=execution.local_agent_timeout_seconds,
@@ -636,6 +650,7 @@ class SettingsStore:
             )
         except Exception as error:  # malformed hand-edited config stays recoverable
             return RoutingSettings(
+                unified_llm_media=unified_llm_contract(),
                 config_path=str(self.config_path),
                 error=f"{type(error).__name__}: {error}",
             )

@@ -10,7 +10,9 @@ def test_cloud_build_is_manual_read_only_and_reuses_the_release_scripts():
     assert "contents: read" in workflow and "contents: write" not in workflow
     for script in ("build-bootstrap.ps1", "build-installer.ps1", "build-release.ps1"):
         assert script in workflow
-    assert "ref: v0.5.1" in workflow
+    assert "ref: ${{ steps.core.outputs.commit }}" in workflow
+    assert "desktop/resources/core-source.json" in workflow
+    assert "Get-VerifiedCoreSource" in workflow
     assert "actions/upload-artifact@v7" in workflow
     assert "environment: release-build" in workflow
     assert "if: ${{ inputs.signed_updates }}" in workflow

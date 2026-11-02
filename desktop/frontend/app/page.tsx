@@ -477,7 +477,7 @@ function HomeContent() {
     }
   };
 
-  const installResource = async (resourceId: string) => {
+  const installResource = async (resourceId: string, automatic = false) => {
     const current = state.resources.find((resource) => resource.id === resourceId);
     if (!current) {
       return;
@@ -487,7 +487,7 @@ function HomeContent() {
       resource: { ...current, state: "downloading", detail: "" },
     });
     try {
-      const install = await desktopApi.installResource(resourceId);
+      const install = await desktopApi.installResource(resourceId, automatic);
       dispatch({ type: "resourceInstallChanged", install });
       const resources = await desktopApi.getResourceStatuses();
       dispatch({ type: "resourcesLoaded", resources });
@@ -552,7 +552,7 @@ function HomeContent() {
         // spinner with no task behind it.
         dispatch({ type: "taskRejected", error: RESOURCE_REQUIRED_ERROR });
         focusResource(missing.id);
-        await installResource(missing.id);
+        await installResource(missing.id, true);
         return;
       }
       // The processing device is one global setting, not a per-task control,
@@ -771,6 +771,10 @@ function HomeContent() {
         onExportKeys={() => desktopApi.exportApiKeys()}
         onSaveRouting={async (values: RoutingUpdate) => {
           const routing = await desktopApi.saveRoutingSettings(values);
+          dispatch({ type: "routingChanged", routing });
+        }}
+        onConfigMigrated={async () => {
+          const routing = await desktopApi.getRoutingSettings();
           dispatch({ type: "routingChanged", routing });
         }}
         onSaveProviderKey={async (providerId, value) => {

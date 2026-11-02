@@ -32,6 +32,7 @@ from finesub_bootstrap.locks import (
 )
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.core_compat import llm_call_options
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.worker.agent_health_check import (
     check_agent_health,
@@ -39,6 +40,7 @@ from desktop.backend.worker.agent_health_check import (
 )
 from desktop.backend.worker.model_source import SourceRoute, source_route
 from desktop.backend.worker.protocol import EventLogWriter, WorkerEvent, encode_event
+from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
 
 
 class PipelineCallable(Protocol):
@@ -356,6 +358,19 @@ def _resolve_output_path(request: TaskRequest) -> str | None:
     return str(resolve_name_output_path(request.name))
 
 
+def cleanup_task_intermediates(output_srt, *, preserve=()) -> None:
+    from desktop.backend.worker.knowledge_feedback import retain_task_style
+
+    try:
+        retain_task_style(output_srt)
+    except Exception as error:
+        # Retaining feedback context is best effort, just like cleanup itself:
+        # keep the original artifacts rather than fail a published task.
+        LOGGER.warning("无法保留本任务的风格选择，已跳过中间产物清理 / Style record could not be retained; kept intermediates: %s", error)
+        return
+    cleanup_intermediate(output_srt, preserve=preserve)
+
+
 @contextmanager
 def _routing_override(values: list[str]):
     """Apply one task's core route pin without leaking it across tests/calls."""
@@ -374,6 +389,26 @@ def _routing_override(values: list[str]):
         install_runtime_preferred(previous)
 
 
+def _prepare_task_knowledge(
+    request: TaskRequest,
+    *,
+    stage: str,
+    knowledge: str | None = None,
+    config_files: dict[str, Path] | None = None,
+) -> None:
+    effective_knowledge = request.knowledge if knowledge is None else knowledge
+    needs_store = stage in {"translated-srt", "final-srt"} and (
+        effective_knowledge != "none" or request.style_mode != "none"
+    )
+    if needs_store or (stage != "vocal" and request.asr_context != "off"):
+        from finesub.paths import resolve_knowledge_root
+        from desktop.backend.knowledge.schema_guard import prepare_knowledge_store
+
+        root = resolve_knowledge_root(required=False)
+        if root is not None:
+            prepare_knowledge_store(root, **({"config_files": config_files} if config_files is not None else {}))
+
+
 def _execute_pipeline(
     request: TaskRequest,
     *,
@@ -383,6 +418,8 @@ def _execute_pipeline(
     knowledge: str | None = None,
     route: SourceRoute | None = None,
 ) -> Any:
+    _prepare_task_knowledge(request, stage=stage, knowledge=knowledge,
+        config_files=getattr(route, "backup_files", None))
     return pipeline(
         request.input,
         output_path=_resolve_output_path(request),
@@ -402,15 +439,8 @@ def _execute_pipeline(
         word=request.word,
         asr_stabilize_profile=request.asr_stabilize_profile,
         split_length_scale=request.split_length_scale,
-        llm_media=request.llm_media,
-        llm_correction_media=route.correction_media if route is not None else request.llm_correction_media,
-        llm_planning_media=route.planning_media if route is not None else request.llm_planning_media,
-        llm_retrieval=request.llm_retrieval,
-        llm_difficulty=request.llm_difficulty,
-        llm_continuity=request.llm_continuity,
-        llm_parallel_windows=request.llm_parallel_windows,
+        **llm_call_options(request, route=route, knowledge=knowledge),
         llm_fast=request.llm_fast,
-        llm_output_scale=request.llm_output_scale,
         llm_video=request.llm_video,
         extra_info=request.extra_info,
         extra_style=request.extra_style,
@@ -418,7 +448,6 @@ def _execute_pipeline(
         style=request.style,
         style_mode=request.style_mode,
         download_video_source=request.download_video_source,
-        knowledge=request.knowledge if knowledge is None else knowledge,
         refined_srt=request.refined_srt,
         task_id=task_id,
         postprocess_profile=request.postprocess_profile,
@@ -820,7 +849,7 @@ def run_request(
             # offers the subtitle stages today, so this was a bridge-contract
             # hole rather than a visible one -- but `TaskRequest` accepts all of
             # them and `validate_stage` only guards the two LLM stages.
-            cleanup_intermediate(
+            cleanup_task_intermediates(
                 paths.final_srt,
                 preserve=outputs.values(),
             )
@@ -909,6 +938,7 @@ def main() -> int:
         with _announcing_this_task(args.task_id, request.output), redirect_stdout(
             log_writer
         ), redirect_stderr(log_writer):
+            initialize_native_paths()
             from finesub.stages import run_pipeline
 
             run_request(
@@ -917,6 +947,7 @@ def main() -> int:
                 pipeline=run_pipeline,
                 emit=emit,
             )
+            record_runtime_success()
         return 0
     except Exception as error:
         traceback.print_exc(file=log_writer)

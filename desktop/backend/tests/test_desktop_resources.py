@@ -94,6 +94,10 @@ class FakeRuntime:
         self.python_version = "3.12"
 
     @property
+    def runtime_root(self) -> Path:
+        return self.paths.runtime / "python"
+
+    @property
     def python_executable(self) -> Path:
         return self.root / "python.exe"
 

@@ -37,7 +37,7 @@ class ResourceInstallManager:
         self._pause_events: dict[str, threading.Event] = {}
         self._workers: dict[str, threading.Thread] = {}
 
-    def start(self, resource_id: str) -> ResourceInstallSnapshot:
+    def start(self, resource_id: str, *, automatic: bool = False) -> ResourceInstallSnapshot:
         with self._lock:
             current = self._snapshots.get(resource_id)
             if current is not None and current.state in {"queued", "running"}:
@@ -76,7 +76,7 @@ class ResourceInstallManager:
             self._pause_events[resource_id] = pause_event
             worker = threading.Thread(
                 target=self._run,
-                args=(resource_id, pause_event),
+                args=(resource_id, pause_event, automatic),
                 name=f"finesub-resource-{resource_id}",
                 daemon=True,
             )
@@ -149,7 +149,7 @@ class ResourceInstallManager:
         path.mkdir(parents=True, exist_ok=True)
         return path.resolve()
 
-    def _run(self, resource_id: str, pause_event: threading.Event) -> None:
+    def _run(self, resource_id: str, pause_event: threading.Event, automatic: bool = False) -> None:
         self._update(
             resource_id,
             state="running",
@@ -209,6 +209,7 @@ class ResourceInstallManager:
                 stage=stage,
                 log=log,
                 should_pause=pause_event.is_set,
+                **({"automatic": True} if automatic else {}),
             )
         except DownloadPaused:
             transcript.finish("已暂停")

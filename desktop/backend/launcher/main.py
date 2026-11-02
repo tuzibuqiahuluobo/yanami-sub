@@ -102,11 +102,14 @@ PUBLIC_BRIDGE_METHODS = (
     "reveal_api_keys",
     "export_api_keys",
     "get_routing_settings",
+    "preview_config_migration",
+    "apply_config_migration",
     "save_routing_settings",
     "save_provider_key",
     "delete_provider_key",
     "probe_local_agents",
     "open_workbuddy_login",
+    "open_codebuddy_login",
     "get_dsh_path",
     "set_dsh_path",
     "get_agent_paths",
@@ -758,6 +761,7 @@ def create_backend_services(
     # Fire and forget: the interface asks for the result, it never waits for it.
     gpu_probe.start()
     jobs = JobManager(
+        on_runtime_failure=resources.runtime_health.failure_note,
         python_executable=context.python_executable,
         working_directory=context.working_directory,
         worker_env=context.environment,
@@ -772,6 +776,7 @@ def create_backend_services(
     )
 
     batches = BatchManager(
+        on_runtime_failure=resources.runtime_health.failure_note,
         python_executable=context.python_executable,
         working_directory=context.working_directory,
         worker_env=context.environment,

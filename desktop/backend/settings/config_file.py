@@ -22,6 +22,7 @@ than asking the upstream package to retain a desktop-only API.
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import re
 import tomllib
@@ -41,6 +42,16 @@ _MULTILINE_MARKERS = ('"""', "'''")
 # excludes brackets), so the preceding table's span would swallow the whole
 # block and an edit could rewrite a key inside it. Refuse, like above.
 _ARRAY_TABLE_RE = re.compile(r"^\s*\[\[")
+
+
+def shared_config_path(user_data: Path) -> Path:
+    from finesub.paths import resolve_config_file
+
+    configured = os.environ.get("FINESUB_CONFIG_FILE", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+    found = resolve_config_file()
+    return found if found is not None else user_data / "config.toml"
 
 
 class ConfigWriteError(RuntimeError):

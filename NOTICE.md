@@ -6,7 +6,7 @@ Yanami Sub 是 [FineSub](https://github.com/caca2331/finesub) 的衍生 Windows 
 
 - 上游仓库：<https://github.com/caca2331/finesub>
 - 初始桌面端迁移锚点：<https://github.com/caca2331/finesub/tree/0.5.0pre/desktop>
-- 当前打包并测试的核心版本：<https://github.com/caca2331/finesub/tree/v0.5.1>
+- 本分支构建候选核心（尚未发布）：<https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197>（v0.6.0）
 - 下游仓库：<https://github.com/tuzibuqiahuluobo/yanami-sub>
 
 ## 作者与维护
@@ -19,11 +19,11 @@ Git 历史保留各项修改的具体作者信息。
 
 ## 许可证
 
-Yanami Sub 与打包的 FineSub v0.5.1 代码遵循
+Yanami Sub 与构建候选中的 FineSub v0.6.0 代码遵循
 [GNU General Public License v3.0 or later](LICENSE)，SPDX 标识为 `GPL-3.0-or-later`。
 
 随 FineSub 核心分发的 `src/finesub/llm/prompt_templates/` 明文模板采用
-[Creative Commons Attribution-ShareAlike 4.0 International](https://github.com/caca2331/finesub/blob/v0.5.1/src/finesub/llm/prompt_templates/LICENSE.md)。
+[Creative Commons Attribution-ShareAlike 4.0 International](https://github.com/caca2331/finesub/blob/v0.6.0/src/finesub/llm/prompt_templates/LICENSE.md)。
 用于 SOCKS 代理模型下载的 `desktop/resources/wheels/socksio-1.0.0-py3-none-any.whl`
 采用 MIT 许可证，许可证原文保存在该 wheel 内的 `socksio-1.0.0.dist-info/LICENSE`。
 分发二进制或源码时，应同时保留 GPL、该目录的 CC BY-SA 声明以及本文件中的来源与作者归属。

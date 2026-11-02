@@ -80,14 +80,15 @@ export function TaskSettings({
     request.stage,
   );
   const source = request.llm_source ?? "auto";
-  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"] as const;
+  const unifiedMedia = routing?.unified_llm_media ?? false;
+  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", unifiedMedia ? "LOCAL_CODEBUDDY" : "LOCAL_WORKBUDDY"] as const;
   const hasResearchOverride = request.llm_model.some((value) =>
     value.trimStart().startsWith("research="),
   );
   const selectedRoute =
     request.llm_model.find((value) => !value.includes("=")) ?? "";
-  const workBuddySelected = (source === "agent" && request.llm_agent === "LOCAL_WORKBUDDY") ||
-    (source === "manual" && selectedRoute.startsWith("local-workbuddy-"));
+  const workBuddySelected = (source === "agent" && ["LOCAL_WORKBUDDY", "LOCAL_CODEBUDDY"].includes(request.llm_agent ?? "")) ||
+    (source === "manual" && (selectedRoute.startsWith("local-workbuddy-") || selectedRoute.startsWith("local-codebuddy-")));
   const workBuddyQuickActive = Object.entries(WORKBUDDY_QUICK_SETTINGS).every(
     ([key, value]) => request[key as keyof typeof WORKBUDDY_QUICK_SETTINGS] === value,
   );
@@ -294,7 +295,8 @@ export function TaskSettings({
                 ]}
               />
               <small className="field-help">{t.newTask.settings.agentChoiceHint}</small>
-              <small className="field-help">{language === "en" ? "Capabilities depend on the selected model: AGY can support audio/video; Codex, Claude, DSH and WorkBuddy use text in this integration. Native search requires a search-capable route and account access. CLI detection does not verify sign-in." : "能力以所选模型为准：AGY 部分模型支持音频/视频；Codex、Claude、DSH、WorkBuddy 在此集成中使用纯文本。原生搜索还需相应路由及账号权限；检测到 CLI 不代表已登录。"}</small>
+              <small className="field-help">{language === "en" ? `Capabilities depend on the selected model: AGY can support audio/video; Codex, Claude, DSH and ${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} use text. Native search requires a matching route and account access. CLI detection does not verify sign-in.` : `能力以所选模型为准：AGY 部分模型支持音频/视频；Codex、Claude、DSH、${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} 使用纯文本。原生搜索还需相应路由及账号权限；检测到 CLI 不代表已登录。`}</small>
+              {unifiedMedia ? <small className="field-help">{language === "en" ? "CodeBuddy must be selected explicitly; its upstream fallback group may spend credits. The all-agents automatic order excludes it." : "CodeBuddy 需要手动指定；其上游候选组可能消耗积分。自动依次尝试所有 Agent 时不会启用它。"}</small> : null}
               {onOpenSettings ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
             </div> : null}
             {source === "manual" ? <div className="field field-wide task-route-field">
@@ -322,11 +324,12 @@ export function TaskSettings({
                 options={routeOptions}
               />
               <small className="field-help">{t.newTask.settings.llmRouteHint}</small>
-              <small className="field-help">{language === "en" ? "If any fallback candidate cannot process audio/video, correction and planning use text; local speech recognition is unaffected." : "如回退候选不能全部处理音频/视频，纠错与规划会改用纯文本；本地语音识别不受影响。"}</small>
+              <small className="field-help">{language === "en" ? "If any fallback candidate cannot process audio/video, correction uses text; local speech recognition is unaffected." : "如回退候选不能全部处理音频/视频，纠错会改用纯文本；本地语音识别不受影响。"}</small>
             </div> : null}
             {translationSelected && workBuddySelected ? (
               <div className="field field-wide task-route-field">
-                <strong>{language === "en" ? "WorkBuddy quick workflow" : "WorkBuddy 快速流程"}</strong>
+                <strong>{unifiedMedia ? (language === "en" ? "CodeBuddy quick workflow" : "CodeBuddy 快速流程") : (language === "en" ? "WorkBuddy quick workflow" : "WorkBuddy 快速流程")}</strong>
+                {unifiedMedia ? <small className="field-help">{language === "en" ? "CodeBuddy models and their fallbacks may spend credits; check your account plan and vendor billing." : "CodeBuddy 模型及其回退候选可能消耗积分，请确认账号套餐及厂商计费。"}</small> : null}
                 <small className="field-help">{language === "en" ? "Keep correction and translation; use text/efficiency mode without web research or knowledge-base processing. This reduces extra calls, but context and terminology checks may be less thorough. Model choice, concurrency and budget checks are unchanged." : "保留纠错翻译，使用纯文本效率模式，关闭联网调查和知识库处理。可减少额外调用，但背景与术语校验可能减少；不更换模型、不提高并发，保留窗口预算检查。"}</small>
                 <button type="button" className="button button-secondary button-compact" disabled={disabled || workBuddyQuickActive}
                   onClick={() => onChange(WORKBUDDY_QUICK_SETTINGS)}>
@@ -349,7 +352,7 @@ export function TaskSettings({
             <div className="field">
               <span>{t.newTask.settings.knowledge}</span>
               <CustomSelect
-                value={request.knowledge}
+                value={request.knowledge === "collect" ? "read" : request.knowledge}
                 disabled={disabled || !translationSelected}
                 ariaLabel={t.newTask.settings.knowledge}
                 onChange={(value) =>
@@ -357,7 +360,7 @@ export function TaskSettings({
                 }
                 options={[
                   { value: "update", label: t.newTask.settings.knowledgeUpdate },
-                  { value: "collect", label: t.newTask.settings.knowledgeCollect },
+                  { value: "read", label: t.newTask.settings.knowledgeCollect },
                   { value: "none", label: t.newTask.settings.knowledgeNone },
                 ]}
               />
@@ -676,11 +679,11 @@ export function TaskSettings({
               <div className="field">
                 <span>{t.newTask.settings.llmMedia}</span>
                 <CustomSelect
-                  value={request.llm_media}
+                  value={unifiedMedia ? request.llm_correction_media || request.llm_media : request.llm_media}
                   disabled={disabled || !translationSelected}
                   ariaLabel={t.newTask.settings.llmMedia}
                   onChange={(value) =>
-                    onChange({ llm_media: value as TaskRequest["llm_media"] })
+                    onChange({ llm_media: value as TaskRequest["llm_media"], ...(unifiedMedia ? { llm_correction_media: "", llm_planning_media: "" } : {}) })
                   }
                   options={[
                     { value: "text", label: t.newTask.settings.mediaText },
@@ -689,7 +692,7 @@ export function TaskSettings({
                   ]}
                 />
               </div>
-              {(["correction", "planning"] as const).map((kind) => {
+              {!unifiedMedia && (["correction", "planning"] as const).map((kind) => {
                 const key = kind === "correction" ? "llm_correction_media" : "llm_planning_media";
                 const label = kind === "correction"
                   ? t.newTask.settings.correctionMedia

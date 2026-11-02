@@ -9,13 +9,16 @@ def _requires_login(text: str) -> bool:
 
 
 def install_workbuddy_auth_fix() -> None:
+    from finesub.llm.agent import local_agent
     from finesub.llm.agent.local_agent import (
         LocalAgentTransientError,
         LocalAgentUnavailableError,
-        WorkBuddyLocalAgentDriver,
     )
 
-    driver = WorkBuddyLocalAgentDriver
+    driver = getattr(local_agent, "WorkBuddyLocalAgentDriver", None)
+    # 0.6.0 owns CodeBuddy authentication; never patch its replacement driver.
+    if driver is None:
+        return
     if getattr(driver, "_yanami_auth_fix", False):
         return
     original_stream = driver._classify_stream_failure

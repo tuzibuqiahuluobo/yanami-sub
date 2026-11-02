@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { createDesktopApi } from "../lib/bridge";
-import { knowledgeOutcome } from "../components/BilingualKnowledgeImport";
+import { canApplyProposal, knowledgeOutcome } from "../components/BilingualKnowledgeImport";
 
 test("knowledge review uses native draft IDs, never re-generates on apply", async () => {
   const calls: unknown[][] = [];
@@ -27,6 +27,15 @@ test("outcomes distinguish generation, no change, partial and actual commit", ()
   assert.match(knowledgeOutcome({ status: "no_change" }, false), /unchanged/);
   assert.match(knowledgeOutcome({ status: "partial" }, true), /部分/);
   assert.match(knowledgeOutcome({ status: "applied" }, false), /committed/);
+  assert.match(knowledgeOutcome({ status: "evidence_only" }, true), /条目未变化.*证据/);
+  assert.match(knowledgeOutcome({ status: "evidence_only" }, false), /unchanged.*evidence recorded/);
+});
+
+test("refined feedback can apply evidence without inventing a knowledge revision", () => {
+  assert.equal(canApplyProposal({ draft_id: "frozen", status: "generated", proposal_count: 0, has_feedback_evidence: true }), true);
+  assert.equal(canApplyProposal({ draft_id: "empty", status: "generated", proposal_count: 0 }), false);
+  assert.equal(canApplyProposal({ draft_id: "done", status: "evidence_only", has_feedback_evidence: true }), false);
+  assert.equal(canApplyProposal({ status: "generated", proposal_count: 1 }), false);
 });
 
 test("knowledge confirmations are themed and keyboard accessible", () => {

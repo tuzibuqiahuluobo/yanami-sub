@@ -9,6 +9,7 @@ import subprocess
 import tomllib
 
 from packaging.version import Version
+import pytest
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
@@ -137,3 +138,19 @@ def test_upstream_runtime_keeps_the_verified_tuna_python_route() -> None:
     assert mirror == "https://pypi.tuna.tsinghua.edu.cn/simple"
     assert "https://pypi.tuna.tsinghua.edu.cn/packages/" in mainland_lock
     assert "sha256 =" in mainland_lock
+
+
+def test_candidate_runtime_locks_keep_the_approved_gpu_stack_together() -> None:
+    from desktop.backend.common.core_compat import unified_llm_contract
+    if not unified_llm_contract():
+        pytest.skip("0.6.0 pinned runtime")
+    package = resources.files("finesub_bootstrap")
+    expected = {"torch": "2.11.0+cu128", "torchaudio": "2.11.0+cu128", "torchvision": "0.26.0+cu128",
+                "triton-windows": "3.6.0.post26", "ctranslate2": "4.8.1+finesub0.6.0.cu128"}
+    for filename in ("pylock.win-py312.toml", "pylock.win-py312.cn.toml"):
+        lock = tomllib.loads(package.joinpath(filename).read_text(encoding="utf-8"))
+        rows = {row["name"]: row for row in lock["packages"]}
+        assert {name: rows[name]["version"] for name in expected} == expected
+        ct2 = rows["ctranslate2"]["archive"]
+        assert ct2["url"].endswith("ctranslate2-4.8.1+finesub0.6.0.cu128-cp312-cp312-win_amd64.whl")
+        assert ct2["hashes"]["sha256"] == "7567ef160cccea178c4b0accdb18ff35812b7a198b60419208ce8567b392c63b"

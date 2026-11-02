@@ -13,6 +13,7 @@ SCRIPT = REPO_ROOT / "desktop" / "scripts" / "package-bootstrap.ps1"
 def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Path) -> None:
     work = tmp_path / "package-bootstrap"
     fixture_repo = work / "repo"
+    fixture_core = work / "core"
     output = work / "output"
     launcher_dist = output / "Yanami Sub.dist"
     try:
@@ -64,7 +65,21 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Pa
             "<main>FineSub</main>\n", "utf-8"
         )
         (fixture_repo / "desktop" / "__init__.py").write_text("", "utf-8")
-        (fixture_repo / "pyproject.toml").write_text("[project]\nname='fixture'\n", "utf-8")
+        (fixture_repo / "pyproject.toml").write_text('[project]\nname="fixture"\ndependencies=["finesub==0.6.0"]\n', "utf-8")
+        bootstrap = fixture_repo / "src" / "finesub_bootstrap"
+        for name in ("environment.py", "runtime-manifest.json", "model-manifest.json", "download-sources.json", "pylock.win-py312.cn.toml"):
+            (bootstrap / name).write_text("{}\n", "utf-8")
+        shutil.copytree(fixture_repo / "src", fixture_core / "src")
+        (fixture_core / "VERSION").write_text("0.6.0\n", "utf-8")
+        for arguments in (
+            ("init", "-q"), ("add", "-A"),
+            ("-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "core"),
+        ):
+            subprocess.run(["git", *arguments], cwd=fixture_core, check=True, capture_output=True)
+        core_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=fixture_core, text=True).strip()
+        (fixture_repo / "desktop/resources/core-source.json").write_text(json.dumps({
+            "repository": "fixture/core", "tag": "v0.6.0", "version": "0.6.0", "commit": core_commit,
+        }), "utf-8")
 
         # Packaging is driven by `git ls-files` now, so the fixture has to be a
         # real repository -- and the untracked files below are the point: they
@@ -114,6 +129,8 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Pa
                 str(SCRIPT),
                 "-RepoRoot",
                 str(fixture_repo),
+                "-CoreRoot",
+                str(fixture_core),
                 "-OutputDirectory",
                 str(output),
                 "-Version",
@@ -132,6 +149,7 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Pa
         assert result.returncode == 0, result.stderr
 
         version_root = launcher_dist / "app" / "versions" / "2.3.4"
+        assert (version_root / "VERSION").read_text("utf-8").strip() == "2.3.4"
         assert (version_root / "src" / "finesub" / "pipeline.py").is_file()
         # Pre-0.4.0 launchers in the field validate payloads and locate the
         # active app source by this exact path; dropping it kills every in-app
@@ -149,6 +167,8 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Pa
             ["git", "rev-parse", "HEAD"], cwd=fixture_repo, text=True
         ).strip()
         assert manifest["sourceCommit"] == expected_commit
+        assert manifest["coreCommit"] == core_commit
+        assert manifest["coreVersion"] == "0.6.0"
         assert "desktop/backend/launcher/main.py" in manifest["files"]
         assert not (version_root / "desktop" / "backend" / "tests").exists()
         assert not (version_root / "desktop" / "backend" / "__pycache__").exists()
@@ -182,5 +202,11 @@ def test_package_bootstrap_excludes_tests_and_keeps_runtime_sources(tmp_path: Pa
         assert not (launcher_dist / "launcher.json").read_bytes().startswith(
             b"\xef\xbb\xbf"
         )
+        checked = subprocess.run([
+            "powershell.exe", "-NoProfile", "-Command",
+            f"$ErrorActionPreference='Stop'; . '{SCRIPT.parent / 'source-tree.ps1'}'; "
+            f"Assert-PackagedCoreSource -RepoRoot '{fixture_repo}' -VersionRoot '{version_root}'",
+        ], capture_output=True, text=True, encoding="utf-8", errors="replace")
+        assert checked.returncode == 0, checked.stderr
     finally:
         shutil.rmtree(work, ignore_errors=True)

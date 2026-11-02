@@ -3,6 +3,7 @@
 .pytest-tmp/
 .pytest_cache/
 .pytest-*/
+/.planning/
 pytest-*/
 pytest-cache-files-*/
 __pycache__/

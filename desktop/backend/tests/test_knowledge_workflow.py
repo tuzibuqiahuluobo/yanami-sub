@@ -116,6 +116,7 @@ def test_refined_inherits_route_difficulty_and_writable_style(tmp_path, monkeypa
         yield TaskRequest.model_validate(values), SimpleNamespace(source="agent", targets=["dsh"])
     monkeypatch.setattr(workflow, "_route", route)
     monkeypatch.setattr("finesub.llm.client.RoleClient", lambda: object())
+    monkeypatch.setattr(workflow, "capture_materials", lambda *args: {"mode": "", "windows": {}, "fingerprint": "unchanged"})
     monkeypatch.setattr("finesub.llm.knowledge.style.resolve_style_selection", lambda *args, **kwargs: SimpleNamespace(mode=args[1], names=[args[0]]))
     def update(**kwargs):
         kwargs_seen.append(kwargs)

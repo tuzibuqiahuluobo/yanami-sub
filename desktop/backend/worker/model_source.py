@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import logging
@@ -17,8 +17,10 @@ from finesub.config import clear_config_cache, read_config_with_path
 from finesub.llm.routing.model_routes import default_model_routes
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.core_compat import check_retired_route_choices, unified_llm_contract
 from desktop.backend.settings.config_file import update_config_file
 from desktop.backend.settings.local_agents import COMMANDS_ENV
+from desktop.backend.knowledge.backup import config_sources
 from desktop.backend.worker.workbuddy_compat import install_workbuddy_auth_fix
 
 logger = logging.getLogger(__name__)
@@ -32,6 +34,7 @@ class SourceRoute:
     skip_reason: str = ""
     correction_media: str = ""
     planning_media: str = ""
+    backup_files: dict[str, Path] | None = None
 
 
 @dataclass(frozen=True)
@@ -149,9 +152,14 @@ def _targets(source: str, *, free_only: bool, selected_agent: str = "") -> tuple
             "LOCAL_AGY": "agy-only-capable",
             "LOCAL_DSH": "dsh-capable",
             "LOCAL_WORKBUDDY": "workbuddy-capable",
+            "LOCAL_CODEBUDDY": "codebuddy-capable",
         }
         selected: list[str] = []
         for tier in sorted(tiers):
+            # 0.6.0's CodeBuddy group contains credit-billed models. Detecting
+            # a new CLI must not opt an old automatic task into that spend.
+            if tier == "LOCAL_CODEBUDDY" and selected_agent != tier:
+                continue
             group = routes.model_groups.get(packaged_groups.get(tier, ""))
             if group is not None:
                 # Defense in depth: a packaged group is expected to be
@@ -304,7 +312,8 @@ def _manual_route(request: TaskRequest) -> SourceRoute:
     try:
         install_runtime_preferred(overlay)
         routes = default_model_routes()
-        for index, axis in enumerate(("correction", "planning")):
+        axes = ("correction",) if unified_llm_contract() else ("correction", "planning")
+        for index, axis in enumerate(axes):
             group, _ = routes.resolve_binding(
                 routes.active_preset_id,
                 f"{axis}-text" if media[index] == "text" else f"{axis}-mm",
@@ -344,16 +353,19 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
 
     _install_transport_fallback()
     install_workbuddy_auth_fix()
+    backup_files = config_sources()
     if request.stage not in {"translated-srt", "final-srt"}:
         yield SourceRoute(
             models=request.llm_model, source="manual",
             correction_media=request.llm_correction_media,
             planning_media=request.llm_planning_media,
+            backup_files=backup_files,
         )
         return
 
+    check_retired_route_choices(request)
     if request.llm_source == "manual":
-        yield _manual_route(request)
+        yield replace(_manual_route(request), backup_files=backup_files)
         return
 
     free_key = bool(os.environ.get("GEMINI_FREE", "").strip())
@@ -382,7 +394,16 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
                 "configured" if os.environ.get("GEMINI_FREE") else "missing",
                 "configured" if os.environ.get("GEMINI_PAID") else "missing",
             )
-        yield _no_targets_route(source, explicit=not auto)
+        if source == "agent" and not request.llm_agent and "LOCAL_CODEBUDDY" in _agent_tiers():
+            reason = (
+                "检测到 CodeBuddy，但其候选组可能消耗积分，未在自动顺序中启用；"
+                "请在模型来源中手动指定 CodeBuddy。 / Select CodeBuddy explicitly to allow its credit-billed routes."
+            )
+            if not auto:
+                raise ValueError(reason)
+            yield SourceRoute(models=[], source=source, skip_reason=reason, backup_files=backup_files)
+        else:
+            yield replace(_no_targets_route(source, explicit=not auto), backup_files=backup_files)
         return
 
     # Keep the whole ordered fallback group callable. A single multimodal
@@ -402,7 +423,7 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
             correction_media = "text"
             media_downgraded = True
 
-        if planning_media in ("audio", "video") and not _check_media_support(routes, targets, planning_media):
+        if not unified_llm_contract() and planning_media in ("audio", "video") and not _check_media_support(routes, targets, planning_media):
             logger.info(
                 "Media auto-downgrade: selected agents don't support %s for planning, "
                 "downgrading to text (agents: %s)",
@@ -438,8 +459,11 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
 
         # Apply media downgrades if needed
         if media_downgraded:
-            config_updates["llm"]["correction_media"] = correction_media
-            config_updates["llm"]["planning_media"] = planning_media
+            if unified_llm_contract():
+                config_updates["llm"]["media"] = correction_media
+            else:
+                config_updates["llm"]["correction_media"] = correction_media
+                config_updates["llm"]["planning_media"] = planning_media
 
         update_config_file(task_config, config_updates)
 
@@ -461,6 +485,7 @@ def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
                 models=[group_id], source=source, targets=targets,
                 correction_media=correction_media,
                 planning_media=planning_media,
+                backup_files=backup_files,
             )
         finally:
             if previous is None:

@@ -107,7 +107,9 @@ DOWNLOAD_ROUTE_PREFERENCE = "downloadRegion"
 DOWNLOAD_ROUTE_MODES = frozenset({"auto", "cn", "global"})
 
 
-def _missing_resource_error(missing: list[str], verb: str) -> BridgeError:
+def _missing_resource_error(missing: list[str] | BridgeError, verb: str) -> BridgeError:
+    if isinstance(missing, BridgeError):
+        return missing
     names = "、".join(RESOURCE_LABELS.get(item, item) for item in missing)
     return BridgeError(
         code="runtime_required",
@@ -649,7 +651,11 @@ class DesktopBridge:
             return _missing_resource_error(missing, "继续")
         return None
 
-    def _missing_resources(self, request) -> list[str]:
+    def _runtime_preflight(self):
+        prepare = getattr(self.resources, "prepare_runtime", None)
+        return prepare() if callable(prepare) else None
+
+    def _missing_resources(self, request) -> list[str] | BridgeError:
         """What this specific request still needs.
 
         Requirements depend on the request: git only for a knowledge update,
@@ -657,6 +663,9 @@ class DesktopBridge:
         both before their first plain transcription.
         """
 
+        runtime_error = self._runtime_preflight()
+        if runtime_error is not None:
+            return runtime_error
         ensure = getattr(self.resources, "ensure", None)
         if not callable(ensure):
             return []
@@ -667,7 +676,10 @@ class DesktopBridge:
 
         return ensure(ALWAYS_REQUIRED + capability_requirements(request))
 
-    def _missing_batch_resources(self, request: BatchRequest) -> list[str]:
+    def _missing_batch_resources(self, request: BatchRequest) -> list[str] | BridgeError:
+        runtime_error = self._runtime_preflight()
+        if runtime_error is not None:
+            return runtime_error
         ensure = getattr(self.resources, "ensure", None)
         if not callable(ensure):
             return []
@@ -693,12 +705,19 @@ class DesktopBridge:
 
         return self._guard(collect)
 
-    def install_resource(self, resource_id: str) -> dict[str, Any]:
+    def install_resource(self, resource_id: str, automatic: bool = False) -> dict[str, Any]:
+        if not isinstance(automatic, bool):
+            return _failure(BridgeError(code="invalid_request", message="automatic must be true/false"))
+        if resource_id == "uv" and automatic:
+            runtime_error = self._runtime_preflight()
+            if runtime_error is not None:
+                return _failure(runtime_error)
         if self.resource_installs is None:
             def install_legacy() -> Any:
                 if resource_id == "uv":
                     self._prepare_download_route()
-                result = self.resources.install(resource_id, lambda event: None)
+                result = self.resources.install(resource_id, lambda event: None,
+                    **({"automatic": True} if automatic else {}))
                 self._refresh_worker_environment()
                 return result
 
@@ -707,7 +726,7 @@ class DesktopBridge:
         def start() -> Any:
             if resource_id == "uv":
                 self._prepare_download_route()
-            return self.resource_installs.start(resource_id)
+            return self.resource_installs.start(resource_id, **({"automatic": True} if automatic else {}))
 
         return self._guard(start)
 
@@ -1150,6 +1169,30 @@ class DesktopBridge:
     def get_routing_settings(self) -> dict[str, Any]:
         return self._guard(self.settings.routing_settings)
 
+    def preview_config_migration(self) -> dict[str, Any]:
+        from desktop.backend.settings.core_migration import preview_config_migration
+        return self._guard(lambda: preview_config_migration(self.settings.config_path))
+
+    def apply_config_migration(self, token: str, confirmed: bool = False) -> dict[str, Any]:
+        from desktop.backend.settings.core_migration import apply_config_migration
+        from finesub_bootstrap.locks import LockUnavailable, holding_activity_barrier
+        if confirmed is not True or not isinstance(token, str) or len(token) != 64:
+            return _failure(BridgeError(code="config_migration_failed", message="请先预览并确认 / Preview and confirm first"))
+        try:
+            with holding_activity_barrier(self.settings.user_data, timeout=0):
+                result = apply_config_migration(self.settings.config_path, token, confirmed=True)
+                try:
+                    self._refresh_worker_environment()
+                except Exception:
+                    LOGGER.exception("config applied but worker context refresh failed")
+                    result["restart_required"] = True
+            return _success(result)
+        except LockUnavailable:
+            return _failure(BridgeError(code="config_migration_busy",
+                message="仍有任务或知识库/下载操作在运行，请结束后再转换 / Wait for active operations to finish"))
+        except (OSError, ValueError, RuntimeError) as error:
+            return _failure(BridgeError(code="config_migration_failed", message=str(error), action="open_settings"))
+
     def save_routing_settings(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             values = RoutingUpdate.model_validate(payload)
@@ -1186,6 +1229,28 @@ class DesktopBridge:
             return {"path": str(executable)}
 
         return self._guard(open_client)
+
+    def open_codebuddy_login(self) -> dict[str, Any]:
+        def open_cli() -> dict[str, str]:
+            if "LOCAL_CODEBUDDY" not in LOCAL_AGENT_TIERS:
+                raise ValueError("当前核心尚未启用独立 CodeBuddy CLI。")
+            selected = self.get_agent_paths()["data"]["paths"].get("LOCAL_CODEBUDDY", "")
+            if selected:
+                _, command = validated_agent_path("LOCAL_CODEBUDDY", selected)
+            else:
+                command = configure_local_agents(self.settings.user_data).get("LOCAL_CODEBUDDY")
+            if not command:
+                raise ValueError("未找到独立 CodeBuddy CLI，请先安装 @tencent-ai/codebuddy-code 并设置路径。")
+            # Only this explicit login action opens an interactive console.
+            # Probes/task helpers remain hidden; no cmd /c, shell shim, copied
+            # credentials or model request is involved here.
+            subprocess.Popen(
+                list(command), cwd=str(self.settings.user_data), close_fds=True,
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0,
+            )
+            return {"path": command[-1]}
+
+        return self._guard(open_cli)
 
     def set_dsh_path(self, path: str) -> dict[str, Any]:
         result = self.set_agent_path("LOCAL_DSH", path)

@@ -53,6 +53,7 @@ import {
 import { runInterfaceTransition } from "@/lib/viewTransition";
 
 import { ApiKeyField } from "./ApiKeyField";
+import { ConfigMigration } from "./ConfigMigration";
 import { WorkBuddyRepairDialog } from "./WorkBuddyRepairDialog";
 import { SoundSettings } from "./SoundSettings";
 import { TaskLogBrowser } from "./TaskLogBrowser";
@@ -78,6 +79,7 @@ interface SettingsProps extends UpdateSectionProps {
   onRevealKeys: () => Promise<RevealedApiKeys>;
   onExportKeys: () => Promise<KeyExportResult>;
   onSaveRouting: (values: RoutingUpdate) => Promise<void>;
+  onConfigMigrated?: () => Promise<void>;
   onSaveProviderKey: (providerId: string, value: string) => Promise<void>;
   onDeleteProviderKey: (providerId: string) => Promise<void>;
   onProbeLocalAgents: () => Promise<LocalAgentStatus[]>;
@@ -100,6 +102,7 @@ export function Settings({
   onRevealKeys,
   onExportKeys,
   onSaveRouting,
+  onConfigMigrated,
   onSaveProviderKey,
   onDeleteProviderKey,
   onProbeLocalAgents,
@@ -193,7 +196,8 @@ export function Settings({
   const [agentPaths, setAgentPaths] = useState<Record<string, string>>({});
   const [agentPathBusy, setAgentPathBusy] = useState("");
   const [agentPathError, setAgentPathError] = useState<Record<string, string>>({});
-  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"];
+  const codeBuddy = routing.unified_llm_media ?? false;
+  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", codeBuddy ? "LOCAL_CODEBUDDY" : "LOCAL_WORKBUDDY"];
   useEffect(() => {
     void desktopApi.getAgentPaths().then((saved) => setAgentPaths((current) => ({ ...current, ...Object.fromEntries(Object.entries(saved.paths).filter(([, path]) => path)) }))).catch(() => undefined);
   }, []);
@@ -701,6 +705,7 @@ export function Settings({
           </span>
         </div>
 
+        {routing.unified_llm_media ? <ConfigMigration onApplied={onConfigMigrated} /> : null}
         {routing.error ? (
           <p className="routing-error" role="alert">{routing.error}</p>
         ) : (
@@ -929,8 +934,8 @@ export function Settings({
                   ))}
                 </div>
               ) : null}
-              <button type="button" className="button button-secondary button-compact" onClick={() => setWorkBuddyRepairOpen(true)}>{language === "en" ? "WorkBuddy sign-in repair" : "WorkBuddy 登录修复"}</button>
-              <WorkBuddyRepairDialog open={workBuddyRepairOpen} onClose={() => setWorkBuddyRepairOpen(false)} onProbe={onProbeLocalAgents} />
+              <button type="button" className="button button-secondary button-compact" onClick={() => setWorkBuddyRepairOpen(true)}>{codeBuddy ? (language === "en" ? "CodeBuddy sign-in repair" : "CodeBuddy 登录修复") : (language === "en" ? "WorkBuddy sign-in repair" : "WorkBuddy 登录修复")}</button>
+              <WorkBuddyRepairDialog open={workBuddyRepairOpen} onClose={() => setWorkBuddyRepairOpen(false)} onProbe={onProbeLocalAgents} codeBuddy={codeBuddy} />
             </div>
 
             {customProviders.length ? (

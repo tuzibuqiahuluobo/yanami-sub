@@ -7,6 +7,7 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     Field,
+    ValidationInfo,
     field_validator,
     model_validator,
     model_serializer,
@@ -58,6 +59,15 @@ LLMDifficulty = Annotated[
     Literal["quality", "intermediate", "efficiency"],
     BeforeValidator(_accept_retired_difficulty),
 ]
+
+
+# Input-only legacy spelling. Every newly persisted task uses ``read``;
+# the temporary old-core adapter translates it back at the execution boundary.
+KnowledgeMode = Annotated[
+    Literal["none", "read", "update"],
+    BeforeValidator(lambda value: "read" if value == "collect" else value),
+]
+LocalAgentTier = Literal["", "LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY", "LOCAL_CODEBUDDY"]
 
 
 def _normalize_asr_decode_batch(value: object) -> object:
@@ -135,6 +145,7 @@ class RoutingTargetSummary(DesktopModel):
 
 
 class RoutingSettings(DesktopModel):
+    unified_llm_media: bool = False
     active_preset_id: str = ""
     execution_policy: str = ""
     local_agent_timeout_seconds: int = 1680
@@ -211,6 +222,7 @@ class TaskDefaults(BaseModel):
     llm_planning_media: Literal["", "text", "audio", "video"] | None = None
     llm_retrieval: Literal["none", "local", "native"] | None = None
     llm_source: Literal["auto", "api", "agent", "manual"] | None = None
+    llm_agent: LocalAgentTier | None = None
     llm_difficulty: LLMDifficulty | None = None
     llm_continuity: Literal["serial", "parallel"] | None = None
     llm_parallel_windows: int | None = Field(default=None, ge=1)
@@ -220,7 +232,7 @@ class TaskDefaults(BaseModel):
     style: str | None = None
     style_mode: Literal["none", "read", "update"] | None = None
     download_video_source: bool | None = None
-    knowledge: Literal["none", "collect", "update"] | None = None
+    knowledge: KnowledgeMode | None = None
     postprocess_profile: Literal[-1, 0, 1, 2, 3, 4] | None = None
     max_retries_per_window: int | None = Field(default=None, ge=0)
     max_replacements_per_window: int | None = Field(default=None, ge=0)
@@ -371,7 +383,7 @@ class TaskRequest(DesktopModel):
     llm_source: Literal["auto", "api", "agent", "manual"] = "manual"
     # Empty tries all detected Agents; a tier confines this one task (or batch)
     # to that CLI while retaining its own ordered model fallbacks.
-    llm_agent: Literal["", "LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"] = ""
+    llm_agent: LocalAgentTier = ""
     llm_difficulty: LLMDifficulty = "quality"
     llm_continuity: Literal["serial", "parallel"] = "serial"
     llm_parallel_windows: int = Field(default=1, ge=1)
@@ -389,7 +401,7 @@ class TaskRequest(DesktopModel):
     download_video_source: bool = True
     # Default on: the knowledge base is what makes later tasks better, and it
     # only runs when the LLM stage does -- a plain transcription ignores it.
-    knowledge: Literal["none", "collect", "update"] = "update"
+    knowledge: KnowledgeMode = "update"
     refined_srt: str | None = None
     postprocess_profile: Literal[-1, 0, 1, 2, 3, 4] = 0
     max_retries_per_window: int = Field(default=5, ge=0)
@@ -446,7 +458,12 @@ class TaskRequest(DesktopModel):
 
     @field_validator("llm_model")
     @classmethod
-    def validate_llm_model(cls, value: list[str]) -> list[str]:
+    def validate_llm_model(cls, value: list[str], info: ValidationInfo) -> list[str]:
+        # A historical record describes what ran, not what may run today.
+        # Still apply all structural validators; only live catalog validation
+        # is deferred until resubmission. Otherwise removed targets erase history.
+        if info.context and info.context.get("archive"):
+            return value
         if not value:
             return value
         from finesub.llm.routing.model_routes import (
@@ -541,8 +558,8 @@ class RefinedKnowledgeUpdateRequest(DesktopModel):
 
     @field_validator("llm_model")
     @classmethod
-    def validate_llm_model(cls, value: list[str]) -> list[str]:
-        return TaskRequest.validate_llm_model(value)
+    def validate_llm_model(cls, value: list[str], info: ValidationInfo) -> list[str]:
+        return TaskRequest.validate_llm_model(value, info)
 
 
 class BilingualKnowledgeRequest(DesktopModel):

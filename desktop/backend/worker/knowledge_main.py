@@ -12,6 +12,7 @@ import traceback
 from typing import Any, Iterator, Mapping
 
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
+from desktop.backend.worker.runtime import initialize_native_paths, runtime_activity
 
 
 _MAINTENANCE_COMMANDS = {
@@ -299,6 +300,12 @@ def _refined_update(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def _dispatch(payload: Mapping[str, Any]) -> dict[str, Any]:
     action = str(payload.get("action") or "")
+    if action in {"snapshot", "entry", "maintenance", "share", "refined_update", "apply_proposal"} or (
+        action == "bilingual" and payload.get("execute")
+    ):
+        from desktop.backend.knowledge.schema_guard import prepare_knowledge_store
+
+        prepare_knowledge_store(_root())
     if action == "snapshot":
         return _snapshot()
     if action == "entry":
@@ -344,7 +351,8 @@ def main() -> int:
             raise ValueError("knowledge worker request must be a JSON object")
         stdout = StringIO()
         stderr = StringIO()
-        with redirect_stdout(stdout), redirect_stderr(stderr):
+        with runtime_activity(), redirect_stdout(stdout), redirect_stderr(stderr):
+            initialize_native_paths()
             data = _dispatch(payload)
         logs = "\n".join(
             part.strip() for part in (stdout.getvalue(), stderr.getvalue()) if part.strip()

@@ -12,12 +12,18 @@ export function knowledgeOutcome(report: RefinedKnowledgeUpdateReport, zh: boole
     generated: "提案已生成，尚未写入知识库", applied: "提案已提交，知识库已更新",
     partial: "仅部分修改提交成功，请查看报告", blocked: "修改未提交，请查看冲突或错误",
     no_change: "没有新增修改，知识库未变化", already_applied: "此提案已处理，不会重复提交",
+    evidence_only: "条目未变化，已记录精修或风格证据",
   } : {
     generated: "Proposal generated; knowledge is unchanged", applied: "Proposal committed; knowledge updated",
     partial: "Only some changes committed; review the report", blocked: "Nothing committed; review conflicts or errors",
     no_change: "No new changes; knowledge is unchanged", already_applied: "Proposal already processed; no duplicate write",
+    evidence_only: "Entries unchanged; refinement or style evidence recorded",
   };
   return report.status ? labels[report.status] : (zh ? "操作完成，请查看报告" : "Operation finished; review the report");
+}
+
+export function canApplyProposal(report: RefinedKnowledgeUpdateReport | null): boolean {
+  return report?.status === "generated" && Boolean(report.draft_id && (report.proposal_count || report.has_feedback_evidence));
 }
 
 export function ProposalReview({ report }: { report: RefinedKnowledgeUpdateReport }) {
@@ -79,7 +85,7 @@ export function BilingualKnowledgeImport({ snapshot, tasks, onApplied }: {
       <label className="field field-span-all"><span>{zh ? "补充说明（可选）" : "Notes (optional)"}</span><textarea value={values.prompt} onChange={(event) => update("prompt", event.target.value)} /></label>
     </fieldset>
     {error ? <p role="alert" className="knowledge-error">{error}</p> : null}
-    <div className="knowledge-actions"><button type="button" className="button button-secondary" disabled={busy || !values.source_srt || !values.refined_srt} onClick={() => void run(false)}><Check size={15} />{zh ? "检查时间轴（不调用模型）" : "Check timelines (no model call)"}</button><button type="button" className="button button-secondary" disabled={busy || !inspection || !values.subject} onClick={() => void run(true)}><ArrowRight size={15} />{zh ? "生成提案（会调用模型）" : "Generate proposal (model call)"}</button><button type="button" className="button button-primary" disabled={busy || proposal?.status !== "generated" || !proposal.proposal_count} onClick={() => setConfirm(true)}>{zh ? "应用已审阅提案" : "Apply reviewed proposal"}</button></div>
+    <div className="knowledge-actions"><button type="button" className="button button-secondary" disabled={busy || !values.source_srt || !values.refined_srt} onClick={() => void run(false)}><Check size={15} />{zh ? "检查时间轴（不调用模型）" : "Check timelines (no model call)"}</button><button type="button" className="button button-secondary" disabled={busy || !inspection || !values.subject} onClick={() => void run(true)}><ArrowRight size={15} />{zh ? "生成提案（会调用模型）" : "Generate proposal (model call)"}</button><button type="button" className="button button-primary" disabled={busy || !canApplyProposal(proposal)} onClick={() => setConfirm(true)}>{zh ? "应用已审阅提案" : "Apply reviewed proposal"}</button></div>
     {inspection ? <details className="knowledge-proposal-review" open><summary>{zh ? "已匹配字幕条数" : "Matched cues"}：{String(inspection.count)}</summary><pre>{JSON.stringify(inspection, null, 2)}</pre></details> : null}
     {proposal ? <ProposalReview report={proposal} /> : null}
     {busy ? <p role="status">{zh ? "正在处理，请稍候…" : "Working, please wait…"}</p> : null}

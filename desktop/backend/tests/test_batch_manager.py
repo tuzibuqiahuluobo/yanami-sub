@@ -31,6 +31,30 @@ class FakeProcess:
         return self.return_code
 
 
+@pytest.mark.parametrize("failure", [False, True])
+def test_batch_handoff_lease_covers_spawn_and_is_released_on_exit_or_failure(tmp_path, monkeypatch, failure):
+    from finesub_bootstrap.locks import active_run_count
+    root = tmp_path / "user-data"
+    process = FakeProcess("")
+    def spawn(*_args, **_kwargs):
+        assert active_run_count(root) > 0
+        if failure:
+            raise OSError("spawn failed")
+        return process
+    manager = BatchManager(python_executable="python.exe", worker_env={},
+        process_factory=spawn, history_path=root / "batches.json", output_root=tmp_path / "tasks")
+    monkeypatch.setattr(manager, "_start_reader", lambda *_args: None)
+    request = BatchRequest.model_validate({"items": [{"input": "a.wav"}]})
+    if failure:
+        with pytest.raises(OSError, match="spawn failed"):
+            manager.start(request)
+    else:
+        started = manager.start(request)
+        assert active_run_count(root) > 0
+        manager._read_worker(started.batch_id, process)
+    assert active_run_count(root) == 0 and not manager._runtime_activities
+
+
 def test_batch_protocol_turns_non_protocol_output_into_a_log() -> None:
     event = parse_batch_event("a library banner\n", batch_id="batch-1")
 

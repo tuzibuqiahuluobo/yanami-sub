@@ -81,6 +81,7 @@ export interface RoutingTargetSummary {
 }
 
 export interface RoutingSettings {
+  unified_llm_media?: boolean;
   active_preset_id: string;
   execution_policy: string;
   local_agent_timeout_seconds: number;
@@ -239,7 +240,7 @@ export interface TaskRequest {
   llm_planning_media: "" | "text" | "audio" | "video";
   llm_retrieval: "none" | "local" | "native";
   llm_source?: "auto" | "api" | "agent" | "manual";
-  llm_agent?: "" | "LOCAL_AGY" | "LOCAL_CLAUDE" | "LOCAL_CODEX" | "LOCAL_DSH" | "LOCAL_WORKBUDDY";
+  llm_agent?: "" | "LOCAL_AGY" | "LOCAL_CLAUDE" | "LOCAL_CODEX" | "LOCAL_DSH" | "LOCAL_WORKBUDDY" | "LOCAL_CODEBUDDY";
   llm_difficulty: "quality" | "intermediate" | "efficiency";
   llm_continuity: "serial" | "parallel";
   llm_parallel_windows: number;
@@ -254,7 +255,8 @@ export interface TaskRequest {
   style?: string | null;
   style_mode?: "none" | "read" | "update" | null;
   download_video_source: boolean;
-  knowledge: "none" | "collect" | "update";
+  /** collect is accepted only for old saved requests. New choices use read. */
+  knowledge: "none" | "read" | "collect" | "update";
   refined_srt?: string | null;
   postprocess_profile: -1 | 0 | 1 | 2 | 3 | 4;
   max_retries_per_window: number;
@@ -490,8 +492,9 @@ export interface RefinedKnowledgeUpdateRequest {
 
 export interface RefinedKnowledgeUpdateReport {
   draft_id?: string;
-  status?: "generated" | "applied" | "partial" | "blocked" | "no_change" | "already_applied";
+  status?: "generated" | "applied" | "partial" | "blocked" | "no_change" | "already_applied" | "evidence_only";
   proposal_count?: number;
+  has_feedback_evidence?: boolean;
   mode?: string;
   task_fingerprint?: string;
   chunks?: unknown[];
@@ -639,6 +642,22 @@ export interface UpdateInstallSnapshot {
   updated_at: number;
 }
 
+export interface ConfigMigrationPlan {
+  status: "legacy" | "current" | "ready" | "blocked";
+  config_path: string;
+  changes: string[];
+  issues: string[];
+  token: string;
+}
+
+export interface ConfigMigrationResult {
+  status: "applied";
+  config_path: string;
+  backup_path: string;
+  changes: string[];
+  restart_required?: boolean;
+}
+
 export interface DesktopApi {
   selectSubtitleFile(): Promise<{ path: string | null }>;
   runBilingualKnowledgeUpdate(request: BilingualKnowledgeRequest): Promise<RefinedKnowledgeUpdateReport>;
@@ -674,7 +693,7 @@ export interface DesktopApi {
   openBatchDirectory(batchId: string): Promise<{ path: string }>;
   openBatchOutput(batchId: string, path: string): Promise<{ path: string }>;
   openBatchLog(batchId: string): Promise<{ path: string }>;
-  installResource(resourceId: string): Promise<ResourceInstallSnapshot>;
+  installResource(resourceId: string, automatic?: boolean): Promise<ResourceInstallSnapshot>;
   getResourceInstall(resourceId: string): Promise<ResourceInstallSnapshot | null>;
   listResourceInstalls(): Promise<ResourceInstallSnapshot[]>;
   getResourceStatuses(): Promise<ResourceStatus[]>;
@@ -715,11 +734,14 @@ export interface DesktopApi {
   revealApiKeys(): Promise<RevealedApiKeys>;
   exportApiKeys(): Promise<KeyExportResult>;
   getRoutingSettings(): Promise<RoutingSettings>;
+  previewConfigMigration(): Promise<ConfigMigrationPlan>;
+  applyConfigMigration(token: string, confirmed: boolean): Promise<ConfigMigrationResult>;
   saveRoutingSettings(values: RoutingUpdate): Promise<RoutingSettings>;
   saveProviderKey(providerId: string, value: string): Promise<RoutingSettings>;
   deleteProviderKey(providerId: string): Promise<RoutingSettings>;
   probeLocalAgents(): Promise<LocalAgentStatus[]>;
   openWorkBuddyLogin(): Promise<{ path: string }>;
+  openCodeBuddyLogin(): Promise<{ path: string }>;
   getDshPath(): Promise<{ path: string }>;
   setDshPath(path: string): Promise<{ path: string }>;
   getAgentPaths(): Promise<{ paths: Record<string, string> }>;

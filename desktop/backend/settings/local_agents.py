@@ -25,9 +25,13 @@ import subprocess
 import threading
 import time
 
+from desktop.backend.common.core_compat import unified_llm_contract
 
 COMMANDS_ENV = "YANAMI_SUB_LOCAL_AGENT_COMMANDS"
-LOCAL_AGENT_TIERS = ("LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY")
+LOCAL_AGENT_TIERS = (
+    "LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH",
+    "LOCAL_CODEBUDDY" if unified_llm_contract() else "LOCAL_WORKBUDDY",
+)
 _PATCH_MARKER = "_yanami_sub_command_overrides"
 _ERROR_MODE_LOCK = threading.Lock()
 LOGGER = logging.getLogger(__name__)
@@ -296,6 +300,7 @@ def validated_agent_path(
         "LOCAL_CLAUDE": ("claude.exe", "cli.js"),
         "LOCAL_CODEX": ("codex.exe",),
         "LOCAL_WORKBUDDY": ("codebuddy.exe", "codebuddy"),
+        "LOCAL_CODEBUDDY": ("codebuddy.exe", "codebuddy"),
     }[tier]
     try:
         selected = Path(value.strip().strip('"')).expanduser().resolve(strict=True)
@@ -306,6 +311,8 @@ def validated_agent_path(
                 candidates.append(selected / "node_modules" / "@anthropic-ai" / "claude-code" / "cli.js")
             if tier == "LOCAL_WORKBUDDY":
                 candidates.append(selected / "resources" / "app.asar.unpacked" / "cli" / "bin" / "codebuddy")
+            if tier == "LOCAL_CODEBUDDY":
+                candidates.append(selected / "node_modules" / "@tencent-ai" / "codebuddy-code" / "bin" / "codebuddy")
             entry = next((candidate for candidate in candidates if candidate.is_file()), None)
         else:
             entry = selected if selected.is_file() and selected.name.lower() in names else None
@@ -314,6 +321,15 @@ def validated_agent_path(
         entry = entry.resolve(strict=True)
         if entry.suffix.lower() == ".exe":
             return str(selected), (str(entry),)
+        if tier == "LOCAL_CODEBUDDY":
+            try:
+                package = json.loads((entry.parent.parent / "package.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                package = {}
+            if not isinstance(package, dict) or entry.parent.name != "bin" or package.get("name") != "@tencent-ai/codebuddy-code":
+                raise ValueError(
+                    "请选择独立安装的 @tencent-ai/codebuddy-code CLI，不支持复用 WorkBuddy 桌面内置 CLI。"
+                )
         node = _node(environ or os.environ)
         if node is None:
             raise ValueError("已找到 Agent CLI，但未找到 node.exe；请安装 Node.js 并重试。")
@@ -423,9 +439,19 @@ def discover_local_agent_commands(
     if agy is not None:
         commands["LOCAL_AGY"] = (str(agy),)
 
-    workbuddy = _native_command("codebuddy", target)
-    if workbuddy is not None:
-        commands["LOCAL_WORKBUDDY"] = (str(workbuddy),)
+    codebuddy = _native_command("codebuddy", target)
+    if unified_llm_contract():
+        if codebuddy is not None:
+            commands["LOCAL_CODEBUDDY"] = (str(codebuddy),)
+        elif node is not None:
+            entry = _npm_entry(path_directories, ("@tencent-ai", "codebuddy-code"), ("bin", "codebuddy"))
+            if entry is not None:
+                try:
+                    _, commands["LOCAL_CODEBUDDY"] = validated_agent_path("LOCAL_CODEBUDDY", str(entry), target)
+                except ValueError as error:
+                    LOGGER.warning("independent CodeBuddy CLI path is unavailable: %s", error)
+    elif codebuddy is not None:
+        commands["LOCAL_WORKBUDDY"] = (str(codebuddy),)
     else:
         workbuddy_command = _workbuddy_command(target, path_directories, node)
         if workbuddy_command is not None:

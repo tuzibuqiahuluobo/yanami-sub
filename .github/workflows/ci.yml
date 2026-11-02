@@ -11,12 +11,22 @@ jobs:
       - name: Check out Yanami Sub
         uses: actions/checkout@v7
 
-      - name: Check out FineSub 0.5.1
+      - name: Read pinned FineSub source
+        id: core
+        shell: pwsh
+        run: |
+          $Core = Get-Content desktop/resources/core-source.json -Raw | ConvertFrom-Json
+          if ($Core.commit -notmatch '^[0-9a-f]{40}$') { throw 'Invalid FineSub commit pin.' }
+          "repository=$($Core.repository)" >> $env:GITHUB_OUTPUT
+          "commit=$($Core.commit)" >> $env:GITHUB_OUTPUT
+
+      - name: Check out pinned FineSub
         uses: actions/checkout@v7
         with:
-          repository: caca2331/finesub
-          ref: v0.5.1
+          repository: ${{ steps.core.outputs.repository }}
+          ref: ${{ steps.core.outputs.commit }}
           path: upstream
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@v7
@@ -32,6 +42,10 @@ jobs:
 
       - name: Install Python dependencies
         run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          . ./desktop/scripts/source-tree.ps1
+          Get-VerifiedCoreSource -RepoRoot $PWD -CoreRoot "$PWD/upstream" | Out-Null
           python -m pip install --upgrade pip
           python -m pip install -e ./upstream
           python -m pip install -e ".[desktop,dev]"

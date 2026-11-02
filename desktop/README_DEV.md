@@ -4,6 +4,12 @@
 > `cli/`、旧 workflow 或联合发布的段落，都不是当前独立仓库的可执行流程；迁移状态与边界
 > 以 [仓库根 README](../README.md) 为准。
 
+本分支构建候选固定 FineSub 0.6.0，完整提交记在 `desktop/resources/core-source.json`，
+尚未发布。独立仓库开发环境使用 `setup-dev.ps1 -UpstreamDirectory <固定核心 checkout>`；
+默认安装该核心自带的运行依赖锁，`-DesktopOnly` 只跳过大型处理依赖，不跳过核心源码验证。
+这是一项显式安装操作，不在应用启动时运行；仅改壳层或跑离线测试时不要无意安装整套 GPU 环境。
+打包和手动云端工作流复用相同的源码验证及 tracked 文件列表，见 [云端构建](docs/cloud-build.md)。
+
 面向维护者。用户向的说明（怎么装、数据在哪）在 [README.md](README.md)。
 
 Desktop 与 Python 包同版本；唯一版本源是仓库根的 `VERSION`（2026-09-03 从

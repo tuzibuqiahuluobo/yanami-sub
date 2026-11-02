@@ -717,7 +717,7 @@ export const zh = {
 例：xx 玩 xx 感动哭了的实况。出自 https://www.youtube.com/watch?v=xxxx`,
       knowledge: "知识库",
       knowledgeNone: "不自动更新",
-      knowledgeCollect: "收集但不提交更新",
+      knowledgeCollect: "只读知识库（不写入更新）",
       knowledgeUpdate: "自动更新",
       cleanup: "完成后清理中间产物",
       cleanupHint: "仅在任务全部完成后清理，中途失败可继续；删除人声音频与 LLM 检查点等大文件，保留 stable.json 以便重跑复用",

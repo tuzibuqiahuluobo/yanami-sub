@@ -73,10 +73,14 @@ def test_discovery_supports_native_npm_and_dsh_source_installs(
         str(node.resolve()),
         str(dsh.resolve()),
     )
-    assert commands["LOCAL_WORKBUDDY"] == (
-        str(workbuddy_node.resolve()),
-        str(workbuddy_entry.resolve()),
-    )
+    if local_agents.unified_llm_contract():
+        assert "LOCAL_WORKBUDDY" not in commands
+        assert "LOCAL_CODEBUDDY" not in commands  # managed desktop CLI is not the independent CLI
+    else:
+        assert commands["LOCAL_WORKBUDDY"] == (
+            str(workbuddy_node.resolve()),
+            str(workbuddy_entry.resolve()),
+        )
 
 
 def test_inaccessible_npm_candidate_does_not_hide_healthy_claude(
@@ -205,7 +209,7 @@ def test_workbuddy_login_resolves_the_selected_official_install(tmp_path):
 @pytest.mark.parametrize(
     ("tier", "filename"),
     [("LOCAL_AGY", "agy.exe"), ("LOCAL_CODEX", "codex.exe"),
-     ("LOCAL_CLAUDE", "claude.exe"), ("LOCAL_WORKBUDDY", "codebuddy.exe")],
+     ("LOCAL_CLAUDE", "claude.exe"), (local_agents.LOCAL_AGENT_TIERS[-1], "codebuddy.exe")],
 )
 def test_each_agent_accepts_its_own_explicit_installation(tmp_path: Path, tier: str, filename: str) -> None:
     root = tmp_path / tier
