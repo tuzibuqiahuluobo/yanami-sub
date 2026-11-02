@@ -33,6 +33,7 @@
 - `build-bootstrap.ps1 -UpstreamDirectory <固定核心 checkout>` 与云端共用源码核对和受跟踪文件列表；不会把未提交的草稿、日志、缓存塞入冻结包。最终打包仍要求桌面与核心的 tracked source 干净，不能拿未提交的迁移工作区直接发布。
 - `app-manifest.json` 同时记录桌面与核心提交。安装器和 `-SkipBootstrap` 更新构建会核对核心身份及清单/锁文件摘要，拒绝误用上一次核心的旧产物。
 - 运行环境两份锁直接来自被验证的核心，不在下游重新解析 torch/CT2。0.6.0 更换补丁版 CT2，会触发既有托管环境重建；未做真实安装、CPU/GPU 解码和升级验收前，不应发布给用户。
+- 本地 Inno Setup 6 的输入文件全路径需短于 260 字符；前端 chunk 的层级较深，建议把候选放到如 `D:\yanami-build\app` 的短目录。脚本会在压缩前给出明确错误；不要为此调整系统安全设置。Inno 7 的源文件扩展路径支持不受此旧版检查限制。
 - 正式发布前应在真实 Windows 机器验证安装、升级、卸载及至少一轮实际字幕任务；云端打包成功不等于 GPU/账号流程均经过实测。
 
 参考：[GitHub-hosted runners](https://docs.github.com/en/actions/how-tos/manage-runners/github-hosted-runners/use-github-hosted-runners)、[workflow artifacts](https://docs.github.com/en/actions/concepts/workflows-and-actions/workflow-artifacts)。

@@ -53,6 +53,17 @@ Install Inno Setup 6 or pass -InnoCompiler with its full path.
 "@
 }
 
+function Assert-InnoInputPaths {
+    param([string]$ApplicationDirectory, [int]$CompilerMajorVersion)
+
+    if ($CompilerMajorVersion -ge 7) { return }
+    $TooLong = Get-ChildItem -LiteralPath $ApplicationDirectory -Recurse -File |
+        Where-Object { $_.FullName.Length -ge 260 } | Select-Object -First 1
+    if ($TooLong) {
+        throw "Inno Setup 6 input exceeds MAX_PATH: $($TooLong.FullName). Use a shorter build input path, such as D:\yanami-build\app."
+    }
+}
+
 if (-not (Test-Path -LiteralPath $Definition -PathType Leaf)) {
     throw "Installer definition not found: $Definition"
 }
@@ -105,6 +116,8 @@ if ($SigningCertificate) {
 }
 
 $Compiler = Resolve-InnoCompiler -RequestedPath $InnoCompiler
+Assert-InnoInputPaths -ApplicationDirectory $ApplicationDirectory `
+    -CompilerMajorVersion ([System.Diagnostics.FileVersionInfo]::GetVersionInfo($Compiler).FileMajorPart)
 New-Item -ItemType Directory -Force -Path $OutputDirectory | Out-Null
 
 $CompilerArguments = @(

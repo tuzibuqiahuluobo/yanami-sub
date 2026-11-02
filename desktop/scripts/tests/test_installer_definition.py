@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 from pathlib import Path
+import shutil
+import subprocess
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -16,6 +20,29 @@ def _installer_text() -> str:
 
 def _build_script_text() -> str:
     return BUILD_SCRIPT.read_text(encoding="utf-8")
+
+
+@pytest.mark.skipif(not shutil.which("powershell.exe"), reason="PowerShell is required")
+@pytest.mark.parametrize("major,long_path,allowed", [(6, False, True), (6, True, False), (7, True, True)])
+def test_legacy_inno_reports_long_input_before_compilation(tmp_path, major, long_path, allowed):
+    source = tmp_path / "app"
+    folder = source
+    if long_path:
+        while len(str(folder / "frontend.js")) < 260:
+            folder /= "x" * 24
+    folder.mkdir(parents=True)
+    (folder / "frontend.js").write_text("// fixture", "utf-8")
+    script = _build_script_text()
+    body = script.split("function Assert-InnoInputPaths {", 1)[1].split(
+        '\nif (-not (Test-Path -LiteralPath $Definition', 1)[0]
+    result = subprocess.run(["powershell.exe", "-NoProfile", "-Command",
+        "$ErrorActionPreference='Stop'; function Assert-InnoInputPaths {" + body +
+        f"\nAssert-InnoInputPaths -ApplicationDirectory '{source}' -CompilerMajorVersion {major}"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert (result.returncode == 0) == allowed, result.stderr
+    if not allowed:
+        assert "Use a shorter build input path" in result.stderr
+    assert script.index("Assert-InnoInputPaths -ApplicationDirectory") < script.index("& $Compiler @CompilerArguments")
 
 
 def test_installer_has_per_user_configurable_install_directory() -> None:
