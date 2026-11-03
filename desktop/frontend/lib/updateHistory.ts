@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.2-rc.1.post1",
+    title: { zh: "0.2.2 RC1.1 · 桌面功能补齐", en: "0.2.2 RC1.1 · Desktop feature completion" },
+    notes: {
+      zh: ["包含 0.2.1.post1 的可选说话人标签与导出、任务级预设、动态追加批次、Agent 协作及知识库安全恢复。", "沿用 FineSub 0.6.0 原快照；新增原生接口，应用内完整更新，保留模型、设置与任务。", "预览渠道独立；正式版用户须主动开启预览更新。实验性裁判与真实 Agent 账号尚未实测。"],
+      en: ["Includes 0.2.1.post1 optional speaker labels/exports, task presets, live batch intake, Agent hand-off and safe knowledge recovery.", "Keeps the same FineSub 0.6.0 snapshot. New native interfaces require a full in-app update; models, settings and tasks stay.", "Separate preview channel; stable users opt in. Experimental judging and real Agent accounts remain untested."],
+    },
+  },
+  {
     version: "0.2.1.post1",
     title: { zh: "0.2.1.post1 · 说话人、任务预设与安全恢复", en: "0.2.1.post1 · Speakers, task presets and safe recovery" },
     notes: {
