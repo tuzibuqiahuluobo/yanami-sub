@@ -328,6 +328,9 @@ class DesktopResourceService:
                 resolved[model_fetch.HF_ENDPOINT] = endpoint
             else:
                 resolved.pop(model_fetch.HF_ENDPOINT, None)
+            model_fetch.apply_xet_policy(resolved, endpoint=endpoint)
+            if log is not None:
+                log(f"模型下载源：{model_id} · " + ("镜像或自定义端点" if endpoint else "官方源"))
             for route in network_routes():
                 try:
                     self.model_prefetch(

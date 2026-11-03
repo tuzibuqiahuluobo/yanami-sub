@@ -37,6 +37,7 @@ from desktop.backend.worker.main import (
 from desktop.backend.worker.model_source import source_route
 from desktop.backend.worker.protocol import EventLogWriter
 from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
+from desktop.backend.worker.compiler_output import configure_compiler_output
 
 
 def _parse_args() -> argparse.Namespace:
@@ -361,6 +362,7 @@ def main() -> int:
             "normal"
         ):
             initialize_native_paths()
+            configure_compiler_output()
             final = run_batch_request(
                 request,
                 batch_id=args.batch_id,

@@ -43,6 +43,8 @@ def test_each_isolated_worker_initializes_paths_before_dispatch(module):
     calls = {node.func.id: node.lineno for node in ast.walk(main) if isinstance(node, ast.Call) and isinstance(node.func, ast.Name)}
     dispatch = {"main": "run_request", "batch_main": "run_batch_request", "knowledge_main": "_dispatch", "prefetch": "_run_prefetch"}[module]
     assert calls["initialize_native_paths"] < calls[dispatch]
+    if module in {"main", "batch_main"}:
+        assert calls["initialize_native_paths"] < calls["configure_compiler_output"] < calls[dispatch]
 
 
 def test_single_and_batch_share_style_retaining_cleanup():

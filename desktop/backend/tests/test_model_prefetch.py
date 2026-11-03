@@ -188,6 +188,7 @@ def test_dead_parent_proxy_is_removed_before_model_child_starts(
 ) -> None:
     monkeypatch.setenv("HTTPS_PROXY", "socks5://127.0.0.1:7890")
     monkeypatch.setenv("all_proxy", "socks5://127.0.0.1:7890")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
     factory, captured = _spawn(["Whisper 识别模型已就绪"])
 
     run_model_prefetch(
@@ -197,7 +198,8 @@ def test_dead_parent_proxy_is_removed_before_model_child_starts(
         process_factory=factory,
     )
 
-    assert not any(key.lower().endswith("_proxy") for key in captured["env"])
+    assert not any(key.lower() in {"http_proxy", "https_proxy", "all_proxy"} for key in captured["env"])
+    assert captured["env"]["NO_PROXY"] == "localhost,127.0.0.1"
 
 
 def test_default_model_route_skips_a_stopped_local_socks_port(
@@ -218,7 +220,7 @@ def test_default_model_route_skips_a_stopped_local_socks_port(
         ["whisper"], context=FakeContext(tmp_path), process_factory=factory
     )
 
-    assert not any(key.lower().endswith("_proxy") for key in captured["env"])
+    assert not any(key.lower() in {"http_proxy", "https_proxy", "all_proxy"} for key in captured["env"])
 
 
 def test_model_child_uses_only_the_selected_proxy(tmp_path: Path, monkeypatch) -> None:

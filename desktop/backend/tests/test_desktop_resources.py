@@ -954,8 +954,9 @@ def test_installing_models_only_fetches_the_missing_ones(
     assert result.state == "ready"
 
 
+@pytest.mark.parametrize("user_xet", [None, "0", "1"])
 def test_the_fallback_attempt_does_not_carry_the_mirror_back_in(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, user_xet
 ) -> None:
     """`worker_context` fills in the configured endpoint for an ordinary run.
 
@@ -973,6 +974,10 @@ def test_the_fallback_attempt_does_not_carry_the_mirror_back_in(
     monkeypatch.setenv("FINESUB_DOWNLOAD_SOURCES", str(table))
     monkeypatch.setenv("FINESUB_DOWNLOAD_REGION", "cn")
     monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    if user_xet is None:
+        monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    else:
+        monkeypatch.setenv("HF_HUB_DISABLE_XET", user_xet)
 
     class InjectingRuntime(FakeRuntime):
         """Applies the endpoint the way the real worker_context does."""
@@ -989,9 +994,12 @@ def test_the_fallback_attempt_does_not_carry_the_mirror_back_in(
             return context
 
     endpoints: list[str] = []
+    xet_settings: list[str | None] = []
 
     def prefetch(model_ids, **kwargs):
         endpoints.append(kwargs["context"].environment.get("HF_ENDPOINT", ""))
+        environment = {**os.environ, **kwargs["context"].environment}
+        xet_settings.append(environment.get("HF_HUB_DISABLE_XET"))
         if len(endpoints) == 1:
             # The shape run_model_prefetch really raises: the download happens
             # in a subprocess, so what reaches us is its output tail wrapped in
@@ -1011,6 +1019,7 @@ def test_the_fallback_attempt_does_not_carry_the_mirror_back_in(
     service.install("models", lambda event: None)
 
     assert endpoints == ["https://mirror.example", ""]
+    assert xet_settings == (["1", None] if user_xet is None else [user_xet, user_xet])
 
 
 def test_refused_proxy_retries_direct_before_changing_model_source(
@@ -1107,8 +1116,9 @@ def test_model_source_changes_only_after_direct_transport_fails(
     ]
 
 
+@pytest.mark.parametrize("user_xet", [None, "0", "1"])
 def test_cached_overseas_route_can_recover_through_configured_mirror(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path, monkeypatch, user_xet
 ) -> None:
     _isolate_shared_caches(monkeypatch, tmp_path)
     table = tmp_path / "sources.json"
@@ -1118,6 +1128,10 @@ def test_cached_overseas_route_can_recover_through_configured_mirror(
     monkeypatch.setenv("FINESUB_DOWNLOAD_SOURCES", str(table))
     monkeypatch.delenv("FINESUB_HF_ENDPOINT", raising=False)
     monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    if user_xet is None:
+        monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+    else:
+        monkeypatch.setenv("HF_HUB_DISABLE_XET", user_xet)
     monkeypatch.setattr(
         download_routes,
         "resolve_region",
@@ -1128,9 +1142,12 @@ def test_cached_overseas_route_can_recover_through_configured_mirror(
         lambda: [NetworkRoute("直连", None)],
     )
     endpoints: list[str] = []
+    xet_settings: list[str | None] = []
 
     def prefetch(model_ids, **kwargs):
         endpoints.append(kwargs["context"].environment.get("HF_ENDPOINT", ""))
+        environment = {**os.environ, **kwargs["context"].environment}
+        xet_settings.append(environment.get("HF_HUB_DISABLE_XET"))
         if len(endpoints) == 1:
             raise ModelPrefetchFailed("httpx.ConnectError: official unreachable")
         _install_managed_weights(service.runtime.paths.models, *model_ids)
@@ -1146,6 +1163,7 @@ def test_cached_overseas_route_can_recover_through_configured_mirror(
 
     assert service.install("models", lambda event: None).state == "ready"
     assert endpoints == ["", "https://mirror.example"]
+    assert xet_settings == ([None, "1"] if user_xet is None else [user_xet, user_xet])
 
 
 def test_forced_official_model_source_is_not_overridden_after_failure(

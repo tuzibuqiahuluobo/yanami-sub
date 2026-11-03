@@ -234,7 +234,7 @@ def test_network_failure_retries_direct_without_proxy_credentials(tmp_path: Path
     )
     assert len(seen) == 2
     assert "HTTPS_PROXY" in seen[0]
-    assert not any(key.lower().endswith("_proxy") for key in seen[1])
+    assert not any(key.lower() in {"http_proxy", "https_proxy", "all_proxy"} for key in seen[1])
     assert any("改为直连" in line for line in logs)
     assert all("secret" not in line for line in logs)
 

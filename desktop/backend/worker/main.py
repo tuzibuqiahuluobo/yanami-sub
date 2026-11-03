@@ -41,6 +41,7 @@ from desktop.backend.worker.agent_health_check import (
 from desktop.backend.worker.model_source import SourceRoute, source_route
 from desktop.backend.worker.protocol import EventLogWriter, WorkerEvent, encode_event
 from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
+from desktop.backend.worker.compiler_output import configure_compiler_output
 
 
 class PipelineCallable(Protocol):
@@ -939,6 +940,7 @@ def main() -> int:
             log_writer
         ), redirect_stderr(log_writer):
             initialize_native_paths()
+            configure_compiler_output()
             from finesub.stages import run_pipeline
 
             run_request(
