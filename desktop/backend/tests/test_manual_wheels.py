@@ -61,6 +61,35 @@ def _torch_locks(tmp_path: Path) -> tuple[Path, Path]:
     return official, mirror
 
 
+def test_core_staging_repair_preserves_package_reinstall_request(tmp_path: Path, monkeypatch) -> None:
+    from finesub_bootstrap import environment as core_environment
+
+    if not hasattr(core_environment.RuntimeEnvironment, "_verify_staging"):
+        pytest.skip("Legacy core does not verify staging against package RECORDs")
+    lock = _lock(tmp_path, hashlib.sha256(b"wheel").hexdigest())
+    runtime = DesktopRuntimeEnvironment(
+        paths=AppPaths.for_root(tmp_path), app_source=tmp_path,
+        runtime_lock=lock, uv_executable=lambda: tmp_path / "uv.exe",
+    )
+    reports = iter([
+        SimpleNamespace(mismatched=True, packages_to_reinstall=lambda: ["ctranslate2"]),
+        SimpleNamespace(mismatched=False),
+    ])
+    monkeypatch.setattr(core_environment.runtime_health, "check_runtime", lambda *a, **kw: next(reports))
+    monkeypatch.setenv("FINESUB_DOWNLOAD_REGION", "global")
+    monkeypatch.setattr(runtime, "regional_lock", lambda: None)
+    commands = []
+    monkeypatch.setattr(runtime, "_run", lambda command, *a, **kw: commands.append(command))
+    runtime._verify_staging(
+        tmp_path / "uv.exe", tmp_path / "Scripts/python.exe", {},
+        verify_hashes=True, log=None, should_pause=None,
+    )
+    assert commands[0][1:] == ["cache", "clean", "ctranslate2"]
+    install = commands[1]
+    assert install[install.index("--requirement") + 1] == str(lock)
+    assert install[-2:] == ["--reinstall-package", "ctranslate2"]
+
+
 def test_failed_locked_wheel_can_be_guided_into_verified_local_retry(
     tmp_path: Path,
 ) -> None:

@@ -347,7 +347,7 @@ class JobManager:
                 snapshot.state = "running"
                 snapshot.events = []
                 snapshot.error = None
-                snapshot.outputs = {}
+                # The worker needs this index evidence to reuse our published filenames.
                 snapshot.updated_at = generation_started_at
                 self._replay_device_notice(task_id)
                 self._start_reader(

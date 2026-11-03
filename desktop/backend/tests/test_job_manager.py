@@ -1362,6 +1362,40 @@ def test_retry_keeps_the_task_id_so_outputs_and_log_stay_together(tmp_path) -> N
     assert Path(again.request.output).parent.name == again.task_id
 
 
+def test_retry_keeps_published_output_ownership_in_the_running_index(tmp_path: Path) -> None:
+    from finesub_bootstrap import task_index
+
+    subtitle = tmp_path / "clip-raw.srt"
+    subtitle.write_text("previous subtitle", encoding="utf-8")
+    outputs = {"rawSrt": str(subtitle)}
+    retry_process = FakeProcess()
+    calls = []
+
+    def factory(command, **kwargs):
+        calls.append(command)
+        if len(calls) == 1:
+            task_id = command[command.index("--task-id") + 1]
+            return FinishedProcess(encode_event(WorkerEvent.completed(task_id, outputs)))
+        return retry_process
+
+    manager = JobManager(
+        python_executable="python.exe", worker_env={}, process_factory=factory,
+        terminate_process_tree=lambda child: None, history_path=tmp_path / "tasks.json",
+        output_root=tmp_path / "tasks",
+    )
+    first = manager.start(TaskRequest(input=str(tmp_path / "clip.wav")))
+    _settle(manager)
+    try:
+        retried = manager.retry(first.task_id)
+        assert retried.state == "running"
+        assert retried.outputs == outputs
+        rows = task_index.read(manager.history_path, manager.output_root)
+        assert rows[0]["outputs"] == outputs
+    finally:
+        retry_process.stdout.close()
+        _settle(manager)
+
+
 def test_task_directory_refuses_anything_that_is_not_a_task_id(tmp_path) -> None:
     """On Windows `root / "C:" + sep + "Windows"` discards the root entirely."""
     manager = _completed_manager(tmp_path)
@@ -1564,6 +1598,7 @@ def test_a_spawn_sees_one_worker_context_even_if_it_is_swapped(tmp_path) -> None
 
 def test_task_worker_does_not_inherit_a_dead_proxy(monkeypatch) -> None:
     monkeypatch.setenv("HTTPS_PROXY", "socks5://127.0.0.1:7890")
+    monkeypatch.setenv("NO_PROXY", "localhost,127.0.0.1")
     monkeypatch.setattr(
         "desktop.backend.jobs.launch.network_routes",
         lambda: [NetworkRoute("直连", None)],
@@ -1582,7 +1617,8 @@ def test_task_worker_does_not_inherit_a_dead_proxy(monkeypatch) -> None:
     )
     manager.start(TaskRequest(input="a.wav"))
 
-    assert not any(key.lower().endswith("_proxy") for key in seen)
+    assert not any(key.lower() in {"http_proxy", "https_proxy", "all_proxy"} for key in seen)
+    assert seen["NO_PROXY"] == "localhost,127.0.0.1"
 
 
 def test_quitting_terminates_a_running_task(tmp_path) -> None:

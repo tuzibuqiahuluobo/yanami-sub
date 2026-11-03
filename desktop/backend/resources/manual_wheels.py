@@ -10,7 +10,7 @@ import re
 import tempfile
 import time
 import tomllib
-from typing import Callable, Iterator
+from typing import Callable, Iterator, Sequence
 from urllib.parse import unquote, urlsplit
 
 import httpx
@@ -273,6 +273,7 @@ class DesktopRuntimeEnvironment(RuntimeEnvironment):
         *,
         log: Callable[[str], None] | None,
         should_pause: Callable[[], bool] | None,
+        reinstall: Sequence[str] = (),
     ) -> None:
         regional = self.regional_lock()
         cn_lock = self.runtime_lock.with_name(
@@ -324,6 +325,11 @@ class DesktopRuntimeEnvironment(RuntimeEnvironment):
                         str(staging_python),
                         "--requirement",
                         str(lock),
+                        *(
+                            argument
+                            for name in reinstall
+                            for argument in ("--reinstall-package", name)
+                        ),
                     ],
                     environment,
                     log=log,
