@@ -134,7 +134,20 @@ function Assert-PackagedCoreSource {
     )) {
         $File = Join-Path $VersionRoot $Relative
         $Expected = $Manifest.files.$Relative.sha256
-        if (-not $Expected -or (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash.ToLowerInvariant() -ne $Expected) {
+        if (-not $Expected) {
+            throw "Packaged core input differs from its build receipt: $Relative"
+        }
+        # Legacy PowerShell children may not discover utility modules.
+        $Hasher = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $Actual = [System.BitConverter]::ToString(
+                $Hasher.ComputeHash([System.IO.File]::ReadAllBytes($File))
+            ).Replace('-', '').ToLowerInvariant()
+        }
+        finally {
+            $Hasher.Dispose()
+        }
+        if ($Actual -ne $Expected) {
             throw "Packaged core input differs from its build receipt: $Relative"
         }
     }

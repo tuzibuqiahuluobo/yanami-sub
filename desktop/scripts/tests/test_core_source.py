@@ -136,9 +136,9 @@ def test_invalid_core_is_rejected_before_any_build_or_install(source, damage):
     assert not (desktop / ".venv-desktop").exists()
 
 
-@pytest.mark.parametrize("damage", ["foreign-core", "missing-receipt", "changed-lock"])
+@pytest.mark.parametrize("damage", ["foreign-core", "missing-receipt", "changed-lock", None])
 @pytest.mark.skipif(not shutil.which("powershell.exe"), reason="PowerShell is required")
-def test_reused_packages_cannot_bypass_core_check(tmp_path, damage):
+def test_reused_packages_require_core_receipts_and_hashes(tmp_path, damage):
     pin = json.loads((ROOT / "desktop/resources/core-source.json").read_text("utf-8"))
     payload = tmp_path / "payload"
     payload.mkdir()
@@ -155,7 +155,18 @@ def test_reused_packages_cannot_bypass_core_check(tmp_path, damage):
         (payload / REQUIRED[-1]).write_bytes(b"different lock\n")
     if damage != "missing-receipt":
         (payload / "app-manifest.json").write_text(json.dumps(body), "utf-8")
-    result = powershell(f"Assert-PackagedCoreSource -RepoRoot '{ROOT}' -VersionRoot '{payload}'")
-    assert result.returncode != 0
+    command = f"Assert-PackagedCoreSource -RepoRoot '{ROOT}' -VersionRoot '{payload}'"
+    result = powershell(command)
+    if damage is None:
+        assert result.returncode == 0, result.stderr
+    else:
+        assert result.returncode != 0
     if damage == "changed-lock":
         assert "Packaged core input differs" in result.stderr
+
+
+def test_packaged_hashing_does_not_depend_on_hash_cmdlet_autoload():
+    helper = HELPER.read_text("utf-8")
+    assert "Get-FileHash" not in helper
+    assert "[System.Security.Cryptography.SHA256]::Create()" in helper
+    assert ".ComputeHash(" in helper
