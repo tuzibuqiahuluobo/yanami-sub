@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.2-rc.1",
+    title: { zh: "0.2.2 RC1.0 · FineSub 0.6.0 预览通道", en: "0.2.2 RC1.0 · FineSub 0.6.0 preview" },
+    notes: {
+      zh: ["与 0.2.1 共用固定核心、迁移安全和下载/运行环境修复，没有额外的仅预览功能。", "正式版主动开启预览后接收本版；使用签名 v2 清单与完整更新包。预览版不降级到 0.2.1。", "完整 AOTI 加速仍有加载异常，可回退 eager CUDA；账号与全新大权重下载仍有验收边界。"],
+      en: ["Shares the pinned core, migration safety and download/runtime fixes with 0.2.1; no extra preview-only feature is claimed.", "Stable builds opt into this preview. Uses signed v2 manifests and a full update; does not downgrade to 0.2.1.", "Full optional AOTI still has a loading issue and falls back to eager CUDA. Account and fresh large-weight transfer acceptance remains limited."],
+    },
+  },
+  {
     version: "0.2.1",
     title: { zh: "0.2.1 · FineSub 0.6.0 与迁移安全", en: "0.2.1 · FineSub 0.6.0 and migration safety" },
     notes: {
