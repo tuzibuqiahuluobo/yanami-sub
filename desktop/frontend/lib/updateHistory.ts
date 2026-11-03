@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.1.post2",
+    title: { zh: "0.2.1.post2 · 资源引导与界面反馈", en: "0.2.1.post2 · Resource guidance and UI feedback" },
+    notes: {
+      zh: ["修复首页资源下载时按钮状态未更新；展示实际进度、暂停与失败信息。", "新建任务和批处理遇到缺失配置或资源时给出原因并定位；任务必需资源持续高亮，返回后保留草稿。", "优化公共弹窗、下拉框、折叠区域与通知动效，支持减少动态效果。", "原生桥接字段更新，应用内使用完整更新包；保留模型、设置和任务。"],
+      en: ["Fix home resource actions to show actual download, pause and failure states.", "Explain missing setup for tasks and batches, highlight required components and preserve drafts when returning.", "Refine shared dialogs, menus, collapsibles and notifications while respecting reduced motion.", "Bridge changes use a full in-app update; models, settings and tasks are preserved."],
+    },
+  },
+  {
     version: "0.2.1.post1",
     title: { zh: "0.2.1.post1 · 说话人、任务预设与安全恢复", en: "0.2.1.post1 · Speakers, task presets and safe recovery" },
     notes: {
