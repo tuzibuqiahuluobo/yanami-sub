@@ -1,17 +1,17 @@
 # FineSub core compatibility
 
-This development branch targets the exact upstream
+Yanami Sub 0.2.1 and 0.2.2 RC1.0 target the exact upstream
 [FineSub `v0.6.0`](https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197)
-source snapshot in `desktop/resources/core-source.json`; this is not a released
-core switch. The desktop repository owns presentation, Windows integration,
+source snapshot in `desktop/resources/core-source.json`.
+The desktop repository owns presentation, Windows integration,
 resource installation, and update delivery; FineSub core remains the only owner
 of subtitle processing, scheduling, model routing, knowledge semantics, and
 storage migration.
 
 The staged 0.6.0 migration is tracked in
-[core-060-migration.md](core-060-migration.md). It is not a released core switch;
-the local build dependency/workflows now use the verified 0.6.0 snapshot, while
-published installations remain unchanged pending native/runtime acceptance.
+[core-060-migration.md](core-060-migration.md). The build dependency and workflows
+use that verified snapshot. Read the documented acceptance limits and
+[0.2.1 upgrade notes](release-notes-v0.2.1.md) before upgrading an installation.
 
 ## Coverage
 

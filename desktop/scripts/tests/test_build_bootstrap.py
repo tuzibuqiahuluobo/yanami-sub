@@ -80,6 +80,8 @@ def test_release_defaults_deliver_the_rc76_frozen_startup_fix() -> None:
 @pytest.mark.parametrize("version, core", [
     ("0.1.1.post1", "0.1.1.0"),
     ("0.1.2-rc.7.post6", "0.1.2.0"),
+    ("0.2.1", "0.2.1.0"),
+    ("0.2.2-rc.1", "0.2.2.0"),
 ])
 def test_windows_version_resources_support_stable_hotfix_and_rc(
     tmp_path: Path, version: str, core: str,

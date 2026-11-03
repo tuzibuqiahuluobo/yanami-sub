@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.1",
+    title: { zh: "0.2.1 · FineSub 0.6.0 与迁移安全", en: "0.2.1 · FineSub 0.6.0 and migration safety" },
+    notes: {
+      zh: ["核心固定升级至 FineSub 0.6.0，统一单任务、批处理、历史和设置接口；旧失效路线要求重选。", "独立 CodeBuddy 替代 WorkBuddy 桌面通道，须单独安装和登录，不复用旧桌面凭据。", "知识库升级前备份并校验；精修风格和证据跟随同一份提案，准确提示部分成功或仅记录证据。", "修复运行环境修复参数、重试重复字幕、HF 回退策略和中文编译诊断解码。首次任务可能重建 Python 环境。", "0.1.2 可直接完整升级；默认不接收 RC。完整可选 AOTI 尚未通过，GPU eager 原始字幕已验收。"],
+      en: ["Pins FineSub 0.6.0 and aligns tasks, batches, history and settings; obsolete routes require reselection.", "Standalone CodeBuddy replaces desktop WorkBuddy. Install and sign in separately; old desktop credentials are not reused.", "Back up and verify before knowledge migration. Freeze style and evidence with proposals and report partial/evidence-only results accurately.", "Fix runtime repair arguments, duplicate retry subtitles, HF fallback policy and localized compiler diagnostics. The first task may rebuild Python.", "0.1.2 can install the full update directly; stable-only remains the default. Optional full AOTI is not accepted; eager GPU raw subtitles are verified."],
+    },
+  },
+  {
     version: "0.1.3-rc.1",
     title: { zh: "0.1.3 RC1.0 · 双语字幕知识导入", en: "0.1.3 RC1.0 · Bilingual knowledge import" },
     notes: {

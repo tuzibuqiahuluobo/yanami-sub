@@ -12,7 +12,7 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 ## 快速开始
 
 1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.1.1.post1-Setup.exe`。
+   `Yanami-Sub-0.2.1-Setup.exe`。
 2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
 3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
 4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
@@ -57,8 +57,8 @@ Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管
 
 各页面的实际操作、数据位置和常见问题见
 [中文使用说明](docs/usage.zh-CN.md)。桌面与核心的功能边界见
-[FineSub 核心兼容矩阵](docs/core-compatibility.md)。本开发分支正在迁移至固定 0.6.0 源码；
-尚未发布，离线检查和实际验收边界见 [迁移记录](docs/core-060-migration.md)。
+[FineSub 核心兼容矩阵](docs/core-compatibility.md)。0.2.1 正式版和 0.2.2 RC1.0 预览版固定使用 FineSub 0.6.0；
+升级注意事项见 [0.2.1 公告](docs/release-notes-v0.2.1.md)，离线检查和实际验收边界见 [迁移记录](docs/core-060-migration.md)。
 
 ## 系统要求
 

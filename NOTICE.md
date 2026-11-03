@@ -6,7 +6,7 @@ Yanami Sub 是 [FineSub](https://github.com/caca2331/finesub) 的衍生 Windows 
 
 - 上游仓库：<https://github.com/caca2331/finesub>
 - 初始桌面端迁移锚点：<https://github.com/caca2331/finesub/tree/0.5.0pre/desktop>
-- 本分支构建候选核心（尚未发布）：<https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197>（v0.6.0）
+- 0.2.x 固定字幕核心：<https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197>（v0.6.0）
 - 下游仓库：<https://github.com/tuzibuqiahuluobo/yanami-sub>
 
 ## 作者与维护
@@ -19,7 +19,7 @@ Git 历史保留各项修改的具体作者信息。
 
 ## 许可证
 
-Yanami Sub 与构建候选中的 FineSub v0.6.0 代码遵循
+Yanami Sub 与随附的 FineSub v0.6.0 代码遵循
 [GNU General Public License v3.0 or later](LICENSE)，SPDX 标识为 `GPL-3.0-or-later`。
 
 随 FineSub 核心分发的 `src/finesub/llm/prompt_templates/` 明文模板采用

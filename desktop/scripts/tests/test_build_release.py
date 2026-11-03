@@ -89,8 +89,8 @@ def test_release_builder_emits_signed_assets(tmp_path: Path) -> None:
     assert parsed.assets.app.size == result.app_zip.stat().st_size
 
 
-def test_new_preview_uses_signed_v2_discovery_gate(tmp_path: Path) -> None:
-    version = "0.1.3-rc.1"
+@pytest.mark.parametrize("version", ["0.1.3-rc.1", "0.2.2-rc.1"])
+def test_new_preview_uses_signed_v2_discovery_gate(tmp_path: Path, version: str) -> None:
     private = Ed25519PrivateKey.generate()
     key = tmp_path / "key.pem"
     key.write_bytes(private.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()))
