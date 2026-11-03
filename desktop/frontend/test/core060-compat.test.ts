@@ -21,7 +21,9 @@ test("automatic install intent reaches the backend separately from a manual repa
     await api.installResource("uv");
     assert.deepEqual(calls, [["uv", true], ["uv", false]]);
     const page = readFileSync("app/page.tsx", "utf-8");
-    assert.match(page, /installResource\(missing.id, true\)/);
+    // The task reports all missing resources but automatically starts only
+    // the first one, preserving the distinct automatic-install intent.
+    assert.match(page, /installResource\(missing\[0\]!\.id, true\)/);
   } finally {
     if (previous === undefined) Reflect.deleteProperty(globalThis, "window");
     else Object.defineProperty(globalThis, "window", { configurable: true, value: previous });

@@ -26,6 +26,13 @@ test("error envelopes preserve bridge code and action", () => {
   );
 });
 
+test("missing resource IDs survive the native error envelope", () => {
+  assert.throws(() => unwrapEnvelope({ ok: false, error: {
+    code: "runtime_required", message: "missing", action: "open_resources", resource_ids: ["yt-dlp"],
+  } }), (error: unknown) => error instanceof BridgeCallError &&
+    error.resourceIds?.[0] === "yt-dlp");
+});
+
 
 test("browser preview fallback is deterministic", async () => {
   const api = createDesktopApi({ preview: true });

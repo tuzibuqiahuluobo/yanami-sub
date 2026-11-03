@@ -15,6 +15,7 @@ interface AppShellProps {
   api: DesktopApi;
   onNavigate: (route: Route) => void;
   updateAvailable: boolean;
+  batchContent?: ReactNode;
   children: ReactNode;
 }
 
@@ -25,6 +26,7 @@ export function AppShell({
   api,
   onNavigate,
   updateAvailable,
+  batchContent,
   children,
 }: AppShellProps) {
   return (
@@ -41,9 +43,10 @@ export function AppShell({
         onNavigate={onNavigate}
       />
       <section className="workspace">
-        <div className="workspace-view" key={state.route}>
-          {children}
+        <div className="workspace-view" hidden={state.route !== "batch"}>
+          {batchContent}
         </div>
+        <div className="workspace-view" key={state.route} style={state.route === "batch" ? { minHeight: 0 } : undefined}>{children}</div>
       </section>
     </div>
   );

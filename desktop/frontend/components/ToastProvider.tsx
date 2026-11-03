@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { formatBytes, formatPercent } from "@/lib/formatters";
+import { motionIsReduced } from "@/lib/useExitPresence";
 import type { TaskState } from "@/lib/state";
 import type { ProcessingStage, Route, UpdateInstallSnapshot } from "@/lib/types";
 
@@ -22,13 +23,15 @@ interface ToastItem {
   instance: number;
   message: string;
   notice?: boolean;
+  leaving?: boolean;
 }
 
 interface ToastContextValue {
   toasts: ToastItem[];
   showSuccess: (message: string, id?: string) => void;
   showNotice: (message: string, id?: string) => void;
-  dismiss: (id: string) => void;
+  dismiss: (instance: number) => void;
+  remove: (instance: number) => void;
 }
 
 const ToastContext = createContext<ToastContextValue | null>(null);
@@ -38,23 +41,30 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const nextId = useRef(0);
 
-  const dismiss = useCallback((id: string) => {
-    setToasts((current) => current.filter((toast) => toast.id !== id));
+  const remove = useCallback((instance: number) => {
+    setToasts((current) => current.filter((toast) => toast.instance !== instance));
   }, []);
+  const dismiss = useCallback((instance: number) => {
+    if (motionIsReduced()) return remove(instance);
+    setToasts((current) => current.map((toast) => toast.instance === instance ? { ...toast, leaving: true } : toast));
+  }, [remove]);
 
   const showToast = useCallback((message: string, stableId?: string, notice = false) => {
     const instance = nextId.current += 1;
     const id = stableId ?? `success-${instance}`;
     setToasts((current) => {
-      const withoutDuplicate = current.filter((toast) => toast.id !== id);
-      return [...withoutDuplicate, { id, instance, message, notice }].slice(-3);
+      const active = current.filter((toast) => !toast.leaving && toast.id !== id).slice(-2);
+      const activeInstances = new Set(active.map((toast) => toast.instance));
+      const leaving = current.filter((toast) => !activeInstances.has(toast.instance))
+        .map((toast) => ({ ...toast, leaving: true })).slice(-3);
+      return [...leaving, ...active, { id, instance, message, notice }];
     });
   }, []);
   const showSuccess = useCallback((message: string, id?: string) => showToast(message, id), [showToast]);
   const showNotice = useCallback((message: string, id?: string) => showToast(message, id, true), [showToast]);
 
   return (
-    <ToastContext.Provider value={{ toasts, showSuccess, showNotice, dismiss }}>
+    <ToastContext.Provider value={{ toasts, showSuccess, showNotice, dismiss, remove }}>
       {children}
     </ToastContext.Provider>
   );
@@ -73,24 +83,34 @@ export function useToast() {
 function SuccessToast({
   toast,
   onDismiss,
+  onRemove,
 }: {
   toast: ToastItem;
-  onDismiss: (id: string) => void;
+  onDismiss: (instance: number) => void;
+  onRemove: (instance: number) => void;
 }) {
   const { t } = useLanguage();
 
   useEffect(() => {
-    const timer = window.setTimeout(() => onDismiss(toast.id), 4500);
+    if (toast.leaving && motionIsReduced()) {
+      onRemove(toast.instance);
+      return;
+    }
+    const timer = toast.leaving
+      ? window.setTimeout(() => onRemove(toast.instance), 220)
+      : window.setTimeout(() => onDismiss(toast.instance), 4500);
     return () => window.clearTimeout(timer);
-  }, [onDismiss, toast.id, toast.message]);
+  }, [onDismiss, onRemove, toast.instance, toast.leaving]);
 
   return (
-    <div className={`toast-item ${toast.notice ? "toast-notice" : "toast-success"}`} role="status">
+    <div className={`toast-item ${toast.notice ? "toast-notice" : "toast-success"}`} role="status"
+      data-leaving={toast.leaving || undefined} inert={toast.leaving} aria-hidden={toast.leaving || undefined}
+      onAnimationEnd={(event) => { if (toast.leaving && event.target === event.currentTarget && event.animationName === "toast-leave") onRemove(toast.instance); }}>
       <span className="toast-status-icon" aria-hidden="true">
         {toast.notice ? <CircleAlert size={14} /> : <Check size={14} strokeWidth={2.4} />}
       </span>
       <span className="toast-message">{toast.message}</span>
-      <button type="button" className="toast-dismiss" aria-label={t.toast.close} onClick={() => onDismiss(toast.id)}>
+      <button type="button" className="toast-dismiss" aria-label={t.toast.close} onClick={() => onDismiss(toast.instance)}>
         <X size={14} />
       </button>
     </div>
@@ -240,6 +260,7 @@ export function ToastViewport({
             key={`${toast.id}-${toast.instance}`}
             toast={toast}
             onDismiss={context.dismiss}
+            onRemove={context.remove}
           />
         ))}
       </div>

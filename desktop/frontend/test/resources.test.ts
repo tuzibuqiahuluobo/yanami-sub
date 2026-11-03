@@ -4,8 +4,21 @@ import test from "node:test";
 import {
   blockingResources,
   isEnvironmentReady,
+  missingRequiredResources,
+  validatedResourceIds,
   unresolvedDependency,
 } from "../lib/resources";
+
+test("guidance accepts only known resource IDs and waits for confirmed readiness", () => {
+  assert.deepEqual(validatedResourceIds(["yt-dlp", "../../unsafe", "yt-dlp", null, "uv"]), ["yt-dlp", "uv"]);
+  assert.deepEqual(validatedResourceIds("yt-dlp"), []);
+  const resources = [
+    { id: "uv", version: "1", state: "ready" as const },
+    { id: "yt-dlp", version: "1", state: "outdated" as const },
+  ];
+  assert.deepEqual(missingRequiredResources(["uv", "yt-dlp"], resources, []), []);
+  assert.deepEqual(missingRequiredResources(["uv", "yt-dlp", "ffmpeg"], resources, ["uv"]), ["uv", "ffmpeg"]);
+});
 
 
 test("optional on-demand tools never block a task", () => {
@@ -34,6 +47,15 @@ test("a missing required resource still blocks", () => {
     ["uv"],
   );
   assert.equal(isEnvironmentReady(resources), false);
+});
+
+test("all missing required resources are retained for guidance", () => {
+  const resources = [
+    { id: "uv", version: "1", state: "missing" as const },
+    { id: "ffmpeg", version: "1", state: "failed" as const },
+    { id: "yt-dlp", version: "1", state: "missing" as const, optional: true },
+  ];
+  assert.deepEqual(blockingResources(resources).map((resource) => resource.id), ["uv", "ffmpeg"]);
 });
 
 

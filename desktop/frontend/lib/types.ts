@@ -21,6 +21,7 @@ export interface BridgeError {
   code: string;
   message: string;
   action?: string | null;
+  resource_ids?: string[] | null;
 }
 
 export type ApiEnvelope<T> =

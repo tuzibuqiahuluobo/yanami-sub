@@ -578,34 +578,29 @@ export function reduceAppState(
         ),
       };
     case "resourceInstallChanged": {
-      const exists = state.resourceInstalls.some(
-        (install) => install.resource_id === action.install.resource_id,
-      );
+      const installs = mergeResourceInstalls(state.resourceInstalls, [action.install]);
+      const selected = installs.find((install) => install.resource_id === action.install.resource_id)!;
       return {
         ...state,
-        resourceInstalls: exists
-          ? state.resourceInstalls.map((install) =>
-              install.resource_id === action.install.resource_id
-                ? action.install
-                : install,
-            )
-          : [...state.resourceInstalls, action.install],
+        resourceInstalls: installs,
         resources: applyResourceInstallToResources(
           state.resources,
-          action.install,
+          selected,
         ),
       };
     }
-    case "resourceInstallsChanged":
+    case "resourceInstallsChanged": {
+      const installs = mergeResourceInstalls(state.resourceInstalls, action.installs);
       return {
         ...state,
-        resourceInstalls: action.installs,
-        resources: action.installs.reduce(
+        resourceInstalls: installs,
+        resources: installs.reduce(
           (resources, install) =>
             applyResourceInstallToResources(resources, install),
           state.resources,
         ),
       };
+    }
     case "settingsChanged":
       return {
         ...state,
@@ -622,7 +617,9 @@ export function reduceAppState(
         },
       };
     case "resourcesLoaded":
-      return { ...state, resources: action.resources };
+      return { ...state, resources: state.resourceInstalls
+        .filter((install) => install.state === "running" || install.state === "queued")
+        .reduce((resources, install) => applyResourceInstallToResources(resources, install), action.resources) };
     case "routingChanged":
       return {
         ...state,
@@ -647,6 +644,19 @@ export function reduceAppState(
       return state;
   }
 }
+
+function mergeResourceInstalls(previous: ResourceInstallSnapshot[], incoming: ResourceInstallSnapshot[]): ResourceInstallSnapshot[] {
+  const merged = new Map(previous.map((install) => [install.resource_id, install]));
+  for (const install of incoming) {
+    const current = merged.get(install.resource_id);
+    if (!current || install.started_at > current.started_at ||
+        (install.started_at === current.started_at && install.updated_at >= current.updated_at)) {
+      merged.set(install.resource_id, install);
+    }
+  }
+  return [...merged.values()];
+}
+
 
 function applyResourceInstallToResources(
   resources: ResourceStatus[],

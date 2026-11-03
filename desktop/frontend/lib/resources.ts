@@ -12,6 +12,19 @@
 
 import type { ResourceInstallSnapshot, ResourceStatus } from "./types";
 
+const RESOURCE_IDS = new Set(["uv", "ffmpeg", "git", "yt-dlp", "tokcount", "models"]);
+
+export function validatedResourceIds(value: unknown): string[] {
+  return Array.isArray(value)
+    ? [...new Set(value.filter((id): id is string => typeof id === "string" && RESOURCE_IDS.has(id)))]
+    : [];
+}
+
+export function missingRequiredResources(ids: string[], resources: ResourceStatus[], submitting: string[]): string[] {
+  return ids.filter((id) => submitting.includes(id) ||
+    !resources.some((resource) => resource.id === id && isUsable(resource)));
+}
+
 /** Resources a task genuinely cannot run without. */
 export function requiredResources(resources: ResourceStatus[]): ResourceStatus[] {
   return resources.filter((resource) => !resource.optional);

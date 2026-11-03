@@ -105,11 +105,11 @@
     border-color 160ms ease,
     color 160ms ease,
     box-shadow 160ms ease,
-    transform 120ms ease;
+    transform 120ms var(--motion-ease-out);
 }
 
 .button:active:not(:disabled) {
-  transform: scale(0.97);
+  transform: scale(0.98);
 }
 
 .button:disabled {
@@ -396,7 +396,7 @@
 .custom-select-arrow {
   flex: 0 0 auto;
   color: #9a9ca2;
-  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1), color 180ms ease;
+  transition: transform var(--motion-normal) var(--motion-ease-spring), color var(--motion-fast) ease;
 }
 
 .custom-select.is-open .custom-select-arrow {
@@ -421,7 +421,16 @@
   box-shadow: var(--glass-shadow);
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
   -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
-  animation: select-menu-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  animation: select-menu-in var(--motion-fast) var(--motion-ease-out);
+}
+
+.custom-select-menu[data-closing] {
+  pointer-events: none;
+  animation: select-menu-out 150ms ease-in forwards;
+}
+
+@keyframes select-menu-out {
+  to { opacity: 0; transform: translateY(-3px) scale(.98); }
 }
 
 @keyframes select-menu-in {

@@ -52,6 +52,7 @@ import {
   type ThemeMode,
 } from "@/lib/useAppearance";
 import { runInterfaceTransition } from "@/lib/viewTransition";
+import { useExitPresence } from "@/lib/useExitPresence";
 
 import { ApiKeyField } from "./ApiKeyField";
 import { ConfigMigration } from "./ConfigMigration";
@@ -193,6 +194,7 @@ export function Settings({
   const [routingError, setRoutingError] = useState("");
   const [agentProbeBusy, setAgentProbeBusy] = useState(false);
   const [agentPathsOpen, setAgentPathsOpen] = useState(false);
+  const agentPathsPresence = useExitPresence(agentPathsOpen);
   const [workBuddyRepairOpen, setWorkBuddyRepairOpen] = useState(false);
   const [agentPaths, setAgentPaths] = useState<Record<string, string>>({});
   const [agentPathBusy, setAgentPathBusy] = useState("");
@@ -219,7 +221,9 @@ export function Settings({
       focusTarget === "routing" ? "settings-routing" : `api-key-${focusTarget}`;
     const frame = window.requestAnimationFrame(() => {
       const element = document.getElementById(id);
-      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      const reduce = document.documentElement.dataset.motion === "off" ||
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      element?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
       element?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
@@ -874,7 +878,9 @@ export function Settings({
               <button type="button" className="agent-path-toggle" aria-expanded={agentPathsOpen} aria-controls="agent-path-list" onClick={() => setAgentPathsOpen((open) => !open)}>
                 <span>{t.settings.routing.dshPath}</span><ChevronDown size={16} aria-hidden="true" className={agentPathsOpen ? "is-open" : ""} />
               </button>
-              <div id="agent-path-list" className="agent-path-list" hidden={!agentPathsOpen}>
+              <div id="agent-path-list" className="agent-path-list" hidden={!agentPathsPresence.present}
+                data-closing={!agentPathsOpen || undefined} inert={!agentPathsOpen} aria-hidden={!agentPathsOpen}
+                onAnimationEnd={(event) => { if (event.target === event.currentTarget) agentPathsPresence.finish(); }}>
               <p className="field-help" id="agent-path-selection-hint">{language === "en" ? "Select a supported CLI file or its installation folder, then save. Only your selected CLI is checked; no other drives are scanned." : "选择受支持的 CLI 文件或安装目录后保存。仅检查选定的 CLI，不扫描其他磁盘。"}</p>
               {agentStatuses?.some((agent) => agent.detected_path) ? <p className="field-help">{t.settings.routing.detectedPathHint}</p> : null}
               {agentTiers.map((tier) => <div className="agent-path-card" key={tier}>

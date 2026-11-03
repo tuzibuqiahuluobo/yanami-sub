@@ -42,6 +42,7 @@ export class BridgeCallError extends Error {
     public readonly code: string,
     message: string,
     public readonly action?: string | null,
+    public readonly resourceIds?: string[] | null,
   ) {
     super(message);
     this.name = "BridgeCallError";
@@ -57,6 +58,7 @@ export function unwrapEnvelope<T>(envelope: ApiEnvelope<T>): T {
     envelope.error.code,
     envelope.error.message,
     envelope.error.action,
+    envelope.error.resource_ids,
   );
 }
 

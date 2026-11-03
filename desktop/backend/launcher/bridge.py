@@ -83,7 +83,10 @@ def _success(value: Any = None) -> dict[str, Any]:
 
 
 def _failure(error: BridgeError) -> dict[str, Any]:
-    return {"ok": False, "error": error.model_dump(mode="json")}
+    payload = error.model_dump(mode="json")
+    if error.resource_ids is None:
+        payload.pop("resource_ids", None)
+    return {"ok": False, "error": payload}
 
 
 RESOURCE_LABELS = {
@@ -91,6 +94,8 @@ RESOURCE_LABELS = {
     "ffmpeg": "FFmpeg",
     "git": "git（知识库更新需要）",
     "yt-dlp": "yt-dlp（链接下载需要）",
+    "tokcount": "tokcount",
+    "models": "AI 模型权重",
 }
 
 # Frontend callers may only open these audited provider pages. Keeping this an
@@ -116,6 +121,7 @@ def _missing_resource_error(missing: list[str] | BridgeError, verb: str) -> Brid
         code="runtime_required",
         message=f"请先安装 {names}，再{verb}字幕任务。",
         action="open_resources",
+        resource_ids=[item for item in missing if item in RESOURCE_LABELS] or None,
     )
 
 

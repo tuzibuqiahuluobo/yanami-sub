@@ -389,6 +389,29 @@ test("resource install snapshots keep progress and failure visible", () => {
   assert.equal(failed.resources[0]?.detail, "连接超时");
 });
 
+test("resource status polling cannot erase or rewind an active install", () => {
+  const base = { ...initialState, resources: [{ id: "uv", version: "1", state: "missing" as const }] };
+  const install = {
+    resource_id: "uv", resource_version: "1", state: "running" as const,
+    phase: "downloading" as const, message: "downloading", downloaded: 25, total: 100,
+    bytes_per_second: 1, cache_path: "", install_path: "", logs: [], error: "",
+    started_at: 2, updated_at: 3,
+  };
+  let next = reduceAppState(base, { type: "resourceInstallChanged", install });
+  next = reduceAppState(next, { type: "resourcesLoaded", resources: base.resources });
+  assert.equal(next.resources[0]?.state, "downloading");
+  next = reduceAppState(next, { type: "resourceInstallChanged", install: {
+    ...install, state: "ready", phase: "complete", updated_at: 5,
+  } });
+  next = reduceAppState(next, { type: "resourceInstallsChanged", installs: [install] });
+  assert.equal(next.resourceInstalls[0]?.state, "ready");
+  assert.equal(next.resources[0]?.state, "ready");
+  next = reduceAppState(next, { type: "resourceInstallChanged", install: {
+    ...install, started_at: 6, updated_at: 6,
+  } });
+  assert.equal(next.resources[0]?.state, "downloading");
+});
+
 test("new tasks keep intermediates and derive their own name", () => {
   // Both are contract, not cosmetics: cleanup used to be unconditional and
   // deleted stable.json, and a blank name means "derive it from the source".

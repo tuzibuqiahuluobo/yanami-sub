@@ -58,6 +58,9 @@ function getResourceInfo(resourceId: string, t: any): { title: string; detail: s
 
 interface ResourceManagerProps {
   focusResourceId?: string;
+  focusSequence?: number;
+  requiredResourceIds?: string[];
+  submittingResources?: string[];
   resources: ResourceStatus[];
   installs: ResourceInstallSnapshot[];
   onInstall: (resourceId: string) => void;
@@ -86,6 +89,9 @@ interface ResourceManagerProps {
 
 export function ResourceManager({
   focusResourceId,
+  focusSequence,
+  requiredResourceIds = [],
+  submittingResources = [],
   resources,
   installs,
   onInstall,
@@ -103,17 +109,19 @@ export function ResourceManager({
   onRelocateData,
   onPurgeRebuildableData,
 }: ResourceManagerProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showSuccess } = useToast();
   useEffect(() => {
     if (!focusResourceId) return;
     const frame = window.requestAnimationFrame(() => {
       const element = document.getElementById(`resource-${focusResourceId}`);
-      element?.scrollIntoView({ block: "center", behavior: "smooth" });
+      const reduce = document.documentElement.dataset.motion === "off" ||
+        window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      element?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
       element?.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusResourceId]);
+  }, [focusResourceId, focusSequence]);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [pendingResourceId, setPendingResourceId] = useState<string | null>(null);
   const [pythonPreflight, setPythonPreflight] = useState<PythonInterpreterChoice | null>(null);
@@ -208,7 +216,7 @@ export function ResourceManager({
   const handleInstallClick = (resourceId: string) => {
     const resource = resources.find((r) => r.id === resourceId);
     const install = installs.find((i) => i.resource_id === resourceId);
-    const isReady = resource?.state === "ready" || install?.state === "ready";
+    const isReady = resource?.state === "ready";
     const isRunning = install?.state === "queued" || install?.state === "running";
 
     if (isRunning) {
@@ -720,14 +728,14 @@ export function ResourceManager({
           // "ready" here drives the finished look and the open-directory
           // action. An outdated copy is installed, so it gets neither the
           // download affordance nor the finished one -- it gets its own.
-          const outdated = resource.state === "outdated" && install === undefined;
-          const ready =
-            (resource.state === "ready" || install?.state === "ready") &&
-            !outdated;
-          const running =
+          const outdated = resource.state === "outdated";
+          const submitting = submittingResources.includes(resource.id);
+          const running = submitting ||
             install?.state === "queued" || install?.state === "running";
-          const paused = install?.state === "paused";
-          const failed = install?.state === "failed";
+          const ready = !running && resource.state === "ready";
+          const paused = !running && install?.state === "paused";
+          const failed = !running && install?.state === "failed";
+          const required = requiredResourceIds.includes(resource.id) && (running || !isUsable(resource));
           const systemPythonAvailable =
             resource.id === "uv" && resource.reuses_system_python === true;
           // The model weights are fetched by the managed interpreter, so there
@@ -741,7 +749,7 @@ export function ResourceManager({
               id={`resource-${resource.id}`}
               tabIndex={-1}
               className={`resource-card${running ? " is-installing" : ""
-                }${failed ? " is-failed" : ""}`}
+                }${failed ? " is-failed" : ""}${required ? " is-required" : ""}`}
               key={resource.id}
             >
               <span className="resource-large-icon">
@@ -758,6 +766,7 @@ export function ResourceManager({
                   <div className="resource-card-copy">
                     <div>
                       <h2>{resourceInfo.title}</h2>
+                      {required ? <span className="resource-required-label">{language === "en" ? "Required for this task" : "此任务必需"}</span> : null}
                       <span
                         className={`resource-label${ready ? " is-ready" : ""
                           }${running ? " is-busy" : ""}${failed ? " is-failed" : ""
@@ -785,6 +794,9 @@ export function ResourceManager({
                       </span>
                     </div>
                     <p>{resourceInfo.detail}</p>
+                    {required ? <p className="resource-required-reason">{resource.id === "yt-dlp"
+                      ? (language === "en" ? "Link tasks need yt-dlp to download media." : "链接任务需要 yt-dlp 下载媒体。")
+                      : (language === "en" ? "Install this component before continuing the task." : "继续任务前需要安装此组件。")}</p> : null}
                     <div className="resource-meta">
                       <small>
                         {resource.version === "on-demand"
@@ -810,7 +822,7 @@ export function ResourceManager({
                     type="button"
                     className={`button ${ready ? "button-secondary" : "button-primary"
                       }`}
-                    disabled={blockedBy !== ""}
+                    disabled={blockedBy !== "" || submitting}
                     title={
                       blockedBy
                         ? t.resources.blockedBy.replace(
@@ -845,7 +857,7 @@ export function ResourceManager({
                               : t.resources.actions.downloadAndInstall}
                   </button>
                 </div>
-                {install ? (
+                {install && !submitting ? (
                   <div className="resource-install-detail">
                     {running && install.total > 0 ? (
                       <DownloadProgress

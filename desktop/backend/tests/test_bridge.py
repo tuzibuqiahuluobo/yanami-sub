@@ -585,6 +585,47 @@ def test_bridge_requests_runtime_install_before_worker_launch(
     assert jobs.requests == []
 
 
+def test_missing_url_resource_is_structured_for_single_and_batch(tmp_path: Path) -> None:
+    jobs = FakeJobs()
+    batches = FakeBatches()
+    resources = FakeResources()
+    resources.ensure = lambda required: ["yt-dlp"] if "yt-dlp" in required else []
+    bridge = DesktopBridge(jobs=jobs, batches=batches, resources=resources,
+                           settings=SettingsStore(tmp_path / "user-data"))
+
+    single = bridge.start_task({"input": "https://example.test/video", "stage": "raw-srt"})
+    batch = bridge.start_batch({"items": [{"input": "https://example.test/video"}]})
+    for result in (single, batch):
+        assert result["ok"] is False
+        assert result["error"]["action"] == "open_resources"
+        assert result["error"]["resource_ids"] == ["yt-dlp"]
+    assert not jobs.requests and not batches.requests
+    assert bridge.start_task({"input": "D:/media/a.wav", "stage": "raw-srt"})["ok"] is True
+
+
+def test_resource_error_does_not_expose_untrusted_navigation_ids() -> None:
+    from desktop.backend.launcher.bridge import _failure, _missing_resource_error
+
+    error = _failure(_missing_resource_error(["yt-dlp", "../../unsafe"], "开始"))["error"]
+    assert error["resource_ids"] == ["yt-dlp"]
+    assert "../../unsafe" in error["message"]
+
+
+def test_resume_and_append_report_the_same_url_resource(tmp_path: Path) -> None:
+    batches = FakeBatches()
+    batches.requests = [BatchRequest.model_validate({"items": [{"input": "https://example.test/first"}]})]
+    resources = FakeResources()
+    resources.ensure = lambda required: ["yt-dlp"] if "yt-dlp" in required else []
+    bridge = DesktopBridge(jobs=FakeJobs(), batches=batches, resources=resources,
+                           settings=SettingsStore(tmp_path / "user-data"))
+
+    for result in (bridge.resume_batch("batch-1"),
+                   bridge.append_batch("batch-1", ["https://example.test/second"])):
+        assert result["ok"] is False
+        assert result["error"]["action"] == "open_resources"
+        assert result["error"]["resource_ids"] == ["yt-dlp"]
+
+
 def test_bridge_starts_a_core_batch_and_requests_url_capabilities(
     tmp_path: Path,
 ) -> None:

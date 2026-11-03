@@ -10,6 +10,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
 import { useLanguage } from "./LanguageProvider";
+import { useExitPresence } from "@/lib/useExitPresence";
 
 
 export interface SelectOption {
@@ -44,6 +45,7 @@ export function CustomSelect({
 }: CustomSelectProps) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
+  const presence = useExitPresence(open);
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
@@ -185,10 +187,14 @@ export function CustomSelect({
         <ChevronDown size={15} className="custom-select-arrow" aria-hidden="true" />
       </button>
 
-      {open ? (
+      {presence.present ? (
         <ul
           id={listboxId}
           className="custom-select-menu"
+          data-closing={!open || undefined}
+          inert={!open}
+          aria-hidden={!open || undefined}
+          onAnimationEnd={(event) => { if (event.target === event.currentTarget) presence.finish(); }}
           role="listbox"
           aria-labelledby={triggerId}
         >

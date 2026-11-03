@@ -37,13 +37,16 @@ import { useToast } from "./ToastProvider";
 
 
 interface BatchQueueProps {
+  visible: boolean;
   request: Omit<TaskRequest, "input">;
   capabilities: CapabilityState;
   routing?: RoutingSettings;
   onRequestChange: (changes: Partial<Omit<TaskRequest, "input">>) => void;
-  onOpenResources: () => void;
+  onOpenResources: (ids?: string[]) => void;
   apiKeys: Record<ApiProvider, "configured" | "missing">;
   onOpenSettings: (target: ApiProvider | "agents" | "routing") => void;
+  onBlocked: (error: BridgeCallError) => void;
+  onStarted: () => void;
 }
 
 
@@ -61,6 +64,7 @@ function sourceLabel(source: string): string {
 
 
 export function BatchQueue({
+  visible,
   request,
   capabilities,
   routing,
@@ -68,6 +72,8 @@ export function BatchQueue({
   onOpenResources,
   apiKeys,
   onOpenSettings,
+  onBlocked,
+  onStarted,
 }: BatchQueueProps) {
   const { t, language } = useLanguage();
   const { showSuccess } = useToast();
@@ -76,13 +82,23 @@ export function BatchQueue({
   const [snapshot, setSnapshot] = useState<BatchSnapshot | null>(null);
   const [history, setHistory] = useState<BatchSnapshot[]>([]);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<{ message: string; code?: string; action?: string | null } | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string; action?: string | null; resourceIds?: string[] | null } | null>(null);
   const [workers, setWorkers] = useState({ download: 2, asr: 1, llm: 2 });
   const [asrQueueSize, setAsrQueueSize] = useState(4);
   const [retryFailed, setRetryFailed] = useState(1);
   const [manifestBusy, setManifestBusy] = useState(false);
   const [manifestNotice, setManifestNotice] = useState("");
   const [intakeDraft, setIntakeDraft] = useState("");
+
+  const reportError = (caught: unknown, fallback: string) => {
+    setError({
+      message: caught instanceof Error ? caught.message : fallback,
+      code: caught instanceof BridgeCallError ? caught.code : undefined,
+      action: caught instanceof BridgeCallError ? caught.action : null,
+      resourceIds: caught instanceof BridgeCallError ? caught.resourceIds : undefined,
+    });
+    if (caught instanceof BridgeCallError) onBlocked(caught);
+  };
 
   const appendRunning = async (chooseFiles = false) => {
     if (!snapshot || busy) return;
@@ -92,10 +108,11 @@ export function BatchQueue({
       const sources = chooseFiles ? (await desktopApi.selectBatchFiles()).paths : intakeDraft.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
       if (!sources.length) return;
       setSnapshot(await desktopApi.appendBatch(snapshot.batch_id, sources));
+      onStarted();
       setIntakeDraft("");
       showSuccess(language === "en" ? "Saved; awaiting scheduler admission. Resume if this run finishes first." : "已保存，等待调度器接收；若本轮已结束，可继续批次。");
     } catch (caught) {
-      setError({ message: caught instanceof Error ? caught.message : String(caught) });
+      reportError(caught, t.batch.errors.start);
     } finally { setBusy(false); }
   };
 
@@ -149,6 +166,7 @@ export function BatchQueue({
   };
 
   useEffect(() => {
+    if (!visible) return;
     let active = true;
     void Promise.all([desktopApi.getBatchSnapshot(), desktopApi.listBatches()])
       .then(([current, rows]) => {
@@ -161,10 +179,10 @@ export function BatchQueue({
     return () => {
       active = false;
     };
-  }, []);
+  }, [visible]);
 
   useEffect(() => {
-    if (snapshot?.state !== "running") return;
+    if (!visible || snapshot?.state !== "running") return;
     let active = true;
     let inFlight = false;
     const poll = async () => {
@@ -188,7 +206,7 @@ export function BatchQueue({
       active = false;
       window.clearInterval(timer);
     };
-  }, [snapshot?.state, snapshot?.batch_id]);
+  }, [visible, snapshot?.state, snapshot?.batch_id]);
 
   const counts = useMemo(() => {
     const rows = snapshot?.items ?? [];
@@ -284,16 +302,10 @@ export function BatchQueue({
     try {
       const payload = batchRequest(items);
       setSnapshot(await desktopApi.startBatch(payload));
+      onStarted();
       void refreshHistory();
     } catch (caught) {
-      if (caught instanceof BridgeCallError && caught.code === "api_key_required") onOpenSettings("gemini_free");
-      else if (caught instanceof BridgeCallError && caught.action === "open_agents") onOpenSettings("agents");
-      else if (caught instanceof BridgeCallError && caught.action === "open_settings") onOpenSettings("routing");
-      setError({
-        message: caught instanceof Error ? caught.message : t.batch.errors.start,
-        code: caught instanceof BridgeCallError ? caught.code : undefined,
-        action: caught instanceof BridgeCallError ? caught.action : null,
-      });
+      reportError(caught, t.batch.errors.start);
     } finally {
       setBusy(false);
     }
@@ -318,11 +330,9 @@ export function BatchQueue({
     setError(null);
     try {
       setSnapshot(await desktopApi.resumeBatch(snapshot.batch_id));
+      onStarted();
     } catch (caught) {
-      setError({
-        message: caught instanceof Error ? caught.message : t.batch.errors.resume,
-        action: caught instanceof BridgeCallError ? caught.action : null,
-      });
+      reportError(caught, t.batch.errors.resume);
     } finally {
       setBusy(false);
     }
@@ -351,6 +361,15 @@ export function BatchQueue({
       </header>
 
       {manifestNotice ? <div className="batch-manifest-notice" role="status">{manifestNotice}</div> : null}
+      {error ? (
+        <div className="error-banner" role="alert">
+          <strong>{error.message}</strong>
+          {error.action === "open_resources" ? <button type="button" className="text-button" onClick={() => onOpenResources(error.resourceIds ?? undefined)}>{t.batch.openResources}</button> : null}
+          {error.code === "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("gemini_free")}>{t.newTask.openKeyField}</button> : null}
+          {error.action === "open_settings" && error.code !== "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("routing")}>{t.settings.routing.title}</button> : null}
+          {error.action === "open_agents" ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
+        </div>
+      ) : null}
 
       {showBuilder ? (
         <div className="batch-layout">
@@ -444,16 +463,6 @@ export function BatchQueue({
                 <input type="number" min={0} max={10} value={retryFailed} onChange={(event) => setRetryFailed(Math.max(0, Number(event.target.value) || 0))} />
               </label>
             </div>
-
-            {error ? (
-              <div className="error-banner" role="alert">
-                <strong>{error.message}</strong>
-                {error.action === "open_resources" ? <button type="button" className="text-button" onClick={onOpenResources}>{t.batch.openResources}</button> : null}
-                {error.code === "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("gemini_free")}>{t.newTask.openKeyField}</button> : null}
-                {error.action === "open_settings" && error.code !== "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("routing")}>{t.settings.routing.title}</button> : null}
-                {error.action === "open_agents" ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
-              </div>
-            ) : null}
 
             <div className="task-actions">
               <div><strong>{t.batch.ready.replace("{count}", String(items.length))}</strong><span>{t.batch.priorityHint}</span></div>

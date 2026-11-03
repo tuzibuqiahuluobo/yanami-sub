@@ -62,6 +62,9 @@
   animation: advanced-grid-in 240ms var(--motion-ease-out) both;
 }
 
+.advanced-grid-animated[data-closing] { pointer-events: none; animation: advanced-grid-out 150ms ease-in forwards; }
+@keyframes advanced-grid-out { to { opacity: 0; transform: translateY(-4px) scaleY(.98); } }
+
 @keyframes advanced-grid-in {
   from {
     opacity: 0;
@@ -179,6 +182,7 @@
   color: var(--muted);
   font-size: 0.8rem;
 }
+.resource-row > div span { overflow-wrap: anywhere; }
 
 .resource-state {
   display: grid;

@@ -5,6 +5,7 @@ import { useState } from "react";
 
 import { invalidOutputName } from "@/lib/formatters";
 import { runInterfaceTransition } from "@/lib/viewTransition";
+import { useExitPresence } from "@/lib/useExitPresence";
 import type {
   ApiProvider,
   CapabilityState,
@@ -79,6 +80,7 @@ export function TaskSettings({
   };
   const [tab, setTab] = useState<SettingsTab>("speech");
   const [advanced, setAdvanced] = useState(false);
+  const advancedPresence = useExitPresence(advanced);
   const [nameError, setNameError] = useState("");
   const selectTab = (next: SettingsTab) => {
     if (next === tab) return;
@@ -451,8 +453,10 @@ export function TaskSettings({
         />
       </button>
 
-      {advanced ? (
-        <div className="advanced-grid advanced-grid-animated">
+      {advancedPresence.present ? (
+        <div className="advanced-grid advanced-grid-animated" data-closing={!advanced || undefined}
+          inert={!advanced} aria-hidden={!advanced || undefined}
+          onAnimationEnd={(event) => { if (event.target === event.currentTarget) advancedPresence.finish(); }}>
           {tab === "speech" ? (
             <>
               <div className="advanced-section-heading">

@@ -317,6 +317,23 @@
   border-color: #e8c8c3;
 }
 
+.resource-card.is-required {
+  border-color: color-mix(in srgb, var(--warning) 70%, var(--border));
+  background: color-mix(in srgb, var(--warning) 9%, var(--panel));
+}
+.resource-card.is-required.is-failed { border-color: var(--danger); }
+.resource-required-label {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning) 22%, var(--panel));
+  color: var(--text);
+  font-size: .73rem;
+  font-weight: 650;
+}
+.resource-card-copy .resource-required-reason { color: var(--text-secondary); font-weight: 600; }
+
 .resource-large-icon {
   width: 42px;
   height: 42px;

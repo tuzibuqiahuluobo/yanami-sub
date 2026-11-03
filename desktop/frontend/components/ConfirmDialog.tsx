@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useRef, useId } from "react";
 import { ShieldAlert } from "lucide-react";
 
 import { saveUi, uiValue } from "@/lib/preferences";
+import { useExitPresence } from "@/lib/useExitPresence";
 import { useLanguage } from "./LanguageProvider";
 
 
@@ -57,7 +58,10 @@ export function ConfirmDialog({
   const { t } = useLanguage();
   const [remember, setRemember] = useState(false);
   const card = useRef<HTMLDivElement>(null);
+  const cancelRef = useRef(onCancel);
+  cancelRef.current = onCancel;
   const titleId = useId();
+  const presence = useExitPresence(open);
 
   useEffect(() => {
     if (!open) return;
@@ -65,7 +69,7 @@ export function ConfirmDialog({
     const previous = document.activeElement as HTMLElement | null;
     card.current?.querySelector<HTMLButtonElement>("button")?.focus();
     const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") { event.preventDefault(); onCancel(); }
+      if (event.key === "Escape") { event.preventDefault(); cancelRef.current(); }
       if (event.key !== "Tab") return;
       const controls = Array.from(card.current?.querySelectorAll<HTMLElement>("button:not(:disabled), input:not(:disabled)") || []);
       const first = controls[0], last = controls.at(-1);
@@ -74,7 +78,7 @@ export function ConfirmDialog({
     };
     document.addEventListener("keydown", keydown);
     return () => { document.removeEventListener("keydown", keydown); previous?.focus(); };
-  }, [open, onCancel]);
+  }, [open]);
 
   // A modal has to own the scroll wheel. Without this the form underneath kept
   // scrolling while the dialog was up, so the page could move out from behind
@@ -104,12 +108,13 @@ export function ConfirmDialog({
     onConfirm();
   }, [remember, config.id, config.allowRemember, onConfirm]);
 
-  if (!open) {
+  if (!presence.present) {
     return null;
   }
 
   return (
-    <div className="dialog-overlay" onClick={onCancel}>
+    <div className="dialog-overlay" data-closing={!open || undefined} inert={!open} aria-hidden={!open || undefined}
+      onAnimationEnd={(event) => { if (event.target === event.currentTarget) presence.finish(); }} onClick={onCancel}>
       <div ref={card} className={`dialog-card ${config.tone === "danger" ? "knowledge-confirm-danger" : ""}`} role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
         {config.tone === "danger" ? <div className="knowledge-confirm-icon"><ShieldAlert size={24} /></div> : null}
         <h3 id={titleId}>{config.title}</h3>

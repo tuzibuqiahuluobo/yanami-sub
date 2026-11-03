@@ -17,6 +17,7 @@ import { useLanguage } from "./LanguageProvider";
 interface NewTaskProps {
   state: AppState;
   busy: boolean;
+  submittingResources: string[];
   /** The weights are already cached, so the notice must not promise a download. */
   modelsReady?: boolean;
   onSelectFile: () => void;
@@ -35,6 +36,7 @@ interface NewTaskProps {
 export function NewTask({
   state,
   busy,
+  submittingResources,
   modelsReady,
   onSelectFile,
   onDropPath,
@@ -237,6 +239,8 @@ export function NewTask({
 
         <EnvironmentPanel
           resources={state.resources}
+          installs={state.resourceInstalls}
+          submitting={submittingResources}
           busy={busy}
           onInstall={onInstallResource}
         />

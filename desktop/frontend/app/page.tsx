@@ -15,6 +15,7 @@ import { KnowledgeCenter } from "@/components/KnowledgeCenter";
 import { LanguageProvider, useLanguage } from "@/components/LanguageProvider";
 import { NewTask } from "@/components/NewTask";
 import { ProcessingView } from "@/components/ProcessingView";
+import { PrerequisiteNotice } from "@/components/PrerequisiteNotice";
 import { ResourceManager } from "@/components/ResourceManager";
 import { Settings } from "@/components/Settings";
 import { TaskHistory } from "@/components/TaskHistory";
@@ -34,7 +35,7 @@ import {
   readProcessingDevice,
   requestDeviceFields,
 } from "@/lib/processingDevice";
-import { blockingResources, hasActiveInstall, pipelineModelsReady } from "@/lib/resources";
+import { blockingResources, hasActiveInstall, isUsable, missingRequiredResources, pipelineModelsReady, validatedResourceIds } from "@/lib/resources";
 import {
   REMEMBERED_TASK_FIELDS,
   initialState,
@@ -70,6 +71,7 @@ function toBridgeError(error: unknown): BridgeError {
       code: error.code,
       message: error.message,
       action: error.action,
+      resource_ids: error.resourceIds,
     };
   }
   return {
@@ -108,7 +110,7 @@ function HomeContent() {
   const startupAgentProbeFired = useRef(false);
   const agentProbeGeneration = useRef(0);
   const eventCursor = useRef(0);
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showSuccess } = useToast();
   const { settings: appearance, update: updateAppearance } = useAppearance();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -117,14 +119,38 @@ function HomeContent() {
   const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState("");
   const [settingsFocus, setSettingsFocus] = useState<{ target: ApiProvider | "agents" | "routing"; sequence: number } | null>(null);
-  const [resourceFocusId, setResourceFocusId] = useState("");
+  const [resourceFocus, setResourceFocus] = useState({ id: "", sequence: 0 });
+  const [guide, setGuide] = useState<{
+    origin: "new-task" | "batch" | "history";
+    target: "settings" | "resources";
+    error: BridgeError;
+    resourceIds: string[];
+  } | null>(null);
+  const submittingRef = useRef(new Set<string>());
+  const [submittingResources, setSubmittingResources] = useState<string[]>([]);
   const focusSettings = (target: ApiProvider | "agents" | "routing") => {
     setSettingsFocus((current) => ({ target, sequence: (current?.sequence ?? 0) + 1 }));
     dispatch({ type: "navigate", route: "settings" });
   };
   const focusResource = (id: string) => {
-    setResourceFocusId(id);
+    setResourceFocus((current) => ({ id: validatedResourceIds([id])[0] ?? "", sequence: current.sequence + 1 }));
     dispatch({ type: "navigate", route: "resources" });
+  };
+  const guideBlocked = (error: BridgeError, origin: "new-task" | "batch" | "history") => {
+    if (error.action === "open_resources" || error.code === "runtime_required") {
+      const resourceIds = validatedResourceIds(error.resource_ids);
+      for (const id of resourceIds) {
+        const resource = state.resources.find((item) => item.id === id);
+        if (resource && isUsable(resource)) {
+          dispatch({ type: "resourceChanged", resource: { ...resource, state: "missing" } });
+        }
+      }
+      setGuide({ origin, target: "resources", error, resourceIds });
+      focusResource(resourceIds[0] ?? "");
+    } else if (error.code === "api_key_required" || error.action === "open_settings" || error.action === "open_agents") {
+      setGuide({ origin, target: "settings", error, resourceIds: [] });
+      focusSettings(error.code === "api_key_required" ? "gemini_free" : error.action === "open_agents" ? "agents" : "routing");
+    }
   };
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheck | null>(null);
   const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState("");
@@ -479,9 +505,11 @@ function HomeContent() {
 
   const installResource = async (resourceId: string, automatic = false) => {
     const current = state.resources.find((resource) => resource.id === resourceId);
-    if (!current) {
+    if (!current || submittingRef.current.has(resourceId)) {
       return;
     }
+    submittingRef.current.add(resourceId);
+    setSubmittingResources([...submittingRef.current]);
     dispatch({
       type: "resourceChanged",
       resource: { ...current, state: "downloading", detail: "" },
@@ -489,8 +517,12 @@ function HomeContent() {
     try {
       const install = await desktopApi.installResource(resourceId, automatic);
       dispatch({ type: "resourceInstallChanged", install });
-      const resources = await desktopApi.getResourceStatuses();
-      dispatch({ type: "resourcesLoaded", resources });
+      try {
+        const resources = await desktopApi.getResourceStatuses();
+        dispatch({ type: "resourcesLoaded", resources });
+      } catch {
+        // The install has started; a status refresh failure is not an install failure.
+      }
     } catch (error) {
       dispatch({
         type: "resourceChanged",
@@ -500,6 +532,9 @@ function HomeContent() {
           detail: toBridgeError(error).message,
         },
       });
+    } finally {
+      submittingRef.current.delete(resourceId);
+      setSubmittingResources([...submittingRef.current]);
     }
   };
 
@@ -546,13 +581,14 @@ function HomeContent() {
       // by design, so it is permanently "missing" on a healthy machine; gating
       // on it meant no task could ever start until both on-demand tools were
       // installed, which is exactly what marking them optional prevents.
-      const [missing] = blockingResources(state.resources);
-      if (missing) {
+      const missing = blockingResources(state.resources);
+      if (missing.length) {
         // Leave "checking" before handing off, or the workspace sits on a
         // spinner with no task behind it.
-        dispatch({ type: "taskRejected", error: RESOURCE_REQUIRED_ERROR });
-        focusResource(missing.id);
-        await installResource(missing.id, true);
+        const error = { ...RESOURCE_REQUIRED_ERROR, resource_ids: missing.map((resource) => resource.id) };
+        dispatch({ type: "taskRejected", error });
+        guideBlocked(error, "new-task");
+        await installResource(missing[0]!.id, true);
         return;
       }
       // The processing device is one global setting, not a per-task control,
@@ -565,12 +601,11 @@ function HomeContent() {
         ...requestDeviceFields(processing),
       });
       dispatch({ type: "taskStarted", snapshot });
+      setGuide(null);
     } catch (error) {
       const bridgeError = toBridgeError(error);
       dispatch({ type: "taskRejected", error: bridgeError });
-      if (bridgeError.code === "api_key_required") focusSettings("gemini_free");
-      else if (bridgeError.action === "open_agents") focusSettings("agents");
-      else if (bridgeError.action === "open_settings") focusSettings("routing");
+      guideBlocked(bridgeError, "new-task");
       if (bridgeError.action === "show_batch") {
         dispatch({ type: "navigate", route: "batch" });
       }
@@ -610,8 +645,11 @@ function HomeContent() {
           ? await desktopApi.resumeTask(taskId)
           : await desktopApi.retryTask(taskId);
       dispatch({ type: "taskStarted", snapshot });
+      setGuide(null);
     } catch (error) {
-      dispatch({ type: "taskRejected", error: toBridgeError(error) });
+      const bridgeError = toBridgeError(error);
+      dispatch({ type: "taskRejected", error: bridgeError });
+      guideBlocked(bridgeError, "history");
     } finally {
       setBusy(false);
     }
@@ -676,20 +714,7 @@ function HomeContent() {
 
   let content;
   if (state.route === "batch") {
-    content = (
-      <BatchQueue
-        request={state.task.request}
-        capabilities={state.capabilities}
-        routing={state.routing}
-        apiKeys={state.settings.api_keys}
-        onOpenSettings={focusSettings}
-        onRequestChange={(changes) => {
-          dispatch({ type: "requestChanged", changes });
-          rememberTaskOptions(changes);
-        }}
-        onOpenResources={() => focusResource(blockingResources(state.resources)[0]?.id ?? "uv")}
-      />
-    );
+    content = null;
   } else if (state.route === "history") {
     content = (
       <TaskHistory
@@ -721,7 +746,10 @@ function HomeContent() {
   } else if (state.route === "resources") {
     content = (
       <ResourceManager
-        focusResourceId={resourceFocusId}
+        focusResourceId={resourceFocus.id}
+        focusSequence={resourceFocus.sequence}
+        requiredResourceIds={guide?.target === "resources" ? guide.resourceIds : []}
+        submittingResources={submittingResources}
         resources={state.resources}
         installs={state.resourceInstalls}
         onInstall={(resourceId) => void installResource(resourceId)}
@@ -856,6 +884,7 @@ function HomeContent() {
       <NewTask
         state={state}
         busy={busy}
+        submittingResources={submittingResources}
         modelsReady={pipelineModelsReady(state.resources)}
         onSelectFile={() => void selectFile()}
         onDropPath={(path) => dispatch({ type: "fileSelected", path })}
@@ -865,12 +894,27 @@ function HomeContent() {
         }}
         onReuse={(snapshot) => dispatch({ type: "reuseAsr", snapshot })}
         onInstallResource={(resourceId) => void installResource(resourceId)}
-        onOpenResources={() => focusResource(blockingResources(state.resources)[0]?.id ?? "uv")}
+        onOpenResources={() => {
+          const missing = blockingResources(state.resources);
+          if (!missing.length) return focusResource("");
+          guideBlocked({ code: "runtime_required", action: "open_resources",
+            message: language === "en" ? "Install the required components before starting." : "开始任务前需要安装所需组件。",
+            resource_ids: missing.map((resource) => resource.id) }, "new-task");
+        }}
         onOpenSettings={focusSettings}
         onStart={() => void startTask()}
       />
     );
   }
+
+  const guideReady = guide?.target === "resources" && guide.resourceIds.length > 0 &&
+    missingRequiredResources(guide.resourceIds, state.resources, submittingResources).length === 0;
+  const guideMessage = language !== "en" || !guide ? guide?.error.message ?? "" :
+    guide.target === "resources" && guide.resourceIds.length
+      ? `Install the required components before continuing: ${guide.resourceIds.map((id) => id === "uv" ? "Python runtime" : id).join(", ")}.`
+      : guide.error.code === "api_key_required"
+        ? "Configure a Gemini API key or choose another model source."
+        : guide.error.message;
 
   return (
     <>
@@ -881,12 +925,34 @@ function HomeContent() {
           state={state}
           agentStatuses={agentStatuses}
           api={desktopApi}
+          batchContent={<BatchQueue
+            visible={state.route === "batch"}
+            request={state.task.request}
+            capabilities={state.capabilities}
+            routing={state.routing}
+            apiKeys={state.settings.api_keys}
+            onOpenSettings={focusSettings}
+            onRequestChange={(changes) => {
+              dispatch({ type: "requestChanged", changes });
+              rememberTaskOptions(changes);
+            }}
+            onOpenResources={(ids) => focusResource(ids?.[0] ?? guide?.resourceIds[0] ?? "")}
+            onBlocked={(error) => guideBlocked(toBridgeError(error), "batch")}
+            onStarted={() => setGuide(null)}
+          />}
           onNavigate={(route: Route) => {
             if (route !== "settings") setSettingsFocus(null);
             dispatch({ type: "navigate", route });
           }}
           updateAvailable={startupUpdate?.available === true}
         >
+          {guide && guide.target === state.route ? <PrerequisiteNotice
+            message={guideMessage}
+            origin={guide.origin}
+            ready={!!guideReady}
+            onBack={() => { setSettingsFocus(null); dispatch({ type: "navigate", route: guide.origin }); }}
+            onDismiss={() => setGuide(null)}
+          /> : null}
           {content}
           <StartTaskConfirmDialog
             open={confirmOpen}

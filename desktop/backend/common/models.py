@@ -101,6 +101,7 @@ class BridgeError(DesktopModel):
     code: str
     message: str
     action: str | None = None
+    resource_ids: list[Literal["uv", "ffmpeg", "git", "yt-dlp", "tokcount", "models"]] | None = None
 
 
 class CapabilityState(DesktopModel):
