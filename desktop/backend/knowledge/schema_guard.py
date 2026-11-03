@@ -26,6 +26,9 @@ def prepare_knowledge_store(root: Path, *, config_files: dict[str, Path] | None 
     from finesub.llm.knowledge.node import schema
 
     root = root.expanduser().resolve()
+    from desktop.backend.knowledge.recovery import pending_path
+    if pending_path(root).exists():
+        raise ValueError("检测到未完成的知识库恢复，请在知识库维护页点击‘修复未完成的恢复’；不会创建空库 / Settle the interrupted restore in Knowledge maintenance; no empty store created")
     database = root / "knowledge.sqlite"
     if not database.is_file():
         if root.exists() and any(root.iterdir()):

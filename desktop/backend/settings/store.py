@@ -31,7 +31,7 @@ from desktop.backend.common.models import (
     SharedSettings,
     TaskRequest,
 )
-from desktop.backend.common.core_compat import check_retired_route_choices, profile_for_request, unified_llm_contract
+from desktop.backend.common.core_compat import check_retired_route_choices, preset_defaults, profile_for_request, unified_llm_contract
 from finesub_bootstrap import secrets
 from desktop.backend.settings.config_file import shared_config_path, update_config_file
 from desktop.backend.settings.local_agents import (
@@ -113,6 +113,8 @@ class SettingsStore:
                 return BridgeError(code="configuration_review_required", message=str(error), action="open_settings")
             try:
                 check_retired_route_choices(request)
+                if request.llm_preset or request.llm_preset_defaults:
+                    preset_defaults(request.llm_preset)
                 # Retry/resume receives already-instantiated archival models.
                 # Revalidate their live routes before resources/workers start;
                 # display-only archive context must never authorize execution.
@@ -140,6 +142,22 @@ class SettingsStore:
                 )
             return None
 
+        if request.llm_preset and request.stage in {"translated-srt", "final-srt"}:
+            try:
+                profile_for_request(request)
+            except ValueError as error:
+                return BridgeError(code="route_unavailable", message=str(error), action="open_settings")
+            # The selected preset is worker-local; shared-route capability
+            # preflight would reject a different route. Core checks it pre-ASR.
+            return None
+        if request.llm_model == ["conversational-agent"]:
+            try:
+                profile = profile_for_request(request)
+                if profile.native_search:
+                    raise ValueError("Agent 协作不支持模型原生检索，请选择本地检索 / Use local retrieval with Agent cooperation")
+            except ValueError as error:
+                return BridgeError(code="route_unavailable", message=str(error), action="open_settings")
+            return None
         stage_error = self.validate_stage(request.stage, request.llm_model)
         if stage_error is not None:
             return stage_error
@@ -291,6 +309,9 @@ class SettingsStore:
                 )
             for target_id in targets:
                 target = routes.targets[target_id]
+                if target.backend == "conversational_agent" and llm_model:
+                    # The user's Agent joins later; it is not an installed CLI.
+                    return True
                 if target.backend in {"local_agent", "conversational_agent"}:
                     if (
                         routes.target_fact(target_id).provider_tier
@@ -572,6 +593,7 @@ class SettingsStore:
                     test_target_id=preset.test_target_id,
                     uses_local_agent=preset_uses_agent(preset.id),
                     warnings=routes.preset_binding_warnings(preset.id),
+                    defaults=preset_defaults(preset.id) if unified_llm_contract() else {},
                 )
                 for preset in routes.presets.values()
             ]
@@ -601,7 +623,9 @@ class SettingsStore:
                     or _PROVIDER_TIER_ENV_NAMES.get(provider.id, "")
                     or target.enabled_by
                 )
-                if target.backend in {"local_agent", "conversational_agent"}:
+                if target.backend == "conversational_agent":
+                    available = True  # It waits for a later hand-off, not CLI detection.
+                elif target.backend == "local_agent":
                     available = fact.provider_tier in agent_tiers
                 else:
                     # Providers without a key environment are deliberately

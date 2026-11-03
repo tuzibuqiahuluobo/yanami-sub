@@ -9,6 +9,8 @@ const TASK_OUTPUT_KEYS = [
   "stableJson",
   "alignedJson",
   "vocalAudio",
+  "speakerTimeline",
+  "speakerJudge",
 ] as const;
 
 
@@ -41,7 +43,8 @@ export function preferredSubtitleOutput(
 export function taskOutputEntries(
   outputs: Record<string, string> | undefined,
 ): [string, string][] {
-  return orderedOutputEntries(TASK_OUTPUT_KEYS, outputs);
+  return [...orderedOutputEntries(TASK_OUTPUT_KEYS, outputs),
+    ...Object.entries(outputs ?? {}).filter(([key, path]) => key.startsWith("speaker:") && Boolean(path)).sort(([a], [b]) => a.localeCompare(b))];
 }
 
 

@@ -32,6 +32,7 @@ import type {
 
 import { useLanguage } from "./LanguageProvider";
 import { TaskSettings } from "./TaskSettings";
+import { AgentCooperation } from "./AgentCooperation";
 import { useToast } from "./ToastProvider";
 
 
@@ -81,6 +82,22 @@ export function BatchQueue({
   const [retryFailed, setRetryFailed] = useState(1);
   const [manifestBusy, setManifestBusy] = useState(false);
   const [manifestNotice, setManifestNotice] = useState("");
+  const [intakeDraft, setIntakeDraft] = useState("");
+
+  const appendRunning = async (chooseFiles = false) => {
+    if (!snapshot || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const sources = chooseFiles ? (await desktopApi.selectBatchFiles()).paths : intakeDraft.split(/\r?\n/).map((value) => value.trim()).filter(Boolean);
+      if (!sources.length) return;
+      setSnapshot(await desktopApi.appendBatch(snapshot.batch_id, sources));
+      setIntakeDraft("");
+      showSuccess(language === "en" ? "Saved; awaiting scheduler admission. Resume if this run finishes first." : "已保存，等待调度器接收；若本轮已结束，可继续批次。");
+    } catch (caught) {
+      setError({ message: caught instanceof Error ? caught.message : String(caught) });
+    } finally { setBusy(false); }
+  };
 
   const appendSources = (incoming: string[]) => {
     const device = requestDeviceFields(readProcessingDevice());
@@ -449,6 +466,16 @@ export function BatchQueue({
         </div>
       ) : snapshot ? (
         <section className="primary-panel batch-progress">
+          {snapshot.state === "running" ? <div className="field field-wide">
+            <span>{language === "en" ? "Add to this running batch" : "追加到当前批次"}</span>
+            <textarea rows={2} value={intakeDraft} disabled={busy} onChange={(event) => setIntakeDraft(event.target.value)}
+              placeholder={language === "en" ? "One file path or URL per line" : "每行一个文件路径或 URL"} />
+            <small className="field-help">{language === "en" ? "New items use this batch’s saved settings, not changes made elsewhere. Work already running is not interrupted." : "追加项目沿用本批次保存的参数，不读取其他页面的新设置；不会中断正在执行的项目。"}</small>
+            <div className="task-actions">
+              <button className="button button-secondary" disabled={busy} onClick={() => void appendRunning(true)}><FilePlus2 size={15} />{t.batch.addFiles}</button>
+              <button className="button button-primary" disabled={busy || !intakeDraft.trim()} onClick={() => void appendRunning()}>{language === "en" ? "Save additional items" : "保存追加项目"}</button>
+            </div>
+          </div> : null}
           <div className="batch-summary">
             <div>
               <span className={`batch-state is-${snapshot.state}`}>{t.batch.states[snapshot.state]}</span>
@@ -475,6 +502,7 @@ export function BatchQueue({
                 <div className="batch-item-main">
                   <strong>{item.label}</strong>
                   <small title={item.skip_reason || item.input}>{item.error || item.skip_reason || (item.stage ? `${t.batch.stage}: ${item.stage}` : item.input)}</small>
+                  {item.state === "done" && snapshot.request.items[item.index]?.diarize && snapshot.request.items[item.index]?.diarize !== "off" && !item.outputs.speakerTimeline ? <small>{language === "en" ? "Speaker labels were not produced; see the shared log. Ordinary subtitles remain available." : "说话人标签未生成，请查看共享日志；普通字幕仍可使用。"}</small> : null}
                   {item.state === "done" ? <><code className="result-path">{Object.values(item.outputs).join("\n")}</code><code className="result-path">{snapshot.log_path}</code><button type="button" className="button button-secondary button-compact" onClick={() => void desktopApi.openBatchLog(snapshot.batch_id)}>{language === "en" ? "Shared batch log" : "共享批次日志"}</button></> : null}
                 </div>
                 <span className={`resource-label is-${item.correction_skipped ? "advisory" : item.state === "done" ? "ready" : item.state === "failed" ? "failed" : "neutral"}`}>
@@ -492,6 +520,7 @@ export function BatchQueue({
               <FilePlus2 size={15} />{t.batch.newBatch}
             </button>
           </div>
+          {snapshot.state === "running" && snapshot.request.items.some((item) => item.llm_model.some((value) => value.includes("conversational"))) ? <AgentCooperation /> : null}
         </section>
       ) : null}
 

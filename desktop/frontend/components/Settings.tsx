@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { desktopApi } from "@/lib/bridge";
+import { AgentCooperation } from "./AgentCooperation";
 
 import {
   isStale,
@@ -936,6 +937,7 @@ export function Settings({
               ) : null}
               <button type="button" className="button button-secondary button-compact" onClick={() => setWorkBuddyRepairOpen(true)}>{codeBuddy ? (language === "en" ? "CodeBuddy sign-in repair" : "CodeBuddy 登录修复") : (language === "en" ? "WorkBuddy sign-in repair" : "WorkBuddy 登录修复")}</button>
               <WorkBuddyRepairDialog open={workBuddyRepairOpen} onClose={() => setWorkBuddyRepairOpen(false)} onProbe={onProbeLocalAgents} codeBuddy={codeBuddy} />
+              {codeBuddy ? <AgentCooperation /> : null}
             </div>
 
             {customProviders.length ? (

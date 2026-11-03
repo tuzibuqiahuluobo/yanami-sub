@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.1.post1",
+    title: { zh: "0.2.1.post1 · 说话人、任务预设与安全恢复", en: "0.2.1.post1 · Speakers, task presets and safe recovery" },
+    notes: {
+      zh: ["可选说话人标签、实验性裁判与分轨 SRT/ASS；未产出则明确跳过，普通字幕不变。", "单任务与批处理共享任务预设及上游默认参数，保留旧任务的自定义选择。", "运行中可追加批次；Agent 协作复用上游任务、注册与租约协议，不自动启动模型。", "知识库小节结构先预览再应用；恢复点先校验与准备副本，启用前保留回退数据，中断时不创建空库。", "新增原生接口，应用内采用完整更新包；保留模型与任务。裁判和真实 Agent 账号未实测。"],
+      en: ["Optional speaker labels, experimental judging and separate SRT/ASS exports. Missing optional outputs are reported as skipped; normal subtitles stay unchanged.", "Tasks and batches share presets and core-owned defaults; existing explicit task choices are preserved.", "Append to a running batch. Agent hand-off reuses core registration and leases without launching a model automatically.", "Preview and apply frozen knowledge structure changes. Verify restore copies, retain rollback data and guard interrupted swaps against empty-store creation.", "New native interfaces require a full in-app update; models and tasks stay. Judge modes and real Agent accounts were not exercised."],
+    },
+  },
+  {
     version: "0.2.1",
     title: { zh: "0.2.1 · FineSub 0.6.0 与迁移安全", en: "0.2.1 · FineSub 0.6.0 and migration safety" },
     notes: {

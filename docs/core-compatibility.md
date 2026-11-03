@@ -1,6 +1,6 @@
 # FineSub core compatibility
 
-Yanami Sub 0.2.1 and 0.2.2 RC1.0 target the exact upstream
+Yanami Sub 0.2.1.post1 and 0.2.2 RC1.1 target the exact upstream
 [FineSub `v0.6.0`](https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197)
 source snapshot in `desktop/resources/core-source.json`.
 The desktop repository owns presentation, Windows integration,
@@ -20,6 +20,8 @@ use that verified snapshot. Read the documented acceptance limits and
 | Local audio/video and URL inputs | Supported | URL jobs request `yt-dlp` only when needed. |
 | Every production pipeline stage | Supported | Vocal, aligned, stable, raw SRT, translated SRT, and final SRT are selectable. |
 | ASR and separation tuning | Supported | Model, language, device/GPU tier, separation/rate, VAD assist, Qwen verification, language re-decode, context, decode batch, gap, stabilization, word timestamps, and split scale are forwarded to core. |
+| Optional speaker labels/judging/exports | Supported, opt-in | Acoustic and experimental text/audio judging, backend and optional speaker cap use core defaults and loaders. Normal SRT stays unchanged; separate SRT/ASS and timeline/judge records are retained. Missing optional output is reported, not marked as success. |
+| Per-task routing presets | Supported | One shared form for single tasks and batches; explicit follow-preset defaults use core resolution. Historical explicit settings remain unchanged. Knowledge feedback inherits the saved selection. |
 | LLM correction/translation tuning | Supported | Unified media, retrieval, difficulty, continuity, parallel windows, output scale, per-task model routes, retry budgets, extra context/style, named styles, and resume are forwarded to core. Removed planning/media and old fast-mode arguments are not sent to 0.6.0. |
 | Knowledge collection/update and refined-SRT feedback | Supported | The task form and Knowledge Center use the core knowledge implementation in an isolated worker. |
 | Multiple files/URLs | Supported | The batch page uses the core scheduler, worker limits, queue back-pressure, priorities, retries, failure isolation, durable progress, cancel, resume, and core-compatible static JSONL manifest import/export. |
@@ -38,17 +40,27 @@ desktop product policy, not a second pipeline implementation.
 
 ## Deliberate CLI-only or partial surfaces
 
-These are not missing subtitle-processing features:
+These boundaries remain intentional:
 
-- `agent-join` and `agent-task` remain CLI-only. Core exposes them as
-  terminal-oriented runtime modules, not a structured service suitable for a
-  long-lived GUI. Desktop can configure Agent routes and verify local CLIs.
+- Agent cooperation exposes owned waiting assignments and explicit join instructions
+  in tasks, batches and settings. Core registration, JSON controls, validators and
+  lease fences remain authoritative. Instructions pin this installation's managed
+  interpreter and a source-pinning helper; Desktop does not inject into, launch,
+  claim for or message the user's Agent. Windows instructions use PowerShell.
+  The upstream conversational protocol is frozen and remains experimental/text-only.
 - `agent-ping` spends quota. Desktop currently performs the safe, non-spending
   readiness probe instead of issuing model calls without a task.
-- Live append to a running JSONL manifest remains CLI-only. Desktop can import
-  and export static core-compatible JSONL manifests, start and resume owned
-  batches, but does not yet attach an editor to the scheduler's live intake
-  channel.
+- Running batches accept additional files/URLs with the batch's saved settings.
+  Native storage persists the request before appending complete UTF-8 control rows;
+  core `control_intake` admits them and commits its durable cursor after publication.
+  A tail arriving after the scheduler's final poll remains explicitly resumable.
+  Desktop never edits the live scheduler queue view. Reprioritization/withdrawal
+  still use CLI controls; the current desktop intake adds new items only.
+- Manual knowledge section split/move previews freeze core-translated operations
+  and apply them as user revisions with revision checks. Migration restore points
+  are checksum-verified and prepared/migrated in an isolated copy, then activated
+  under activity/write barriers with a rollback snapshot and interrupted-swap guard.
+  Config/keys are not restored; old proposal receipts are quarantined, not reused.
 - Arbitrary `--output`, `--knowledge-root`, `--task-artifact-dir`, and
   `--task-id` are managed by the desktop task store so a web renderer cannot
   escape app-owned paths. `--extra-info-file` is represented by the equivalent
@@ -74,13 +86,14 @@ their business logic:
 
 ## Interfaces to request from core next
 
-1. A structured Agent service for join, task listing, next-task, submit,
-   cancel, and ping results. This would let Desktop add full Agent operations
-   without parsing terminal output or binding private modules.
+1. A versioned public Agent service contract for status/bootstrap and optional
+   quota probes. Existing structured task controls already exist and are reused;
+   no terminal-output parser or duplicate runtime is needed.
 2. A structured, versioned knowledge administration service. The current
    worker isolation is safe, but still adapts command-style entry points.
-3. A typed live-batch intake/control API so a running desktop queue can accept,
-   reprioritize, or withdraw rows without editing JSONL files directly.
+3. A versioned intake/control service for additional remote frontends. Current
+   desktop append already uses the typed `IntakePoll`/commit API and owned JSONL
+   control channel; do not add a second scheduler or rewrite queue.jsonl.
 4. A small compatibility descriptor (core API level plus supported fields), so
    a future Desktop build can reject an incompatible core update with a precise
    message before launching a task.

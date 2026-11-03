@@ -77,6 +77,8 @@ export function CompletedView({
         </div>
 
         <div className="output-list">
+          {task.request.speaker_tracks && task.request.speaker_tracks !== "off" && !outputs.some(([key]) => key.startsWith("speaker:")) ? <p className="inline-note" role="status">{language === "en" ? "No speaker export was produced. Review the task log; the normal subtitle result is still available." : "分轨字幕未产出，请检查任务日志；普通字幕结果仍可使用。"}</p> : null}
+          {task.request.diarize?.startsWith("judge-") && ["translated-srt", "final-srt"].includes(task.request.stage) && !task.outputs.speakerJudge ? <p className="inline-note" role="status">{language === "en" ? "No speaker-judge report was produced. Review the optional-stage log." : "本次未生成说话人裁判报告，请查看可选阶段日志。"}</p> : null}
           {outputs.map(([key, path]) => (
             <button
               type="button"
@@ -88,7 +90,7 @@ export function CompletedView({
                 <FileText size={16} />
               </span>
               <span>
-                <strong>{outputLabels[key] ?? key}</strong>
+                <strong>{key.startsWith("speaker:") ? `${language === "en" ? "Speaker export" : "分轨字幕"} · ${fileName(path)}` : key === "speakerTimeline" ? (language === "en" ? "Speaker timeline" : "说话人时间线") : key === "speakerJudge" ? (language === "en" ? "Speaker judge report" : "说话人裁判记录") : outputLabels[key] ?? key}</strong>
                 <small className="result-path">{path}</small>
               </span>
               <ExternalLink size={14} />

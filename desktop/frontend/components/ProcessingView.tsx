@@ -13,8 +13,9 @@ import { useEffect, useRef, useState } from "react";
 
 import { formatDuration, summarizeTaskError } from "@/lib/formatters";
 import type { TaskState } from "@/lib/state";
-import type { PipelineStage } from "@/lib/types";
+import type { PipelineStage, ProcessingStage } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
+import { AgentCooperation } from "./AgentCooperation";
 
 
 const pipelineStages: PipelineStage[] = [
@@ -47,7 +48,7 @@ export function ProcessingView({
   onRetry,
   onBackToNewTask,
 }: ProcessingViewProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [logsOpen, setLogsOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const logDrawerRef = useRef<HTMLDivElement>(null);
@@ -68,22 +69,28 @@ export function ProcessingView({
     ? Math.max(0, (now - task.startedAt) / 1000)
     : 0;
   const targetIndex = pipelineStages.indexOf(task.request.stage);
-  const activeIndex = task.currentStage
-    ? pipelineStages.indexOf(task.currentStage)
-    : 0;
-  const visibleStages = pipelineStages.slice(0, Math.max(0, targetIndex) + 1);
-  const stageLabels: Record<PipelineStage, string> = {
+  const visibleStages: ProcessingStage[] = pipelineStages.slice(0, Math.max(0, targetIndex) + 1);
+  if (task.request.diarize && task.request.diarize !== "off" && visibleStages.includes("stable")) {
+    visibleStages.splice(visibleStages.indexOf("stable") + 1, 0, "diarize");
+  }
+  if (task.request.speaker_tracks && task.request.speaker_tracks !== "off" && visibleStages.includes("raw-srt")) {
+    visibleStages.push("speaker-tracks");
+  }
+  const activeIndex = task.currentStage ? visibleStages.indexOf(task.currentStage) : 0;
+  const stageLabels: Record<ProcessingStage, string> = {
     vocal: t.processing.stages.vocal,
     aligned: t.processing.stages.aligned,
     stable: t.processing.stages.stable,
     "raw-srt": t.processing.stages.rawSrt,
     "translated-srt": t.processing.stages.translatedSrt,
     "final-srt": t.processing.stages.finalSrt,
+    diarize: language === "en" ? "Speaker labels" : "说话人标记",
+    "speaker-tracks": language === "en" ? "Speaker exports" : "分轨导出",
   };
   const headline = task.phase === "failed"
     ? t.processing.failedHeadline
     : task.currentStage
-      ? stageLabels[task.currentStage]
+      ? stageLabels[task.currentStage] ?? task.currentStage
       : t.processing.starting;
   const stageProgress = task.phase === "running" && task.stageProgress?.stage === task.currentStage
     ? task.stageProgress : null;
@@ -248,6 +255,7 @@ export function ProcessingView({
             )}
           </div>
         ) : null}
+        {task.phase === "running" && task.request.llm_model.some((value) => value.includes("conversational")) ? <AgentCooperation /> : null}
       </section>
     </div>
   );

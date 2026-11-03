@@ -17,7 +17,7 @@ from finesub.config import clear_config_cache, read_config_with_path
 from finesub.llm.routing.model_routes import default_model_routes
 
 from desktop.backend.common.models import TaskRequest
-from desktop.backend.common.core_compat import check_retired_route_choices, unified_llm_contract
+from desktop.backend.common.core_compat import check_retired_route_choices, effective_task_request, unified_llm_contract
 from desktop.backend.settings.config_file import update_config_file
 from desktop.backend.settings.local_agents import COMMANDS_ENV
 from desktop.backend.knowledge.backup import config_sources
@@ -343,6 +343,36 @@ def _manual_route(request: TaskRequest) -> SourceRoute:
 
 @contextmanager
 def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
+    if not request.llm_preset or request.stage not in {"translated-srt", "final-srt"}:
+        with _source_route(effective_task_request(request)) as route:
+            yield route
+        return
+    # The process-local config is private to this worker, never the user's file.
+    _, shared_path = read_config_with_path()
+    previous = os.environ.get("FINESUB_CONFIG_FILE")
+    with tempfile.TemporaryDirectory(prefix="yanami-task-preset-") as directory:
+        path = Path(directory) / "config.toml"
+        if shared_path is not None:
+            shutil.copy2(shared_path, path)
+        update_config_file(path, {"llm": {"preset": request.llm_preset}})
+        try:
+            os.environ["FINESUB_CONFIG_FILE"] = str(path)
+            clear_config_cache()
+            default_model_routes.cache_clear()
+            default_model_routes()  # Unknown presets fail before any model call.
+            with _source_route(effective_task_request(request)) as route:
+                yield route
+        finally:
+            if previous is None:
+                os.environ.pop("FINESUB_CONFIG_FILE", None)
+            else:
+                os.environ["FINESUB_CONFIG_FILE"] = previous
+            clear_config_cache()
+            default_model_routes.cache_clear()
+
+
+@contextmanager
+def _source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     """Supply a private route group, never editing the shared config.toml.
 
     RC6.13+: When using agent source and selected targets don't support the

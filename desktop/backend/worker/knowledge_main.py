@@ -300,7 +300,10 @@ def _refined_update(payload: Mapping[str, Any]) -> dict[str, Any]:
 
 def _dispatch(payload: Mapping[str, Any]) -> dict[str, Any]:
     action = str(payload.get("action") or "")
-    if action in {"snapshot", "entry", "maintenance", "share", "refined_update", "apply_proposal"} or (
+    if action == "prepare_restore":
+        from desktop.backend.knowledge.recovery import prepare
+        return prepare(_root(), str(payload.get("backup") or ""))
+    if action in {"snapshot", "entry", "maintenance", "share", "refined_update", "apply_proposal", "structure"} or (
         action == "bilingual" and payload.get("execute")
     ):
         from desktop.backend.knowledge.schema_guard import prepare_knowledge_store
@@ -308,6 +311,9 @@ def _dispatch(payload: Mapping[str, Any]) -> dict[str, Any]:
         prepare_knowledge_store(_root())
     if action == "snapshot":
         return _snapshot()
+    if action == "structure":
+        from desktop.backend.worker.knowledge_structure import structure
+        return structure(_root(), dict(payload))
     if action == "entry":
         rev = payload.get("rev")
         return _entry(

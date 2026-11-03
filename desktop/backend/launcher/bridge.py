@@ -18,6 +18,7 @@ from desktop.backend.common.models import (
     BatchRequest,
     BridgeError,
     KnowledgeCommandRequest,
+    KnowledgeStructureRequest,
     KnowledgeShareCommandRequest,
     RefinedKnowledgeUpdateRequest,
     BilingualKnowledgeRequest,
@@ -480,6 +481,32 @@ class DesktopBridge:
             )
         except Exception:
             return self._internal_error("start_batch")
+
+    def agent_cooperation(self, payload: dict[str, Any]) -> dict[str, Any]:
+        from desktop.backend.jobs.cooperation import invoke
+        if not isinstance(payload, dict) or payload.get("action") not in {"list", "status", "join"}:
+            return _failure(BridgeError(code="invalid_request", message="Invalid cooperation request"))
+        return self._guard(lambda: invoke(self.jobs.worker_context, payload))
+
+    def append_batch(self, batch_id: str, sources: list[str]) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(BridgeError(code="batch_unavailable", message="当前构建不支持批处理。"))
+        try:
+            if not isinstance(sources, list) or not all(isinstance(value, str) for value in sources):
+                raise ValueError("输入必须为路径或 URL 列表 / Expected paths or URLs")
+            saved = self.batches.request_for(batch_id)
+            candidate = BatchRequest.model_validate({**saved.model_dump(), "items": [
+                {**saved.items[-1].model_dump(), "input": value} for value in sources]})
+            missing = self._missing_batch_resources(candidate)
+            if isinstance(missing, BridgeError):
+                return _failure(missing)
+            if missing:
+                return _failure(_missing_resource_error(missing, "追加"))
+            return _success(self.batches.append(batch_id, sources))
+        except (ValueError, BatchNotFound, OSError) as error:
+            return _failure(BridgeError(code="batch_append_failed", message=str(error)))
+        except Exception:
+            return self._internal_error("append_batch")
 
     def cancel_batch(self, batch_id: str) -> dict[str, Any]:
         if self.batches is None:
@@ -1168,6 +1195,31 @@ class DesktopBridge:
 
     def get_routing_settings(self) -> dict[str, Any]:
         return self._guard(self.settings.routing_settings)
+
+    def knowledge_structure(self, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            request = KnowledgeStructureRequest.model_validate(payload)
+        except ValueError as error:
+            return _failure(BridgeError(code="invalid_request", message=str(error)))
+        return self._knowledge_guard(lambda: self.knowledge.structure(request.model_dump()))
+
+    def knowledge_recovery(self, action: str, identifier: str = "", confirmed: bool = False) -> dict[str, Any]:
+        from desktop.backend.knowledge.recovery import activate, list_backups, pending_path, recover_interrupted
+        def execute():
+            if action == "list":
+                return {**list_backups(self.knowledge.root), "pending": pending_path(self.knowledge.root).exists()}
+            if action == "recover" and confirmed is True:
+                return recover_interrupted(self.knowledge.root, self.settings.user_data)
+            if action == "prepare":
+                return self.knowledge.prepare_restore(identifier)
+            if action == "activate" and confirmed is True:
+                from finesub_bootstrap.locks import LockUnavailable
+                try:
+                    return activate(self.knowledge.root, identifier, self.settings.user_data)
+                except LockUnavailable as error:
+                    raise ValueError("仍有任务在运行或知识库被占用，请结束后重试 / Wait for active tasks and knowledge operations to finish") from error
+            raise ValueError("请先准备并确认恢复 / Prepare and confirm a restore first")
+        return self._knowledge_guard(execute)
 
     def preview_config_migration(self) -> dict[str, Any]:
         from desktop.backend.settings.core_migration import preview_config_migration

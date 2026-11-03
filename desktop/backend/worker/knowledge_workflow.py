@@ -11,6 +11,7 @@ import tempfile
 import uuid
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.core_compat import effective_task_request
 from desktop.backend.worker.knowledge_feedback import (
     book_refined_evidence, book_style_evidence, capture_materials, freeze_style_evidence, task_style, validate_style_scope,
 )
@@ -78,7 +79,7 @@ def _route(values: dict):
     from desktop.backend.worker.model_source import source_route
     from desktop.backend.worker.knowledge_main import _routing_override
 
-    request = TaskRequest.model_validate(values).model_copy(update={"stage": "final-srt", "llm_media": "text", "llm_correction_media": "text", "llm_planning_media": "text"})
+    request = effective_task_request(TaskRequest.model_validate(values)).model_copy(update={"stage": "final-srt", "llm_media": "text", "llm_correction_media": "text", "llm_planning_media": "text"})
     with source_route(request) as route:
         if route.skip_reason:
             raise ValueError(f"没有可用模型 / No available model: {route.skip_reason}")

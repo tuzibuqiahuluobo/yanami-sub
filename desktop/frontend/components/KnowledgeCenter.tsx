@@ -32,6 +32,8 @@ import type {
 import { useLanguage } from "./LanguageProvider";
 import { useToast } from "./ToastProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { KnowledgeStructure } from "./KnowledgeStructure";
+import { KnowledgeRecovery } from "./KnowledgeRecovery";
 import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
 
@@ -469,6 +471,8 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
                 </div>
                 <textarea className="knowledge-document" value={draft} spellCheck={false} onChange={(event) => setDraft(event.target.value)} />
                 <p className="field-hint">{t.knowledge.editor.hint}</p>
+                {document.category === "common" ? <KnowledgeStructure key={document.id} document={document} entries={snapshot?.entries ?? []} disabled={busy || draft !== document.text}
+                  onChanged={async () => { await loadSnapshot(); const next = await desktopApi.getKnowledgeEntry(document.qualified_name); setDocument(next); setDraft(next.text); }} /> : null}
               </>
             ) : (
               <div className="knowledge-empty-editor">{t.knowledge.selectEntry}</div>
@@ -536,6 +540,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
 
       {!loading && tab === "maintenance" ? (
         <div className="knowledge-maintenance-grid">
+          <KnowledgeRecovery onChanged={() => loadSnapshot(false)} />
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.maintenance.healthTitle}</h2><p>{t.knowledge.maintenance.healthHint}</p></div></div>
             <div className="knowledge-command-row">

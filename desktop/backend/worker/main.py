@@ -32,7 +32,7 @@ from finesub_bootstrap.locks import (
 )
 
 from desktop.backend.common.models import TaskRequest
-from desktop.backend.common.core_compat import llm_call_options
+from desktop.backend.common.core_compat import effective_task_request, llm_call_options, speech_call_options
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.worker.agent_health_check import (
     check_agent_health,
@@ -284,7 +284,7 @@ def _unclaimed_destination(destination: Path, *, source: Path) -> Path:
     return candidate
 
 
-def _publish_output(
+def _publish_primary_output(
     paths: Any,
     request: TaskRequest,
     *,
@@ -320,10 +320,13 @@ def _publish_output(
     if not imported.is_file():
         return {key: str(generated)}
 
-    destination = _unclaimed_destination(
-        imported.resolve().with_name(f"{imported.stem}{suffix}"),
-        source=imported.resolve(),
-    )
+    destination = _publish_deliverable(generated, imported.resolve().with_name(f"{imported.stem}{suffix}"),
+                                     source=imported.resolve(), task_id=task_id)
+    return {key: str(destination)}
+
+
+def _publish_deliverable(generated: Path, desired: Path, *, source: Path, task_id: str) -> Path:
+    destination = _unclaimed_destination(desired, source=source)
     if destination != generated:
         temporary = destination.with_name(
             f".{destination.name}.{task_id}.part"
@@ -335,12 +338,43 @@ def _publish_output(
         finally:
             temporary.unlink(missing_ok=True)
     try:
-        _record_published_output(destination, imported.resolve())
+        _record_published_output(destination, source)
     except (OSError, LockUnavailable) as error:
         # The deliverable is already safely published. Missing evidence only
         # prevents future replacement; it cannot authorize an overwrite.
         LOGGER.warning("could not record published subtitle digest: %s", error)
-    return {key: str(destination)}
+    return destination
+
+
+def _publish_output(paths: Any, request: TaskRequest, *, task_id: str) -> dict[str, str]:
+    outputs = _publish_primary_output(paths, request, task_id=task_id)
+    if request.diarize == "off":
+        return outputs
+    for key, attribute in (("speakerTimeline", "diar_json"), ("speakerJudge", "speaker_judge_json")):
+        report = getattr(paths, attribute, None)
+        if report and Path(report).is_file() and not Path(report).is_symlink():
+            outputs[key] = str(report)
+    if request.speaker_tracks == "off":
+        return outputs
+    stable = Path(paths.stable_json)
+    directory = stable.with_name(stable.name.removesuffix("-stable.json") + "-speakers")
+    if not directory.is_dir():
+        return outputs  # The optional core stage may warn and skip; never invent a deliverable.
+    if directory.is_symlink():
+        raise ValueError("Speaker output directory must not be a symlink")
+    source = Path(request.input).expanduser()
+    extensions = {".srt", ".ass"} if request.speaker_tracks == "both" else {"." + request.speaker_tracks}
+    for generated in sorted(directory.iterdir()):
+        if generated.suffix.lower() not in extensions or not generated.is_file():
+            continue
+        if generated.is_symlink():
+            raise ValueError("Speaker outputs must not be symlinks")
+        destination = generated
+        if source.is_file():
+            destination = _publish_deliverable(generated, source.resolve().with_name(f"{source.stem}-{generated.name}"),
+                                             source=source.resolve(), task_id=task_id)
+        outputs[f"speaker:{generated.name}"] = str(destination)
+    return outputs
 
 
 def _resolve_output_path(request: TaskRequest) -> str | None:
@@ -439,6 +473,7 @@ def _execute_pipeline(
         asr_context=request.asr_context,
         word=request.word,
         asr_stabilize_profile=request.asr_stabilize_profile,
+        **speech_call_options(request),
         split_length_scale=request.split_length_scale,
         **llm_call_options(request, route=route, knowledge=knowledge),
         llm_fast=request.llm_fast,
@@ -732,6 +767,9 @@ def run_request(
     emit: Emit,
 ) -> dict[str, str]:
     emit(WorkerEvent.started(task_id))
+    if request.llm_preset_defaults:
+        emit(WorkerEvent.log(task_id, f"使用预设默认参数 / Preset defaults: {request.llm_preset or 'settings'}"))
+    request = effective_task_request(request)
 
     # Auto mode must not be blocked by an unrelated Agent probe when the free
     # API is selected. With no source, auto can still produce raw subtitles.
@@ -839,6 +877,13 @@ def run_request(
                 )
             effective_request = request.model_copy(update={"stage": effective_stage})
             outputs = _publish_output(paths, effective_request, task_id=task_id)
+            if request.diarize != "off" and request.stage in {"stable", "raw-srt", "translated-srt", "final-srt"}:
+                if "speakerTimeline" not in outputs:
+                    emit(WorkerEvent.progress(task_id, stage="diarize", skipped=True,
+                        message="未生成说话人时间线，普通字幕仍可使用 / Speaker timeline missing; ordinary subtitles remain available"))
+                if request.speaker_tracks != "off" and not any(key.startswith("speaker:") for key in outputs):
+                    emit(WorkerEvent.progress(task_id, stage="speaker-tracks", skipped=True,
+                        message="未生成分轨文件，请查看模型或依赖日志 / Speaker exports missing; check model/dependency logs"))
             if skip_reason:
                 emit(WorkerEvent.log(task_id, skip_reason))
                 emit(WorkerEvent.progress(task_id, stage="translated-srt", message=skip_reason, skipped=True))

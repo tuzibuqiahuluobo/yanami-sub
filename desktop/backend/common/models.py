@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import (
     BaseModel,
@@ -120,6 +120,7 @@ class RoutingPresetSummary(DesktopModel):
     test_target_id: str = ""
     uses_local_agent: bool = False
     warnings: list[str] = Field(default_factory=list)
+    defaults: dict[str, Any] = Field(default_factory=dict)
 
 
 class RoutingProviderSummary(DesktopModel):
@@ -226,6 +227,12 @@ class TaskDefaults(BaseModel):
     llm_difficulty: LLMDifficulty | None = None
     llm_continuity: Literal["serial", "parallel"] | None = None
     llm_parallel_windows: int | None = Field(default=None, ge=1)
+    llm_preset: str | None = Field(default=None, max_length=200)
+    llm_preset_defaults: bool | None = None
+    diarize: Literal["off", "acoustics", "judge-text", "judge-audio"] | None = None
+    diarize_backend: Literal["nemotron3", "diarizen", "sortformer"] | None = None
+    diarize_max_speakers: int | None = Field(default=None, ge=1)
+    speaker_tracks: Literal["off", "srt", "ass", "both"] | None = None
     llm_fast: Literal["auto", "on", "off"] | None = None
     llm_output_scale: float | None = Field(default=None, gt=0)
     llm_model: list[str] | None = None
@@ -369,6 +376,10 @@ class TaskRequest(DesktopModel):
     asr_context: Literal["off", "terms", "full"] = "off"
     word: bool = False
     asr_stabilize_profile: Literal[-1, 0, 1, 2] = 0
+    diarize: Literal["off", "acoustics", "judge-text", "judge-audio"] = "off"
+    diarize_backend: Literal["nemotron3", "diarizen", "sortformer"] | None = None
+    diarize_max_speakers: int | None = Field(default=None, ge=1)
+    speaker_tracks: Literal["off", "srt", "ass", "both"] = "off"
     # None = follow config.toml, then the calibrated default. Set per task only
     # to override the shared setting for this one run.
     split_length_scale: float | None = Field(default=None, ge=0.6, le=1.6)
@@ -387,6 +398,8 @@ class TaskRequest(DesktopModel):
     llm_difficulty: LLMDifficulty = "quality"
     llm_continuity: Literal["serial", "parallel"] = "serial"
     llm_parallel_windows: int = Field(default=1, ge=1)
+    llm_preset: str = Field(default="", max_length=200)
+    llm_preset_defaults: bool = False
     llm_fast: Literal["auto", "on", "off"] = "auto"
     llm_output_scale: float = Field(default=1.0, gt=0)
     # Repeatable core ``--llm-model`` values. A bare id overrides every task
@@ -415,6 +428,12 @@ class TaskRequest(DesktopModel):
         if not normalized:
             raise ValueError("input must not be blank")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_speaker_exports(self):
+        if self.speaker_tracks != "off" and self.diarize == "off":
+            raise ValueError("分轨导出需要开启说话人分离 / Speaker exports require diarization")
+        return self
 
     @field_validator("name")
     @classmethod
@@ -516,6 +535,18 @@ class KnowledgeCommandRequest(DesktopModel):
         return normalized
 
 
+class KnowledgeStructureRequest(DesktopModel):
+    apply: bool = False
+    draft_id: str = Field(default="", max_length=32)
+    operation: Literal["split", "move"] = "split"
+    entry: str = Field(default="", max_length=400)
+    section: str = Field(default="", max_length=200)
+    intro: str = Field(default="", max_length=2000)
+    to_entry: str = Field(default="", max_length=400)
+    target_section: str = Field(default="", max_length=200)
+    expected_rev: int | None = Field(default=None, ge=0)
+
+
 class KnowledgeShareCommandRequest(DesktopModel):
     command: Literal[
         "register",
@@ -605,6 +636,7 @@ class BatchRequest(DesktopModel):
         model_routes: set[tuple[str, ...]] = set()
         model_sources: set[str] = set()
         agent_tiers: set[str] = set()
+        presets: set[tuple[str, bool]] = set()
         for item in self.items:
             source = item.input.casefold()
             if source in seen:
@@ -614,6 +646,7 @@ class BatchRequest(DesktopModel):
             model_routes.add(tuple(item.llm_model))
             model_sources.add(item.llm_source)
             agent_tiers.add(item.llm_agent)
+            presets.add((item.llm_preset, item.llm_preset_defaults))
         if len(devices) > 1:
             raise ValueError("all items in one batch must use the same processing device")
         if len(model_routes) > 1:
@@ -622,6 +655,8 @@ class BatchRequest(DesktopModel):
             raise ValueError("all items in one batch must use the same model source")
         if len(agent_tiers) > 1:
             raise ValueError("all items in one batch must use the same selected Agent")
+        if len(presets) > 1:
+            raise ValueError("同一批次必须使用相同任务预设 / Batch items must use the same preset")
         return self
 
 

@@ -15,6 +15,8 @@ export type PipelineStage =
   | "translated-srt"
   | "final-srt";
 
+export type ProcessingStage = PipelineStage | "diarize" | "speaker-tracks";
+
 export interface BridgeError {
   code: string;
   message: string;
@@ -56,6 +58,7 @@ export interface RoutingPresetSummary {
   test_target_id: string;
   uses_local_agent: boolean;
   warnings: string[];
+  defaults?: Partial<TaskRequest>;
 }
 
 export interface RoutingProviderSummary {
@@ -233,6 +236,10 @@ export interface TaskRequest {
   asr_context: "off" | "terms" | "full";
   word: boolean;
   asr_stabilize_profile: -1 | 0 | 1 | 2;
+  diarize?: "off" | "acoustics" | "judge-text" | "judge-audio";
+  diarize_backend?: "nemotron3" | "diarizen" | "sortformer" | null;
+  diarize_max_speakers?: number | null;
+  speaker_tracks?: "off" | "srt" | "ass" | "both";
   /** One-run override of the shared subtitle-length knob; null follows it. */
   split_length_scale?: number | null;
   llm_media: "text" | "audio" | "video";
@@ -244,6 +251,8 @@ export interface TaskRequest {
   llm_difficulty: "quality" | "intermediate" | "efficiency";
   llm_continuity: "serial" | "parallel";
   llm_parallel_windows: number;
+  llm_preset?: string;
+  llm_preset_defaults?: boolean;
   llm_fast: "auto" | "on" | "off";
   llm_output_scale: number;
   /** Repeatable core --llm-model values, optionally task-group qualified. */
@@ -658,6 +667,39 @@ export interface ConfigMigrationResult {
   restart_required?: boolean;
 }
 
+export interface AgentCooperationResult {
+  assignments?: { id: string; path: string; state: Record<string, unknown> }[];
+  assignment?: string;
+  worker?: string;
+  bootstrap?: string;
+  status?: string;
+}
+
+export interface KnowledgeStructurePreview {
+  draft_id?: string;
+  expected_rev?: number;
+  operations?: Record<string, unknown>[];
+  revision?: number;
+  applied?: number;
+  rejected?: string[];
+  warnings?: string[];
+}
+
+export interface KnowledgeRecoveryResult {
+  pending?: boolean;
+  recovered?: boolean;
+  backups?: { id: string; created_at: string; schema_version: number; files: number }[];
+  token?: string;
+  backup?: string;
+  revision?: number;
+  entries?: number;
+  path?: string;
+  activated?: boolean;
+  rollback_backup?: string;
+  previous?: string;
+  note?: string;
+}
+
 export interface DesktopApi {
   selectSubtitleFile(): Promise<{ path: string | null }>;
   runBilingualKnowledgeUpdate(request: BilingualKnowledgeRequest): Promise<RefinedKnowledgeUpdateReport>;
@@ -686,6 +728,10 @@ export interface DesktopApi {
   listTasks(): Promise<JobSnapshot[]>;
   pollEvents(cursor: number): Promise<PollResult>;
   startBatch(request: BatchRequest): Promise<BatchSnapshot>;
+  appendBatch(batchId: string, sources: string[]): Promise<BatchSnapshot>;
+  agentCooperation(payload: { action: "list" | "status" | "join"; assignment?: string; worker?: string }): Promise<AgentCooperationResult>;
+  knowledgeStructure(payload: Record<string, unknown>): Promise<KnowledgeStructurePreview>;
+  knowledgeRecovery(action: "list" | "prepare" | "activate" | "recover", identifier?: string, confirmed?: boolean): Promise<KnowledgeRecoveryResult>;
   cancelBatch(batchId: string): Promise<BatchSnapshot>;
   resumeBatch(batchId: string): Promise<BatchSnapshot>;
   getBatchSnapshot(): Promise<BatchSnapshot | null>;

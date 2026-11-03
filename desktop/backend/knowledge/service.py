@@ -45,6 +45,12 @@ class KnowledgeService:
     def snapshot(self) -> dict[str, Any]:
         return self._invoke({"action": "snapshot"})
 
+    def structure(self, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._invoke({**payload, "action": "structure"})
+
+    def prepare_restore(self, identifier: str) -> dict[str, Any]:
+        return self._invoke({"action": "prepare_restore", "backup": identifier})
+
     def entry(self, name: str, rev: int | None = None) -> dict[str, Any]:
         return self._invoke({"action": "entry", "name": name, "rev": rev})
 

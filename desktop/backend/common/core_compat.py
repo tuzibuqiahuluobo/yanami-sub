@@ -10,6 +10,33 @@ from __future__ import annotations
 from typing import Any
 
 
+def preset_defaults(preset_id: str = "") -> dict[str, Any]:
+    from dataclasses import replace
+    from finesub.llm.correction_request import resolve_switches
+    from finesub.llm.routing.model_routes import default_model_routes
+
+    routes = default_model_routes()
+    if preset_id:
+        if preset_id not in routes.presets:
+            raise ValueError(f"未知任务预设 / Unknown task preset: {preset_id}")
+        routes = replace(routes, active_preset_id=preset_id)
+    switches = resolve_switches({}, routes=routes)
+    return {
+        "llm_media": switches.media, "llm_retrieval": switches.retrieval,
+        "llm_difficulty": switches.difficulty, "llm_continuity": switches.continuity,
+        "llm_parallel_windows": switches.parallel_windows, "knowledge": switches.knowledge,
+    }
+
+
+def effective_task_request(request: Any):
+    if not getattr(request, "llm_preset_defaults", False):
+        return request
+    if not unified_llm_contract():
+        raise ValueError("任务预设继承需要 FineSub 0.6.0 / Task presets require FineSub 0.6.0")
+    return request.model_copy(update={**preset_defaults(request.llm_preset),
+        "llm_correction_media": "", "llm_planning_media": "", "llm_preset_defaults": False})
+
+
 def unified_llm_contract() -> bool:
     # Inspect the contract, not installed package metadata: source checkouts
     # can override an older installed distribution on PYTHONPATH.
@@ -19,6 +46,7 @@ def unified_llm_contract() -> bool:
 
 
 def llm_call_options(request: Any, *, route: Any = None, knowledge: str | None = None) -> dict[str, Any]:
+    request = effective_task_request(request)
     correction = route.correction_media if route is not None else request.llm_correction_media
     mode = request.knowledge if knowledge is None else knowledge
     options = {
@@ -38,6 +66,15 @@ def llm_call_options(request: Any, *, route: Any = None, knowledge: str | None =
         options["llm_planning_media"] = route.planning_media if route is not None else request.llm_planning_media
         options["knowledge"] = "collect" if mode == "read" else mode
     return options
+
+
+def speech_call_options(request: Any) -> dict[str, Any]:
+    keys = ("diarize", "diarize_backend", "diarize_max_speakers", "speaker_tracks")
+    if unified_llm_contract():
+        return {key: getattr(request, key) for key in keys}
+    if request.diarize != "off" or request.speaker_tracks != "off":
+        raise ValueError("说话人功能需要 FineSub 0.6.0 / Diarization requires FineSub 0.6.0")
+    return {}
 
 
 def profile_for_request(request: Any):

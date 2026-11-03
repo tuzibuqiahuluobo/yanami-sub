@@ -4,7 +4,7 @@ import type {
   BridgeError,
   CapabilityState,
   JobSnapshot,
-  PipelineStage,
+  ProcessingStage,
   PublicSettings,
   ResourceInstallSnapshot,
   ResourceStatus,
@@ -32,13 +32,13 @@ export interface TaskState {
   selectedFile: string | null;
   request: Omit<TaskRequest, "input">;
   taskId: string | null;
-  currentStage: PipelineStage | null;
+  currentStage: ProcessingStage | null;
   /** Verified within-stage count only; never an overall task percentage. */
-  stageProgress?: { stage: PipelineStage; completed: number; total: number } | null;
+  stageProgress?: { stage: ProcessingStage; completed: number; total: number } | null;
   sourceRoute?: { source: string; targets: string[] } | null;
   /** Stages that were satisfied by an existing artifact instead of running. */
-  reusedStages: PipelineStage[];
-  skippedStages?: PipelineStage[];
+  reusedStages: ProcessingStage[];
+  skippedStages?: ProcessingStage[];
   statusMessage: string;
   logs: string[];
   outputs: Record<string, string>;
@@ -125,6 +125,12 @@ export const REMEMBERED_TASK_FIELDS = [
   "llm_difficulty",
   "llm_continuity",
   "llm_parallel_windows",
+  "llm_preset",
+  "llm_preset_defaults",
+  "diarize",
+  "diarize_backend",
+  "diarize_max_speakers",
+  "speaker_tracks",
   "llm_fast",
   "llm_output_scale",
   "llm_model",
@@ -241,15 +247,15 @@ function restoreRunningTask(
     return fallback;
   }
   const { input, ...request } = snapshot.request;
-  let currentStage: PipelineStage | null = null;
+  let currentStage: ProcessingStage | null = null;
   let stageProgress: TaskState["stageProgress"] = null;
   let sourceRoute: TaskState["sourceRoute"] = null;
   let statusMessage = "";
   // Stages the pipeline entered without doing work, because their output was
   // already on disk. Worth keeping apart: on a rerun most of the list is this,
   // and showing it as freshly finished work is a lie about what just happened.
-  const reusedStages: PipelineStage[] = [];
-  const skippedStages: PipelineStage[] = [];
+  const reusedStages: ProcessingStage[] = [];
+  const skippedStages: ProcessingStage[] = [];
   for (const event of snapshot.events ?? []) {
     if (event.type === "route" && typeof event.payload.source === "string" &&
         Array.isArray(event.payload.targets)) {
@@ -263,7 +269,7 @@ function restoreRunningTask(
         typeof event.payload.completed === "number" && typeof event.payload.total === "number" &&
         event.payload.total > 0) {
       stageProgress = {
-        stage: event.payload.stage as PipelineStage,
+        stage: event.payload.stage as ProcessingStage,
         completed: event.payload.completed,
         total: event.payload.total,
       };
@@ -273,7 +279,7 @@ function restoreRunningTask(
       continue;
     }
     if (typeof event.payload.stage === "string") {
-      currentStage = event.payload.stage as PipelineStage;
+      currentStage = event.payload.stage as ProcessingStage;
       stageProgress = null;
       if (event.payload.reused === true && !reusedStages.includes(currentStage)) {
         reusedStages.push(currentStage);
@@ -679,7 +685,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
   if (event.type === "stage") {
     const stage =
       typeof payload.stage === "string"
-        ? (payload.stage as PipelineStage)
+        ? (payload.stage as ProcessingStage)
         : state.task.currentStage;
     const reused =
       payload.reused === true && stage && !state.task.reusedStages.includes(stage)
@@ -713,7 +719,7 @@ function applyWorkerEvent(state: AppState, event: WorkerEvent): AppState {
       ...state,
       task: {
         ...state.task,
-        stageProgress: { stage: stage as PipelineStage, completed, total },
+        stageProgress: { stage: stage as ProcessingStage, completed, total },
       },
     };
   }

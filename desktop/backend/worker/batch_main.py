@@ -20,7 +20,7 @@ from desktop.backend.common.models import (
     BatchRequest,
 )
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
-from desktop.backend.common.core_compat import llm_call_options, unified_llm_contract
+from desktop.backend.common.core_compat import effective_task_request, llm_call_options, speech_call_options, unified_llm_contract
 from desktop.backend.worker.main import (
     cleanup_task_intermediates,
     _agent_error_message,
@@ -50,6 +50,9 @@ def _item_options(
     item: BatchItemRequest, workers: dict[str, int], *, task_id: str
 ) -> dict[str, Any]:
     options = item.model_dump(mode="python")
+    for key in ("diarize", "diarize_backend", "diarize_max_speakers", "speaker_tracks"):
+        options.pop(key, None)
+    options.update(speech_call_options(item))
     options.update(llm_call_options(item))
     if unified_llm_contract():
         options.pop("llm_correction_media", None)
@@ -59,6 +62,8 @@ def _item_options(
     options.pop("llm_model", None)
     options.pop("llm_source", None)
     options.pop("llm_agent", None)
+    options.pop("llm_preset", None)
+    options.pop("llm_preset_defaults", None)
     options["task_id"] = task_id
     options["_batch_workers"] = workers
     return options
@@ -119,6 +124,7 @@ def run_batch_request(
         default_pipeline_paths = core_pipeline_paths
 
     batch_root.mkdir(parents=True, exist_ok=True)
+    request = request.model_copy(update={"items": [effective_task_request(item) for item in request.items]})
     workers = request.workers.model_dump(mode="python")
     items = []
     route_item = next(
@@ -144,7 +150,7 @@ def run_batch_request(
             emit(BatchWorkerEvent.log(
                 batch_id, f"模型来源：{route.source}；尝试顺序：{', '.join(route.targets)}"
             ))
-        for index, row in enumerate(request.items):
+        def build_row(index, row):
             try:
                 effective_row = row
                 if row.stage in {"translated-srt", "final-srt"}:
@@ -214,9 +220,31 @@ def run_batch_request(
                                 )
 
                     item.stages = {**item.stages, "llm": guarded_llm}
-                items.append(item)
+                return item
             except BaseException as error:  # one malformed/disappeared item may fail alone
-                items.append(_failed_item(row.input, error))
+                return _failed_item(row.input, error)
+
+        items.extend(build_row(index, row) for index, row in enumerate(request.items))
+
+        def admit(control):
+            index = int(control["desktop_index"])
+            if index < len(request.items):
+                raise ValueError("项目已在恢复清单中 / Item already in resumed request")
+            if index != len(request.items):
+                raise ValueError("追加项目顺序不连续，请继续批次 / Intake index gap; resume batch")
+            row = effective_task_request(BatchItemRequest.model_validate(control["request"]))
+            if row.input != control["source"]:
+                raise ValueError("Intake source mismatch")
+            BatchRequest.model_validate({**request.model_dump(), "items": [
+                *[item.model_dump() for item in request.items], row.model_dump()]})
+            request.items.append(row)
+            item = build_row(index, row)
+            items.append(item)
+            return item
+
+        from finesub.batch_state import control_intake
+        intake = control_intake(batch_root / "control.jsonl", admit=admit,
+                                cursor_path=batch_root / "control-cursor.txt")
 
         published_path = batch_root / "published.json"
         published = _read_published(published_path)
@@ -311,6 +339,7 @@ def run_batch_request(
             retry_failed=request.retry_failed,
             status_path=batch_root / "batch-status.jsonl",
             publish=publish,
+            intake=intake,
         )
     final = snapshots(results)
     emit(

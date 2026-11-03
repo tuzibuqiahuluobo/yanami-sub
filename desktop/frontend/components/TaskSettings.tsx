@@ -14,6 +14,7 @@ import type {
 } from "@/lib/types";
 
 import { CustomSelect } from "./CustomSelect";
+import { SpeakerSettings } from "./SpeakerSettings";
 import { useLanguage } from "./LanguageProvider";
 
 
@@ -59,16 +60,23 @@ function optionalBoolean(value: string): boolean | null {
 
 
 export function TaskSettings({
-  request,
+  request: storedRequest,
   capabilities,
   routing,
   apiKeys,
   disabled,
   batchMode = false,
-  onChange,
+  onChange: commitChanges,
   onOpenSettings,
 }: TaskSettingsProps) {
   const { t, language } = useLanguage();
+  const inherited = Boolean(storedRequest.llm_preset_defaults);
+  const preset = routing?.presets.find((item) => item.id === (storedRequest.llm_preset || routing.active_preset_id));
+  const request = inherited ? { ...storedRequest, ...preset?.defaults, llm_correction_media: "" as const, llm_planning_media: "" as const } : storedRequest;
+  const onChange: TaskSettingsProps["onChange"] = (changes) => {
+    const custom = inherited && ["llm_media", "llm_correction_media", "llm_planning_media", "llm_retrieval", "llm_difficulty", "llm_continuity", "llm_parallel_windows", "knowledge"].some((key) => key in changes);
+    commitChanges(custom ? { ...request, ...changes, llm_preset_defaults: false } : changes);
+  };
   const [tab, setTab] = useState<SettingsTab>("speech");
   const [advanced, setAdvanced] = useState(false);
   const [nameError, setNameError] = useState("");
@@ -99,7 +107,7 @@ export function TaskSettings({
       .filter((target) => agentBackends.has(target.backend))
       .map((target) => ({
         value: target.id,
-        label: `${t.newTask.settings.llmRouteAgent} · ${target.display_name || target.id} · ${target.available ? t.newTask.settings.llmRouteReady : t.newTask.settings.llmRouteAgentUnavailable}`,
+        label: `${t.newTask.settings.llmRouteAgent} · ${target.display_name || target.id} · ${target.backend === "conversational_agent" ? (language === "en" ? "Join manually" : "需要手动接入") : target.available ? t.newTask.settings.llmRouteReady : t.newTask.settings.llmRouteAgentUnavailable}`,
       })),
     ...(routing?.targets ?? [])
       .filter((target) => !agentBackends.has(target.backend))
@@ -218,6 +226,7 @@ export function TaskSettings({
 
       {tab === "speech" ? (
         <div className="field-grid" role="tabpanel">
+          <SpeakerSettings request={request} disabled={disabled} onChange={onChange} />
           <div className="field">
             <span>{t.newTask.settings.language}</span>
             <CustomSelect
@@ -279,6 +288,18 @@ export function TaskSettings({
           {/* Values are kept, not cleared, while the stage leaves them unused:
               switching back to final-srt must find them where they were. */}
           <div className="field-grid">
+            {unifiedMedia ? <div className="field field-wide">
+              <span>{language === "en" ? "Preset for this task" : "本次任务预设"}</span>
+              <CustomSelect value={request.llm_preset ?? ""} disabled={disabled || !translationSelected}
+                ariaLabel={language === "en" ? "Task preset" : "任务预设"}
+                onChange={(value) => commitChanges({ llm_preset: value, llm_preset_defaults: true })}
+                options={[{ value: "", label: language === "en" ? "Use settings preset" : "跟随设置中的预设" },
+                  ...(routing?.presets ?? []).map((item) => ({ value: item.id, label: `${item.name || item.id} (${item.id})` }))]} />
+              <label className="checkbox-row"><input type="checkbox" checked={inherited} disabled={disabled || !translationSelected}
+                onChange={(event) => commitChanges(event.target.checked ? { llm_preset_defaults: true } : { ...request, llm_preset_defaults: false })} />
+                {language === "en" ? "Use the preset’s default parameters" : "使用预设默认参数"}</label>
+              <small className="field-help">{language === "en" ? "Applies only to this run. Editing media, quality, retrieval, concurrency or knowledge makes the displayed parameters custom; saved settings are unchanged." : "仅影响本次任务；修改媒体、质量、检索、并发或知识库参数后，切换为自定义参数，不改动全局设置。"}</small>
+            </div> : null}
             {source === "agent" ? <div className="field field-wide task-route-field">
               <span>{t.newTask.settings.agentChoice}</span>
               <CustomSelect

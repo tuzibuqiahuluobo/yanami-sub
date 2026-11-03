@@ -108,6 +108,7 @@ const previewBootstrap: BootstrapState = {
     },
   },
   routing: {
+    unified_llm_media: true,
     active_preset_id: "default",
     execution_policy: "agent-text-preferred",
     local_agent_timeout_seconds: 1680,
@@ -119,6 +120,7 @@ const previewBootstrap: BootstrapState = {
       { id: "default", name: "默认", active: true, test_target_id: "gemini-free-3_5-flash-lite", uses_local_agent: false, warnings: [] },
       { id: "agy-hybrid", name: "agy 混合", active: false, test_target_id: "gemini-free-3_5-flash-lite", uses_local_agent: true, warnings: [] },
       { id: "agy", name: "agy 独占", active: false, test_target_id: "local-agy-media-gemini-3_7-flash", uses_local_agent: true, warnings: [] },
+      { id: "fast", name: "快速粗纠（界面预览）", active: false, test_target_id: "gemini-free-3_5-flash-lite", uses_local_agent: false, warnings: [], defaults: { llm_media: "text", llm_retrieval: "none", llm_difficulty: "efficiency", llm_continuity: "parallel", llm_parallel_windows: 4, knowledge: "read" } },
     ],
     policies: ["agent-text-preferred", "api-only", "agent-only"],
     providers: [
@@ -413,6 +415,19 @@ function previewApi(): DesktopApi {
       };
       return structuredClone(batch);
     },
+    async appendBatch(batchId, sources) {
+      if (!batch || batch.batch_id !== batchId || batch.state !== "running") throw new BridgeCallError("batch_not_running", "Batch is no longer running");
+      const template = batch.request.items.at(-1)!;
+      for (const input of sources) {
+        const index = batch.request.items.length;
+        batch.request.items.push({ ...template, input, output: null });
+        batch.items.push({ index, input, label: input, state: "queued", stage: "", error: "", outputs: {} });
+      }
+      return structuredClone(batch);
+    },
+    async agentCooperation() { return { assignments: [] }; },
+    async knowledgeStructure() { return { applied: 0, rejected: ["Native runtime required"] }; },
+    async knowledgeRecovery() { return { backups: [] }; },
     async cancelBatch() {
       if (!batch) throw new BridgeCallError("batch_not_found", "没有找到该批次。");
       batch = { ...batch, state: "cancelled", updated_at: Date.now() / 1000 };
@@ -1001,6 +1016,10 @@ function nativeApi(): DesktopApi {
     listTasks: () => call<JobSnapshot[]>("list_tasks"),
     pollEvents: (cursor) => call("poll_events", cursor),
     startBatch: (request) => call<BatchSnapshot>("start_batch", request),
+    appendBatch: (batchId, sources) => call<BatchSnapshot>("append_batch", batchId, sources),
+    agentCooperation: (payload) => call("agent_cooperation", payload),
+    knowledgeStructure: (payload) => call("knowledge_structure", payload),
+    knowledgeRecovery: (action, identifier = "", confirmed = false) => call("knowledge_recovery", action, identifier, confirmed),
     cancelBatch: (batchId) => call<BatchSnapshot>("cancel_batch", batchId),
     resumeBatch: (batchId) => call<BatchSnapshot>("resume_batch", batchId),
     getBatchSnapshot: () => call<BatchSnapshot | null>("get_batch_snapshot"),

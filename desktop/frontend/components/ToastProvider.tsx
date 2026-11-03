@@ -12,7 +12,7 @@ import {
 
 import { formatBytes, formatPercent } from "@/lib/formatters";
 import type { TaskState } from "@/lib/state";
-import type { PipelineStage, Route, UpdateInstallSnapshot } from "@/lib/types";
+import type { ProcessingStage, Route, UpdateInstallSnapshot } from "@/lib/types";
 
 import { useLanguage } from "./LanguageProvider";
 
@@ -99,16 +99,18 @@ function SuccessToast({
 
 
 function TaskProgressItem({ task }: { task: TaskState }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const progress = task.stageProgress?.stage === task.currentStage ? task.stageProgress : null;
   const percent = progress ? Math.min(100, Math.max(0, progress.completed / progress.total * 100)) : 0;
-  const stageLabels: Record<PipelineStage, string> = {
+  const stageLabels: Record<ProcessingStage, string> = {
     vocal: t.processing.stages.vocal,
     aligned: t.processing.stages.aligned,
     stable: t.processing.stages.stable,
     "raw-srt": t.processing.stages.rawSrt,
     "translated-srt": t.processing.stages.translatedSrt,
     "final-srt": t.processing.stages.finalSrt,
+    diarize: language === "en" ? "Speaker labels" : "说话人标记",
+    "speaker-tracks": language === "en" ? "Speaker exports" : "分轨导出",
   };
 
   return (

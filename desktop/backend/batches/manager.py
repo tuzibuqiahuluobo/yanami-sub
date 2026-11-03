@@ -56,6 +56,8 @@ _DESKTOP_ROW_FIELDS = {
     "llm_model",
     "llm_source",
     "llm_agent",
+    "llm_preset",
+    "llm_preset_defaults",
     "name",
 }
 _BATCH_OPTION_FIELDS = {"workers", "asr_queue_size", "retry_failed"}
@@ -198,6 +200,44 @@ class BatchManager:
             self._persist_history()
         self.terminate_process_tree(process)
         return snapshot.model_copy(deep=True)
+
+    def append(self, batch_id: str, sources: list[str]) -> BatchSnapshot:
+        """Persist first; scheduler admission is a separate, observable event."""
+        with self._lock:
+            snapshot = self._find(batch_id)
+            if snapshot is not self._snapshot or not self.is_running():
+                raise ValueError("批次已结束，请新建或继续批次 / Batch is no longer running")
+            if not sources or len(sources) > 500:
+                raise ValueError("请选择 1–500 个输入 / Select 1–500 inputs")
+            original = snapshot.request
+            template = original.items[-1]
+            added = [template.model_copy(update={"input": source.strip(), "output": None,
+                "name": "", "group": "", "priority": 0}) for source in sources]
+            combined = BatchRequest.model_validate({**original.model_dump(),
+                "items": [row.model_dump() for row in [*original.items, *added]]})
+            combined = self._resolve_outputs(batch_id, combined)
+            start = len(original.items)
+            snapshot.request = combined
+            snapshot.items.extend(self._initial_items(combined)[start:])
+            snapshot.updated_at = time.time()
+            try:
+                self._persist_history(strict=True)
+            except OSError:
+                snapshot.request = original
+                snapshot.items = snapshot.items[:start]
+                raise
+            # This is the user-owned channel, never the scheduler's queue view.
+            path = self._batch_dir(batch_id) / "control.jsonl"
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8", newline="\n") as handle:
+                for index in range(start, len(combined.items)):
+                    handle.write(json.dumps({"source": combined.items[index].input,
+                        "desktop_index": index, "request": combined.items[index].model_dump(mode="json")}, ensure_ascii=False) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            self._append_log(snapshot, BatchWorkerEvent.log(batch_id,
+                f"已保存 {len(added)} 个追加项目，等待调度；若批次已结束，可继续批次 / Saved {len(added)} added items; awaiting admission."))
+            return snapshot.model_copy(deep=True)
 
     def shutdown(self) -> None:
         with self._lock:
@@ -505,6 +545,12 @@ class BatchManager:
             self._append_log(snapshot, event)
         elif event.type == "log":
             self._append_log(snapshot, event)
+        if event.type in {"snapshot", "completed"} and len(snapshot.items) < len(snapshot.request.items):
+            snapshot.items.extend(self._initial_items(snapshot.request)[len(snapshot.items):])
+            if event.type == "completed":
+                snapshot.state = "interrupted"
+                snapshot.error = "追加项目已保存，但本轮已结束；点击继续批次 / Added items are saved; resume this batch to process them."
+                self._append_log(snapshot, BatchWorkerEvent.log(snapshot.batch_id, snapshot.error))
         for item in snapshot.items:
             if item.state == "done" and item.index not in previously_done and item.outputs:
                 self._append_log(snapshot, BatchWorkerEvent(
@@ -555,7 +601,7 @@ class BatchManager:
                 self._snapshot.updated_at = time.time()
                 self._persist_history()
 
-    def _persist_history(self) -> None:
+    def _persist_history(self, *, strict: bool = False) -> None:
         temporary = self.history_path.with_name(
             f".{self.history_path.name}.{os.getpid()}.{threading.get_ident()}.tmp"
         )
@@ -580,3 +626,5 @@ class BatchManager:
                 temporary.unlink(missing_ok=True)
             except OSError:
                 pass
+            if strict:
+                raise
