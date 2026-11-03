@@ -17,11 +17,27 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.2-rc.1.post2",
+    title: { zh: "0.2.2 RC1.2 · 资源引导与界面反馈", en: "0.2.2 RC1.2 · Resource guidance and UI feedback" },
+    notes: {
+      zh: ["包含 0.2.1.post2 的下载状态、缺失配置定位、资源高亮和任务草稿保留修复。", "优化公共控件动效并尊重减少动态效果；新增桥接字段需要完整更新，保留模型、设置和任务。", "预览渠道独立；正式版用户须主动开启预览更新。"],
+      en: ["Includes 0.2.1.post2 download status, targeted setup guidance, resource highlighting and draft preservation.", "Refines shared-control motion and respects reduced motion; bridge changes require a full update without deleting models, settings or tasks.", "Separate preview channel; stable users opt in."],
+    },
+  },
+  {
     version: "0.2.1.post2",
     title: { zh: "0.2.1.post2 · 资源引导与界面反馈", en: "0.2.1.post2 · Resource guidance and UI feedback" },
     notes: {
       zh: ["修复首页资源下载时按钮状态未更新；展示实际进度、暂停与失败信息。", "新建任务和批处理遇到缺失配置或资源时给出原因并定位；任务必需资源持续高亮，返回后保留草稿。", "优化公共弹窗、下拉框、折叠区域与通知动效，支持减少动态效果。", "原生桥接字段更新，应用内使用完整更新包；保留模型、设置和任务。"],
       en: ["Fix home resource actions to show actual download, pause and failure states.", "Explain missing setup for tasks and batches, highlight required components and preserve drafts when returning.", "Refine shared dialogs, menus, collapsibles and notifications while respecting reduced motion.", "Bridge changes use a full in-app update; models, settings and tasks are preserved."],
+    },
+  },
+  {
+    version: "0.2.2-rc.1.post1",
+    title: { zh: "0.2.2 RC1.1 · 桌面功能补齐", en: "0.2.2 RC1.1 · Desktop feature completion" },
+    notes: {
+      zh: ["包含 0.2.1.post1 的可选说话人标签与导出、任务级预设、动态追加批次、Agent 协作及知识库安全恢复。", "沿用 FineSub 0.6.0 原快照；新增原生接口，应用内完整更新，保留模型、设置与任务。", "预览渠道独立；正式版用户须主动开启预览更新。实验性裁判与真实 Agent 账号尚未实测。"],
+      en: ["Includes 0.2.1.post1 optional speaker labels/exports, task presets, live batch intake, Agent hand-off and safe knowledge recovery.", "Keeps the same FineSub 0.6.0 snapshot. New native interfaces require a full in-app update; models, settings and tasks stay.", "Separate preview channel; stable users opt in. Experimental judging and real Agent accounts remain untested."],
     },
   },
   {
