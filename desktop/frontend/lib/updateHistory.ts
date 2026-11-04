@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.2-rc.1.post3",
+    title: { zh: "0.2.2 RC1.3 · 视频下载与代理修复", en: "0.2.2 RC1.3 · Video downloads and proxy support" },
+    notes: {
+      zh: ["包含正式版 0.2.1.post3 的视频下载日志与 SOCKS 代理修复。", "正式版用户需主动启用预览更新。"],
+      en: ["Includes the 0.2.1.post3 video logging and SOCKS proxy fixes.", "Stable users must opt in to preview updates."],
+    },
+  },
+  {
     version: "0.2.1.post3",
     title: { zh: "0.2.1.post3 · 视频下载与代理修复", en: "0.2.1.post3 · Video downloads and proxy support" },
     notes: {
