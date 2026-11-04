@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.2.1.post3",
+    title: { zh: "0.2.1.post3 · 视频下载与代理修复", en: "0.2.1.post3 · Video downloads and proxy support" },
+    notes: {
+      zh: ["修复链接任务中 yt-dlp 与任务日志接口不兼容导致的下载失败。", "启动器打包 SOCKS 支持，修复使用 SOCKS 代理下载更新时缺少依赖。", "旧版更新器遇到此问题时，可临时切换 HTTP 代理或退出后覆盖安装。"],
+      en: ["Fix yt-dlp logging incompatibility in URL tasks.", "Bundle SOCKS support in the launcher for update downloads.", "If an older updater fails, temporarily use an HTTP proxy or exit and install over the existing directory."],
+    },
+  },
+  {
     version: "0.2.1.post2",
     title: { zh: "0.2.1.post2 · 资源引导与界面反馈", en: "0.2.1.post2 · Resource guidance and UI feedback" },
     notes: {

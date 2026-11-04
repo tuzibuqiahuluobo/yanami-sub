@@ -8,6 +8,11 @@ on:
         type: boolean
         required: true
         default: false
+      targeted_only:
+        description: Run targeted regression tests instead of the full suite
+        type: boolean
+        required: true
+        default: false
 
 permissions:
   contents: read
@@ -78,9 +83,17 @@ jobs:
           "PYTHONUTF8=1" >> $env:GITHUB_ENV
 
       - name: Run backend and packaging tests
+        if: ${{ !inputs.targeted_only }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           & .\.venv-desktop\Scripts\python.exe -m pytest -q
+
+      - name: Run targeted desktop regressions
+        if: ${{ inputs.targeted_only }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          & .\.venv-desktop\Scripts\python.exe -m pip install yt-dlp==2026.8.19
+          & .\.venv-desktop\Scripts\python.exe -m pytest -q desktop/backend/tests/test_ytdlp_log_stream.py desktop/scripts/tests/test_desktop_dependencies.py
 
       - name: Verify and build frontend
         working-directory: desktop/frontend
@@ -88,7 +101,7 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           npm ci
           npm run typecheck
-          npm test
+          if ("${{ inputs.targeted_only }}" -ne "true") { npm test }
           npm run build
 
       - name: Ensure Inno Setup is installed
