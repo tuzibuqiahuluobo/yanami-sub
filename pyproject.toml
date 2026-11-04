@@ -27,7 +27,7 @@ Migration-Source = "https://github.com/caca2331/finesub/tree/0.5.0pre/desktop"
 [project.optional-dependencies]
 desktop = [
   "cryptography",
-  "httpx",
+  "httpx[socks]",
   "packaging",
   "pydantic>=2,<3",
   "Pillow",

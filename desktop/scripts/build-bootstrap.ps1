@@ -261,6 +261,7 @@ try {
         "--version-file=$LauncherVersionFile",
         "--add-data=$TrayIconPath;.",
         "--hidden-import=pystray._win32",
+        "--hidden-import=socksio",
         "--hidden-import=webview.platforms.winforms",
         "--hidden-import=webview.platforms.edgechromium",
         "--hidden-import=webview.platforms.win32",

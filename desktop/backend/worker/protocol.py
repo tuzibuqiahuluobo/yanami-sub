@@ -3,7 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import json
 import locale
-from typing import Any, Literal, TextIO
+from typing import Any, Literal
+from io import TextIOBase
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -195,7 +196,7 @@ def parse_worker_line(line: str, *, task_id: str) -> WorkerEvent:
     return event
 
 
-class EventLogWriter(TextIO):
+class EventLogWriter(TextIOBase):
     """Convert arbitrary pipeline stdout writes into protocol log events.
 
     Carriage returns are rendered, not kept. A progress bar rewrites one line
