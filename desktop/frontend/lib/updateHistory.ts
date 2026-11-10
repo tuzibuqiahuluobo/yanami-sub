@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1.post1",
+    title: { zh: "0.3.1 RC1.1 · 环境修复与界面精简", en: "0.3.1 RC1.1 · Runtime repair and simpler settings" },
+    notes: {
+      zh: ["与正式版 0.3.0.post1 使用相同的修复基线，包含 ONNX 校验冲突、折叠设置、日志分页、知识库与批处理拖放优化。", "保留预览更新通道；正式版用户默认不会收到此版本，需在设置中开启预览更新。", "使用完整更新包并保留用户数据；验证范围与注意事项见 0.3.0.post1 更新内容。"],
+      en: ["Shares stable 0.3.0.post1 fixes for ONNX integrity, settings, log pages, knowledge and native batch drops.", "Preview-channel release; stable installs must opt into previews to receive it.", "Uses a full update preserving user data. See 0.3.0.post1 for verification limits and upgrade notes."],
+    },
+  },
+  {
     version: "0.3.0.post1",
     title: { zh: "0.3.0.post1 · Python 环境修复与界面精简", en: "0.3.0.post1 · Runtime repair and simpler settings" },
     notes: {
