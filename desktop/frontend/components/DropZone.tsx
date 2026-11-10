@@ -4,6 +4,7 @@ import { FileVideo2, FolderOpen, Link2, RefreshCw, UploadCloud } from "lucide-re
 import { useEffect, useState } from "react";
 
 import { fileName, isUrlSource } from "@/lib/formatters";
+import { nativeDropPaths } from "@/lib/fileDrop";
 import { useLanguage } from "./LanguageProvider";
 
 
@@ -28,16 +29,15 @@ export function DropZone({
 
   useEffect(() => {
     const receiveNativeDrop = (event: Event) => {
-      const detail = (event as CustomEvent<{ path?: string }>).detail;
-      if (detail?.path) {
-        onDropPath(detail.path);
-      }
+      if (disabled) return;
+      const paths = nativeDropPaths(event);
+      if (paths.length) onDropPath(paths[0]);
     };
     window.addEventListener("finesub:file-drop", receiveNativeDrop);
     return () => {
       window.removeEventListener("finesub:file-drop", receiveNativeDrop);
     };
-  }, [onDropPath]);
+  }, [onDropPath, disabled]);
 
   const submitUrl = () => {
     const trimmed = url.trim();

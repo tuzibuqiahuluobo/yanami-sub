@@ -258,6 +258,20 @@ def _bridge(tmp_path: Path) -> tuple[DesktopBridge, FakeJobs]:
     return bridge, jobs
 
 
+def test_task_log_pages_are_ten_records_and_filter_before_slicing(tmp_path, monkeypatch):
+    bridge, _ = _bridge(tmp_path)
+    monkeypatch.setattr(bridge, "_task_logs_root", lambda: tmp_path)
+    rows = [{"id": str(i), "name": f"任务-{i}", "batch": i % 2 == 0} for i in range(23)]
+    monkeypatch.setattr("desktop.backend.launcher.bridge.feedback.log_catalog", lambda root: rows)
+    for offset, expected in ((0, 10), (10, 10), (20, 3), (30, 0)):
+        result = bridge.list_task_logs("", offset)["data"]
+        assert result["total"] == 23
+        assert result["items"] == rows[offset:offset + expected]
+    assert len(bridge.list_task_logs("任务-2", 0)["data"]["items"]) == 4
+    for invalid in (-1, True, "0"):
+        assert not bridge.list_task_logs("", invalid)["ok"]
+
+
 def test_agent_paths_are_saved_per_tier_and_invalid_choices_are_rejected(tmp_path: Path) -> None:
     bridge, _jobs = _bridge(tmp_path)
     cli = tmp_path / "codex.exe"

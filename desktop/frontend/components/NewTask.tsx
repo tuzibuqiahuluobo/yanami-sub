@@ -111,7 +111,7 @@ export function NewTask({
           </div>
           <DropZone
             selectedFile={state.task.selectedFile}
-            disabled={busy}
+            disabled={busy || state.route !== "new-task"}
             onSelect={onSelectFile}
             onDropPath={onDropPath}
           />

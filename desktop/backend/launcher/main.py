@@ -198,19 +198,27 @@ def relaunch_application(
 
 
 def dropped_file_path(event: Any) -> str | None:
+    paths = dropped_file_paths(event)
+    return paths[0] if paths else None
+
+
+def dropped_file_paths(event: Any) -> list[str]:
     if not isinstance(event, dict):
-        return None
+        return []
     transfer = event.get("dataTransfer")
     if not isinstance(transfer, dict):
-        return None
+        return []
     files = transfer.get("files")
     if not isinstance(files, list) or not files:
-        return None
-    first = files[0]
-    if not isinstance(first, dict):
-        return None
-    path = first.get("pywebviewFullPath")
-    return path if isinstance(path, str) and path else None
+        return []
+    paths = []
+    seen = set()
+    for item in files:
+        path = item.get("pywebviewFullPath") if isinstance(item, dict) else None
+        if isinstance(path, str) and path.strip() and path.casefold() not in seen:
+            paths.append(path)
+            seen.add(path.casefold())
+    return paths
 
 
 def prepare_window(window: Any) -> None:
@@ -243,10 +251,10 @@ def bind_native_file_drop(window: Any) -> None:
         return None
 
     def dispatch_drop(event: Any) -> None:
-        path = dropped_file_path(event)
-        if path is None:
+        paths = dropped_file_paths(event)
+        if not paths:
             return
-        encoded = json.dumps({"path": path}, ensure_ascii=False)
+        encoded = json.dumps({"path": paths[0], "paths": paths}, ensure_ascii=False)
         window.evaluate_js(
             "window.dispatchEvent(new CustomEvent("
             f"'finesub:file-drop', {{detail: {encoded}}}"

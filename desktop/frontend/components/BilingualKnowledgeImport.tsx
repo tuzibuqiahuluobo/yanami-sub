@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { saveUi, uiValue, workflowOptions } from "@/lib/preferences";
 import { FolderOpen, ArrowRight, Check } from "lucide-react";
 import { desktopApi } from "@/lib/bridge";
-import type { KnowledgeSnapshot, TaskRequest, JobSnapshot, RefinedKnowledgeUpdateReport } from "@/lib/types";
+import type { KnowledgeSnapshot, TaskRequest, JobSnapshot, RefinedKnowledgeUpdateReport, RoutingSettings } from "@/lib/types";
 import { useLanguage } from "./LanguageProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -38,8 +38,8 @@ export function ProposalReview({ report }: { report: RefinedKnowledgeUpdateRepor
   </div>;
 }
 
-export function BilingualKnowledgeImport({ snapshot, tasks, onApplied }: {
-  snapshot: KnowledgeSnapshot | null; tasks: JobSnapshot[]; onApplied: () => Promise<unknown>;
+export function BilingualKnowledgeImport({ snapshot, tasks, onApplied, routing }: {
+  snapshot: KnowledgeSnapshot | null; tasks: JobSnapshot[]; onApplied: () => Promise<unknown>; routing?: RoutingSettings;
 }) {
   const { language } = useLanguage();
   const zh = language === "zh";
@@ -53,12 +53,15 @@ export function BilingualKnowledgeImport({ snapshot, tasks, onApplied }: {
   const [inspection, setInspection] = useState<RefinedKnowledgeUpdateReport | null>(null);
   const [proposal, setProposal] = useState<RefinedKnowledgeUpdateReport | null>(null);
   const [confirm, setConfirm] = useState(false);
+  const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", routing?.unified_llm_media ? "LOCAL_CODEBUDDY" : "LOCAL_WORKBUDDY"];
+  const unsupportedAgent = !values.task && values.llm_source === "agent" && Boolean(values.llm_agent) && !agentTiers.includes(values.llm_agent);
   const update = (key: keyof typeof values, value: string) => { setValues((old) => ({ ...old, [key]: value })); setInspection(null); setProposal(null); setError(""); };
   const browse = async (key: "source_srt" | "refined_srt") => {
     try { const result = await desktopApi.selectSubtitleFile(); if (result.path) update(key, result.path); }
     catch (reason) { setError(String(reason)); }
   };
   const run = async (execute: boolean) => {
+    if (execute && unsupportedAgent) return;
     setBusy(true); setError(""); setProposal(null);
     try {
       const inherited = tasks.find((task) => task.task_id === values.task)?.request;
@@ -86,11 +89,12 @@ export function BilingualKnowledgeImport({ snapshot, tasks, onApplied }: {
       <label className="field"><span>{zh ? "目标知识条目" : "Target entry"}</span><select value={values.subject} onChange={(event) => update("subject", event.target.value)}><option value="">{zh ? "选择已创建的条目" : "Choose an existing entry"}</option>{snapshot?.entries.map((entry) => <option key={entry.id} value={entry.qualified_name}>{entry.qualified_name}</option>)}</select></label>
       <label className="field"><span>{zh ? "同时学习润色风格（可选）" : "Learn a style too (optional)"}</span><select value={values.style_subject} onChange={(event) => update("style_subject", event.target.value)}><option value="">{zh ? "不写入风格" : "Do not update a style"}</option>{snapshot?.entries.filter((entry) => entry.category === "style").map((entry) => <option key={entry.id} value={entry.qualified_name}>{entry.key}</option>)}</select></label>
       <label className="field field-span-all"><span>{zh ? "继承任务的模型选择" : "Inherit task model selection"}</span><select value={values.task} onChange={(event) => update("task", event.target.value)}><option value="">{zh ? "单独选择 API / Agent" : "Select API / Agent independently"}</option>{tasks.filter((task) => task.request).map((task) => <option value={task.task_id} key={task.task_id}>{task.request?.input.split(/[\\/]/).pop()}</option>)}</select></label>
-      {!values.task ? <><label className="field"><span>{zh ? "模型来源" : "Model source"}</span><select value={values.llm_source} onChange={(event) => update("llm_source", event.target.value)}>{["auto", "api", "agent", "manual"].map((source) => <option key={source} value={source}>{source}</option>)}</select></label>{values.llm_source === "agent" ? <label className="field"><span>Agent</span><select value={values.llm_agent} onChange={(event) => update("llm_agent", event.target.value)}><option value="">{zh ? "按可用顺序尝试" : "Try available agents in order"}</option>{["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", "LOCAL_WORKBUDDY"].map((agent) => <option key={agent}>{agent}</option>)}</select></label> : null}{values.llm_source === "manual" ? <label className="field"><span>{zh ? "模型 ID / knowledge=模型 ID" : "Model ID / knowledge=model ID"}</span><input value={values.model} onChange={(event) => update("model", event.target.value)} /></label> : null}</> : null}
+      {!values.task ? <><label className="field"><span>{zh ? "模型来源" : "Model source"}</span><select value={values.llm_source} onChange={(event) => update("llm_source", event.target.value)}>{["auto", "api", "agent", "manual"].map((source) => <option key={source} value={source}>{zh ? ({ auto: "自动：API 优先，否则本地 Agent", api: "API 密钥", agent: "本地 Agent", manual: "手动指定模型 ID" }[source]) : ({ auto: "Auto: API, then local Agent", api: "API keys", agent: "Local Agent", manual: "Choose model ID" }[source])}</option>)}</select></label>{values.llm_source === "agent" ? <label className="field"><span>Agent</span><select value={values.llm_agent} onChange={(event) => update("llm_agent", event.target.value)}><option value="">{zh ? "按可用顺序尝试" : "Try available agents in order"}</option>{unsupportedAgent ? <option value={values.llm_agent} disabled>{values.llm_agent} · {zh ? "需重新选择" : "Choose again"}</option> : null}{agentTiers.map((agent) => <option key={agent}>{agent}</option>)}</select></label> : null}{values.llm_source === "manual" ? <label className="field"><span>{zh ? "模型 ID / knowledge=模型 ID" : "Model ID / knowledge=model ID"}</span><input value={values.model} onChange={(event) => update("model", event.target.value)} /></label> : null}</> : null}
       <label className="field field-span-all"><span>{zh ? "补充说明（可选）" : "Notes (optional)"}</span><textarea value={values.prompt} onChange={(event) => update("prompt", event.target.value)} /></label>
     </fieldset>
+    {unsupportedAgent ? <p role="alert" className="knowledge-error">{zh ? "上次选择的 Agent 不适用于当前核心，请重新选择。不会自动切换到可能收费的 CodeBuddy。" : "The saved Agent is not supported by this core. Choose another; CodeBuddy will not be enabled automatically."}</p> : null}
     {error ? <p role="alert" className="knowledge-error">{error}</p> : null}
-    <div className="knowledge-actions"><button type="button" className="button button-secondary" disabled={busy || !values.source_srt || !values.refined_srt} onClick={() => void run(false)}><Check size={15} />{zh ? "检查时间轴（不调用模型）" : "Check timelines (no model call)"}</button><button type="button" className="button button-secondary" disabled={busy || !inspection || !values.subject} onClick={() => void run(true)}><ArrowRight size={15} />{zh ? "生成提案（会调用模型）" : "Generate proposal (model call)"}</button><button type="button" className="button button-primary" disabled={busy || !canApplyProposal(proposal)} onClick={() => setConfirm(true)}>{zh ? "应用已审阅提案" : "Apply reviewed proposal"}</button></div>
+    <div className="knowledge-actions"><button type="button" className="button button-secondary" disabled={busy || !values.source_srt || !values.refined_srt} onClick={() => void run(false)}><Check size={15} />{zh ? "检查时间轴（不调用模型）" : "Check timelines (no model call)"}</button><button type="button" className="button button-secondary" disabled={busy || !inspection || !values.subject || unsupportedAgent} onClick={() => void run(true)}><ArrowRight size={15} />{zh ? "生成提案（会调用模型）" : "Generate proposal (model call)"}</button><button type="button" className="button button-primary" disabled={busy || !canApplyProposal(proposal)} onClick={() => setConfirm(true)}>{zh ? "应用已审阅提案" : "Apply reviewed proposal"}</button></div>
     {inspection ? <details className="knowledge-proposal-review" open><summary>{zh ? "已匹配字幕条数" : "Matched cues"}：{String(inspection.count)}</summary><pre>{JSON.stringify(inspection, null, 2)}</pre></details> : null}
     {proposal ? <ProposalReview report={proposal} /> : null}
     {busy ? <p role="status">{zh ? "正在处理，请稍候…" : "Working, please wait…"}</p> : null}

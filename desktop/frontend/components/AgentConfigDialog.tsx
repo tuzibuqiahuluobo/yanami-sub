@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { useLanguage } from "./LanguageProvider";
 
-export function AgentConfigDialog({ name, children, onDismiss }: { name: string; children: ReactNode; onDismiss?: () => void }) {
+export function AgentConfigDialog({ name, children, onDismiss, status, detail }: { name: string; children: ReactNode; onDismiss?: () => void; status?: ReactNode; detail?: string }) {
   const [open, setOpen] = useState(false);
   const dialog = useRef<HTMLDialogElement>(null);
   const { language } = useLanguage();
@@ -15,8 +15,9 @@ export function AgentConfigDialog({ name, children, onDismiss }: { name: string;
     else dialog.current?.close();
   }, [open]);
   return <div className="agent-config-row">
-    <strong>{name}</strong>
-    <button type="button" className="button button-secondary button-compact" onClick={() => setOpen(true)}>{en ? "Configure" : "配置"}</button>
+    <div className="agent-config-summary"><strong>{name}</strong>{detail ? <small>{detail}</small> : null}</div>
+    {status}
+    <button type="button" className="button button-secondary button-compact" aria-label={`${name} ${en ? "settings" : "设置"}`} onClick={() => setOpen(true)}>{en ? "Configure" : "配置"}</button>
     <dialog ref={dialog} className="dialog-card agent-config-dialog" aria-label={name + (en ? " settings" : " 设置")} onCancel={dismiss}>
       <div className="settings-section-heading"><h3>{name}</h3>
         <button type="button" className="icon-button" onClick={dismiss} aria-label={en ? "Close" : "关闭"}><X size={18} /></button></div>

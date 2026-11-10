@@ -18,6 +18,7 @@ from desktop.backend.launcher.main import (
     _load_resources,
     create_backend_services,
     dropped_file_path,
+    dropped_file_paths,
     expose_bridge,
     load_update_service,
     relaunch_application,
@@ -220,12 +221,17 @@ def test_native_drop_uses_pywebview_full_path_only() -> None:
         )
         == "C:/media/video.mp4"
     )
-    assert (
-        dropped_file_path(
-            {"dataTransfer": {"files": [{"name": "video.mp4"}]}}
-        )
-        is None
-    )
+    assert dropped_file_path({"dataTransfer": {"files": [{"name": "video.mp4"}]}}) is None
+
+
+def test_native_drop_keeps_multiple_unique_full_paths():
+    assert dropped_file_paths({"dataTransfer": {"files": [
+        {"pywebviewFullPath": "D:/中文/a.mp4"},
+        {"name": "untrusted-name.wav"}, None,
+        {"pywebviewFullPath": "D:/中文/A.MP4"},
+        {"pywebviewFullPath": "D:/字幕/b.wav"},
+    ]}}) == ["D:/中文/a.mp4", "D:/字幕/b.wav"]
+    assert dropped_file_paths(None) == []
 
 
 def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:

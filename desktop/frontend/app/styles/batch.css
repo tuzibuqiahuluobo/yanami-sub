@@ -1,5 +1,10 @@
 /* 批处理页：输入队列、核心调度状态和可恢复的批次历史。 */
 
+.batch-builder.is-dragging { outline: 2px dashed var(--accent); outline-offset: -6px; }
+.batch-drop-hint { display: flex; align-items: center; justify-content: center; gap: 12px; padding: 20px; border: 1px dashed var(--border); border-radius: var(--radius-control); color: var(--muted); background: var(--panel-subtle); }
+.batch-drop-hint svg { flex-shrink: 0; }
+.batch-builder.is-dragging .batch-drop-hint { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); }
+
 .batch-layout,
 .batch-builder,
 .batch-progress,

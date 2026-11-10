@@ -351,7 +351,7 @@ export function TaskSettings({
               <small className="field-help">{t.newTask.settings.agentChoiceHint}</small>
               <small className="field-help">{language === "en" ? `Capabilities depend on the selected model: AGY can support audio/video; Codex, Claude, DSH and ${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} use text. Native search requires a matching route and account access. CLI detection does not verify sign-in.` : `能力以所选模型为准：AGY 部分模型支持音频/视频；Codex、Claude、DSH、${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} 使用纯文本。原生搜索还需相应路由及账号权限；检测到 CLI 不代表已登录。`}</small>
               {unifiedMedia ? <small className="field-help">{language === "en" ? "CodeBuddy must be selected explicitly; its upstream fallback group may spend credits. The all-agents automatic order excludes it." : "CodeBuddy 需要手动指定；其上游候选组可能消耗积分。自动依次尝试所有 Agent 时不会启用它。"}</small> : null}
-              {onOpenSettings ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
+                {onOpenSettings ? <button type="button" className="button button-secondary button-compact agent-setup-shortcut" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}<span aria-hidden="true">→</span></button> : null}
             </div> : null}
             {source === "manual" ? <div className="field field-wide task-route-field">
               <span>{t.newTask.settings.llmRoute}</span>

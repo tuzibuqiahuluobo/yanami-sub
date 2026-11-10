@@ -30,6 +30,9 @@ from finesub_bootstrap.environment import (
 )
 from finesub_bootstrap.http_client import NetworkRoute, create_client
 from finesub_bootstrap.model_fetch import LOCAL_FAILURE_MARKERS
+from finesub_bootstrap import runtime_health
+
+from desktop.backend.resources.runtime_integrity import check_runtime
 
 
 PROXY_VARIABLES = (
@@ -264,6 +267,44 @@ def local_lock(
 
 class DesktopRuntimeEnvironment(RuntimeEnvironment):
     """Keep the core lock and runtime marker intact while reusing local wheels."""
+
+    def check(self, *, verify_hashes: bool = False):
+        if self.development_python is not None or not self.site_packages.is_dir():
+            return None
+        return check_runtime(self.site_packages, self.runtime_lock, verify_hashes=verify_hashes)
+
+    def _staging_passes(self, staging, *, verify_hashes, log):
+        report = check_runtime(
+            runtime_health.site_packages_of(staging / "Scripts" / "python.exe"),
+            self.runtime_lock, verify_hashes=verify_hashes,
+        )
+        if report is not None and report.mismatched:
+            if log:
+                log("未完成的新运行环境与锁不一致，重新构建：" + "；".join(report.problems()))
+            return False
+        return True
+
+    def _verify_staging(self, uv, staging_python, environment, *, verify_hashes, log, should_pause):
+        site_packages = runtime_health.site_packages_of(staging_python)
+        report = check_runtime(site_packages, self.runtime_lock, verify_hashes=verify_hashes)
+        if report is None or not report.mismatched:
+            return
+        packages = report.packages_to_reinstall()
+        if log:
+            log("新运行环境校验未通过，清理对应缓存并重装一次：" + "、".join(packages))
+        for name in packages:
+            self._run([str(uv), "cache", "clean", name], environment, log=log, should_pause=should_pause)
+        self._install_dependencies(
+            uv, staging_python, environment, log=log, should_pause=should_pause, reinstall=packages,
+        )
+        report = check_runtime(site_packages, self.runtime_lock, verify_hashes=verify_hashes)
+        if report is not None and report.mismatched:
+            raise RuntimeError(
+                "新运行环境校验仍未通过（" + "；".join(report.problems())
+                + "）。可能原因包括依赖文件冲突、缓存损坏、磁盘写入失败或安全软件拦截。"
+                "请查看资源安装日志及安全软件隔离记录后重试；不要关闭完整性校验。"
+                "原来的运行环境没有改动。"
+            )
 
     def _install_dependencies(
         self,

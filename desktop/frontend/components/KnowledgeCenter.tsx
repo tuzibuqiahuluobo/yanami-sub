@@ -28,12 +28,14 @@ import type {
   KnowledgeSnapshot,
   TaskRequest,
   RefinedKnowledgeUpdateReport,
+  RoutingSettings,
 } from "@/lib/types";
 
 import { useLanguage } from "./LanguageProvider";
 import { useToast } from "./ToastProvider";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { KnowledgeStructure } from "./KnowledgeStructure";
+import { KnowledgeDocument } from "./KnowledgeDocument";
 import { KnowledgeRecovery } from "./KnowledgeRecovery";
 import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
@@ -42,6 +44,7 @@ type KnowledgeTab = "library" | "feedback" | "maintenance" | "sharing";
 
 interface KnowledgeCenterProps {
   tasks: JobSnapshot[];
+  routing?: RoutingSettings;
 }
 
 type CompletedKnowledgeTask = JobSnapshot & {
@@ -76,7 +79,7 @@ function taskLabel(task: CompletedKnowledgeTask): string {
 }
 
 
-export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
+export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
   const { t, language } = useLanguage();
   const { showSuccess } = useToast();
   const [tab, setTab] = useState<KnowledgeTab>(() => uiValue("rememberLastSettings", true) ? uiValue<KnowledgeTab>("knowledgeTab", "library") : "library");
@@ -351,6 +354,11 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
         })}
       </div>
 
+      <aside className="knowledge-guide" aria-label={language === "zh" ? "操作指南" : "Workflow guide"}>
+        <strong>{language === "zh" ? ({ library: "管理会反复用到的术语、译名和字幕风格", feedback: "把人工修订的字幕变成可复用知识", maintenance: "排查知识库问题，或找回之前的内容", sharing: "与社区交换知识；不影响本地独立使用" }[tab]) : ({ library: "Manage reusable terms, names and subtitle styles", feedback: "Learn reusable knowledge from refined subtitles", maintenance: "Check the store or restore earlier content", sharing: "Exchange knowledge with a community server" }[tab])}</strong>
+        <p>{language === "zh" ? ({ library: "先选择左侧条目阅读；需要修改时展开“编辑原文”并保存。停用可在“检查与恢复”中撤销。新建任务的“知识库”选项决定是否读取或更新这些内容。", feedback: "只有两份时间轴一致的字幕？使用“双语字幕导入”，不需要原任务。若有本应用的原任务，可选择任务并导入精修字幕。两种方式都先生成提案，审阅后再写入。生成会调用所选模型，应用同一提案不再次调用模型。", maintenance: "重建缓存和确定性迁移不调用模型。其他工具的“查看计划”只展示工作范围；“生成建议”调用模型但不写入，“生成并写入”会调用模型并更新知识库。它们不是应用同一份预览提案。", sharing: "共享为可选功能，需要你提供可信的服务器地址。先连接并拉取，再标记准备共享的内容，最后提交审核。知识内容会发送到该服务器；不要共享私人材料。" }[tab]) : ({ library: "Choose an entry to read it. Expand Edit source to make changes, then save. Retired entries can be restored under Check & restore. Each task controls whether this knowledge is read or updated.", feedback: "Two matching subtitle files need no original task: use bilingual import. For an existing app task, import a refined SRT below. Generate a proposal first, review it, then apply that exact proposal without another model call.", maintenance: "Cache rebuilding and deterministic migration make no model calls. View plan shows scope only; Generate suggestions calls models without writing; Generate & write calls models and changes the store. These are separate runs, not application of the same preview proposal.", sharing: "Sharing is optional and requires a trusted server URL. Connect and pull, mark shareable content, then submit for review. Content is sent to that server; keep private material local." }[tab])}</p>
+      </aside>
+
       {error ? <div className="inline-error knowledge-error">{error}</div> : null}
       {loading ? <div className="primary-panel knowledge-loading">{t.knowledge.loading}</div> : null}
 
@@ -378,7 +386,13 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
                   type="button"
                   key={entry.id}
                   className={selectedName === entry.qualified_name ? "is-active" : ""}
-                  onClick={() => setSelectedName(entry.qualified_name)}
+                  disabled={busy}
+                  onClick={() => {
+                    if (selectedName === entry.qualified_name) { setShowCreate(false); return; }
+                    const select = () => { setSelectedName(entry.qualified_name); setShowCreate(false); };
+                    if (document && draft !== document.text) confirmAction(language === "zh" ? "当前条目有未保存的修改，切换后将丢弃这些修改。继续切换？" : "This entry has unsaved changes. Switching discards them. Continue?", select);
+                    else select();
+                  }}
                 >
                   <span>
                     <strong>{entry.key}</strong>
@@ -448,7 +462,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
               <>
                 <div className="section-heading knowledge-editor-heading">
                   <div>
-                    <span className="section-kicker">{document.category} · rev {document.valid_from_rev}</span>
+                    <span className="section-kicker">{t.knowledge.categories[document.category as "common" | "streamer" | "style"] || document.category} · rev {document.valid_from_rev}</span>
                     <h2>{document.key}</h2>
                     <p>{document.qualified_name}</p>
                   </div>
@@ -471,10 +485,14 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
                     </button>
                   </div>
                 </div>
-                <textarea className="knowledge-document" value={draft} spellCheck={false} onChange={(event) => setDraft(event.target.value)} />
-                <p className="field-hint">{t.knowledge.editor.hint}</p>
-                {document.category === "common" ? <KnowledgeStructure key={document.id} document={document} entries={snapshot?.entries ?? []} disabled={busy || draft !== document.text}
-                  onChanged={async () => { await loadSnapshot(); const next = await desktopApi.getKnowledgeEntry(document.qualified_name); setDocument(next); setDraft(next.text); }} /> : null}
+                <KnowledgeDocument text={draft} empty={language === "zh" ? "条目还没有正文，可展开下方编辑原文。" : "No content yet. Expand Edit source below."} />
+                <details className="knowledge-source-editor" key={document.id}>
+                  <summary>{language === "zh" ? "编辑原文（高级）" : "Edit source (advanced)"}{draft !== document.text ? (language === "zh" ? " · 有未保存的修改" : " · Unsaved changes") : ""}</summary>
+                  <p className="field-hint">{t.knowledge.editor.hint}</p>
+                  <textarea className="knowledge-document" aria-label={language === "zh" ? "条目原文" : "Entry source"} disabled={busy} value={draft} spellCheck={false} onChange={(event) => setDraft(event.target.value)} />
+                </details>
+                {document.category === "common" ? <details className="knowledge-source-editor"><summary>{language === "zh" ? "拆分、移动与关联条目（高级）" : "Split, move and link entries (advanced)"}</summary><KnowledgeStructure key={document.id} document={document} entries={snapshot?.entries ?? []} disabled={busy || draft !== document.text}
+                  onChanged={async () => { await loadSnapshot(); const next = await desktopApi.getKnowledgeEntry(document.qualified_name); setDocument(next); setDraft(next.text); }} /></details> : null}
               </>
             ) : (
               <div className="knowledge-empty-editor">{t.knowledge.selectEntry}</div>
@@ -485,6 +503,7 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
 
       {!loading && tab === "feedback" ? (
         <div className="knowledge-stack">
+          <BilingualKnowledgeImport snapshot={snapshot} tasks={tasks} routing={routing} onApplied={() => loadSnapshot()} />
           <section className="primary-panel knowledge-section">
             <div className="section-heading">
               <div><h2>{t.knowledge.feedback.title}</h2><p>{t.knowledge.feedback.hint}</p></div>
@@ -692,7 +711,6 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
           <pre>{output}</pre>
         </section>
       ) : null}
-      {tab === "feedback" ? <BilingualKnowledgeImport snapshot={snapshot} tasks={tasks} onApplied={() => loadSnapshot()} /> : null}
       <ConfirmDialog config={{ id: "knowledge-action", title: language === "zh" ? "确认知识库操作" : "Confirm knowledge operation", message: confirmation?.message || "", allowRemember: false, tone: "danger" }} open={Boolean(confirmation)} onCancel={() => setConfirmation(null)} onConfirm={() => { const action = confirmation?.action; setConfirmation(null); action?.(); }} />
       {busy ? <div className="knowledge-busy" role="status"><RefreshCw size={15} />{t.knowledge.running}</div> : null}
     </div>

@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.0.post1",
+    title: { zh: "0.3.0.post1 · Python 环境修复与界面精简", en: "0.3.0.post1 · Runtime repair and simpler settings" },
+    notes: {
+      zh: ["修复 onnx 与 onnx-weekly 共享文件导致的 114 项校验冲突；仍拦截真实损坏和混装。", "合并折叠 API 服务、模型路由与 Agent 配置；缺少配置时自动展开对应区域。", "任务与批次日志每页 10 条，支持筛选及页码校正。", "知识库默认显示可读正文，原文编辑折叠；明确模型调用、提案审阅和写入边界。", "批处理支持多文件原生拖放和去重；统一新建任务与批处理的 Agent 设置快捷按钮。", "采用完整更新，保留用户任务、设置与模型缓存；字幕核心仍为 FineSub 0.7.0。"],
+      en: ["Fix 114 ONNX shared-file integrity conflicts while still rejecting corruption and mixed versions.", "Merge API services and Agent/routing settings into compact collapsibles; guided navigation opens the relevant group.", "Browse task and batch logs in searchable ten-record pages with page correction.", "Read knowledge entries without template comments; keep source editing advanced and clarify model calls versus writes.", "Accept multiple native batch file drops, remove duplicates and restyle the shared Agent shortcut.", "Full update preserves tasks, settings and model caches. The core remains FineSub 0.7.0."],
+    },
+  },
+  {
     version: "0.3.0",
     title: { zh: "0.3.0 · FineSub 0.7.0 与任务设置改进", en: "0.3.0 · FineSub 0.7.0 and task settings" },
     notes: {

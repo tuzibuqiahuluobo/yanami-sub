@@ -119,7 +119,7 @@ function HomeContent() {
   const [cleanupTaskId, setCleanupTaskId] = useState<string | null>(null);
   const [deleteRecordId, setDeleteRecordId] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState("");
-  const [settingsFocus, setSettingsFocus] = useState<{ target: ApiProvider | "agents" | "routing"; sequence: number } | null>(null);
+  const [settingsFocus, setSettingsFocus] = useState<{ target: ApiProvider | "agents" | "routing" | "credentials"; sequence: number } | null>(null);
   const [resourceFocus, setResourceFocus] = useState({ id: "", sequence: 0 });
   const [guide, setGuide] = useState<{
     origin: "new-task" | "batch" | "history";
@@ -129,7 +129,7 @@ function HomeContent() {
   } | null>(null);
   const submittingRef = useRef(new Set<string>());
   const [submittingResources, setSubmittingResources] = useState<string[]>([]);
-  const focusSettings = (target: ApiProvider | "agents" | "routing") => {
+  const focusSettings = (target: ApiProvider | "agents" | "routing" | "credentials") => {
     setSettingsFocus((current) => ({ target, sequence: (current?.sequence ?? 0) + 1 }));
     dispatch({ type: "navigate", route: "settings" });
   };
@@ -150,7 +150,7 @@ function HomeContent() {
       focusResource(resourceIds[0] ?? "");
     } else if (error.code === "api_key_required" || error.action === "open_settings" || error.action === "open_agents") {
       setGuide({ origin, target: "settings", error, resourceIds: [] });
-      focusSettings(error.code === "api_key_required" ? "gemini_free" : error.action === "open_agents" ? "agents" : "routing");
+      focusSettings(error.code === "api_key_required" ? "gemini_free" : error.code === "asr_credentials_required" ? "credentials" : error.action === "open_agents" ? "agents" : "routing");
     }
   };
   const [startupUpdate, setStartupUpdate] = useState<UpdateCheck | null>(null);
@@ -743,7 +743,7 @@ function HomeContent() {
       />
     );
   } else if (state.route === "knowledge") {
-    content = <KnowledgeCenter tasks={state.history} />;
+    content = <KnowledgeCenter tasks={state.history} routing={state.routing} />;
   } else if (state.route === "resources") {
     content = (
       <ResourceManager

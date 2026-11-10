@@ -2,7 +2,9 @@
 
 基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台，提供单任务、批处理、本地 Agent / API 路由、知识库、资源管理和应用内更新。
 
-当前版本系列：**0.3.0 正式版 / 0.3.1 RC1.0 预览版**，固定使用 [FineSub v0.7.0](https://github.com/caca2331/finesub/releases/tag/v0.7.0)。桌面端与字幕核心独立发版；本仓库不复制或分叉核心实现。
+当前版本系列：**0.3.0.post1 正式版 / 0.3.1 RC1.1 预览版（0.3.1-rc.1.post1）**，固定使用 [FineSub v0.7.0](https://github.com/caca2331/finesub/releases/tag/v0.7.0)。桌面端与字幕核心独立发版；本仓库不复制或分叉核心实现。
+
+本次补丁修复 ONNX 双发行包共享文件引起的 Python 环境校验失败，仍保留真实损坏检测；同时精简折叠设置、任务日志每页 10 条、改善知识库阅读与批处理多文件拖放。使用完整更新包，保留任务、设置与模型缓存；无需先卸载或清空模型目录。[修复分析与验证范围](desktop/docs/2026-11-10-usability-runtime-fixes.md)
 
 ## 安装与开始
 

@@ -763,3 +763,43 @@
   overflow-wrap: anywhere;
 }
 
+.settings-disclosure > .settings-disclosure-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 0;
+  cursor: pointer;
+  list-style: none;
+}
+.settings-disclosure-heading::-webkit-details-marker { display: none; }
+.settings-disclosure-heading > div { flex: 1; min-width: 0; }
+.settings-disclosure-heading .capability-chip { flex: 0 0 auto; }
+.settings-disclosure-chevron { flex: 0 0 auto; transition: transform 180ms ease; }
+.settings-disclosure[open] > summary .settings-disclosure-chevron { transform: rotate(180deg); }
+.settings-disclosure-body { margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--border); }
+.settings-disclosure:not([open]) > .settings-disclosure-body { display: none; }
+.settings-disclosure-heading:focus-visible, .task-log-disclosure > summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 8px;
+}
+.agent-config-summary { flex: 1; min-width: 0; }
+.agent-config-summary small { display: block; margin-top: 4px; color: var(--muted); overflow-wrap: anywhere; }
+.agent-config-row > .resource-label { flex: 0 0 auto; }
+.agent-setup-shortcut { justify-self: start; width: auto; max-width: 100%; white-space: normal; text-align: start; }
+.agent-setup-shortcut span { flex: 0 0 auto; }
+.task-log-disclosure { margin-top: 18px; }
+.task-log-disclosure > summary { display: flex; align-items: center; gap: 8px; padding: 12px 0; cursor: pointer; font-weight: 600; }
+.task-log-disclosure > summary::after { content: "+"; margin-inline-start: auto; }
+.task-log-disclosure[open] > summary::after { content: "−"; }
+.log-browser-filter .field { flex: 1; min-width: min(100%, 200px); }
+.log-location-list { min-height: 60px; }
+.log-location-row > button { flex-shrink: 0; }
+.log-browser-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-top: 18px; }
+.log-browser-pagination span { color: var(--muted); font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+@media (max-width: 620px) {
+  .settings-disclosure-heading { flex-wrap: wrap; }
+  .settings-disclosure-heading > div { flex-basis: calc(100% - 36px); }
+  .settings-disclosure-heading .capability-chip { order: 3; }
+  .agent-config-row { flex-wrap: wrap; gap: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { .settings-disclosure-chevron { transition: none; } }
+

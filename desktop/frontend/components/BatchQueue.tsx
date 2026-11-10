@@ -14,11 +14,13 @@ import {
   ScrollText,
   Square,
   Trash2,
+  UploadCloud,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
+import { nativeDropPaths } from "@/lib/fileDrop";
 import { readProcessingDevice, requestDeviceFields } from "@/lib/processingDevice";
 import { saveUi, uiValue } from "@/lib/preferences";
 import type {
@@ -45,7 +47,7 @@ interface BatchQueueProps {
   onRequestChange: (changes: Partial<Omit<TaskRequest, "input">>) => void;
   onOpenResources: (ids?: string[]) => void;
   apiKeys: Record<ApiProvider, "configured" | "missing">;
-  onOpenSettings: (target: ApiProvider | "agents" | "routing") => void;
+  onOpenSettings: (target: ApiProvider | "agents" | "routing" | "credentials") => void;
   onBlocked: (error: BridgeCallError) => void;
   onStarted: () => void;
 }
@@ -100,6 +102,7 @@ export function BatchQueue({
   const [manifestBusy, setManifestBusy] = useState(false);
   const [manifestNotice, setManifestNotice] = useState("");
   const [intakeDraft, setIntakeDraft] = useState("");
+  const [dragging, setDragging] = useState(false);
 
   const reportError = (caught: unknown, fallback: string) => {
     setError({
@@ -153,6 +156,17 @@ export function BatchQueue({
       return [...current, ...added];
     });
   };
+
+  useEffect(() => {
+    if (!visible || snapshot !== null || busy || manifestBusy) return;
+    const receive = (event: Event) => {
+      const paths = nativeDropPaths(event);
+      setDragging(false);
+      if (paths.length) { appendSources(paths); setError(null); }
+    };
+    window.addEventListener("finesub:file-drop", receive);
+    return () => window.removeEventListener("finesub:file-drop", receive);
+  }, [visible, snapshot, busy, manifestBusy, request]);
 
   const batchRequest = (rows: BatchItemRequest[]): BatchRequest => {
     const device = requestDeviceFields(readProcessingDevice());
@@ -377,14 +391,18 @@ export function BatchQueue({
           <strong>{error.message}</strong>
           {error.action === "open_resources" ? <button type="button" className="text-button" onClick={() => onOpenResources(error.resourceIds ?? undefined)}>{t.batch.openResources}</button> : null}
           {error.code === "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("gemini_free")}>{t.newTask.openKeyField}</button> : null}
-          {error.action === "open_settings" && error.code !== "api_key_required" ? <button type="button" className="text-button" onClick={() => onOpenSettings("routing")}>{t.settings.routing.title}</button> : null}
+          {error.action === "open_settings" && error.code !== "api_key_required" ? <button type="button" className="button button-secondary button-compact" onClick={() => onOpenSettings(error.code === "asr_credentials_required" ? "credentials" : "routing")}>{error.code === "asr_credentials_required" ? (language === "en" ? "Configure cloud credentials" : "填写云端转写凭据") : t.settings.routing.title}</button> : null}
           {error.action === "open_agents" ? <button type="button" className="text-button" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}</button> : null}
         </div>
       ) : null}
 
       {showBuilder ? (
         <div className="batch-layout">
-          <section className="primary-panel batch-builder">
+          <section className={`primary-panel batch-builder${dragging ? " is-dragging" : ""}`}
+            onDragEnter={(event) => { event.preventDefault(); if (!busy && !manifestBusy) setDragging(true); }}
+            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = busy || manifestBusy ? "none" : "copy"; }}
+            onDragLeave={(event) => { if (!(event.relatedTarget instanceof Node) || !event.currentTarget.contains(event.relatedTarget)) setDragging(false); }}
+            onDrop={(event) => { event.preventDefault(); setDragging(false); }}>
             <div className="section-heading">
               <div>
                 <h2>{t.batch.sourcesTitle}</h2>
@@ -406,6 +424,7 @@ export function BatchQueue({
               </div>
             </div>
 
+            <div className="batch-drop-hint"><UploadCloud size={20} aria-hidden="true" /><span>{language === "en" ? "Drop audio or video files here to add them to the queue" : "将音频或视频文件拖到这里，即可加入队列"}</span></div>
             <div className="batch-url-row">
               <textarea
                 value={urlDraft}

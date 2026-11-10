@@ -1,6 +1,17 @@
 /* Knowledge workspace: a compact master-detail surface for FineSub's
    revisioned knowledge store. Theme-specific colour stays in shared tokens. */
 
+.knowledge-guide { padding: 16px 20px; margin: 16px 0 22px; border-inline-start: 3px solid var(--accent); border-radius: 0 10px 10px 0; background: var(--accent-soft); }
+.knowledge-guide strong { font-size: 0.94rem; }
+.knowledge-guide p { margin: 7px 0 0; color: var(--muted); line-height: 1.7; font-size: 0.86rem; max-width: 90ch; }
+.knowledge-readable { min-height: 160px; max-height: 560px; overflow: auto; padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--panel-subtle); overflow-wrap: anywhere; }
+.knowledge-readable h3 { margin: 20px 0 10px; font-size: 1rem; }
+.knowledge-readable h3:first-child { margin-top: 0; }
+.knowledge-readable p { margin: 8px 0; line-height: 1.75; font-size: 0.9rem; white-space: pre-wrap; }
+.knowledge-source-editor { margin-top: 16px; }
+.knowledge-source-editor > summary { padding: 12px 0; cursor: pointer; font-weight: 600; color: var(--text); }
+.knowledge-source-editor > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
 .page-knowledge {
   width: min(100%, 1280px);
   min-width: 0;

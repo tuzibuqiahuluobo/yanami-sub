@@ -1547,7 +1547,7 @@ class DesktopBridge:
                 raise ValueError("Invalid page")
             rows = [row for row in feedback.log_catalog(self._task_logs_root())
                     if query[:100].casefold() in row["name"].casefold()]
-            return {"items": rows[offset:offset + 25], "total": len(rows)}
+            return {"items": rows[offset:offset + 10], "total": len(rows)}
         return self._guard(read)
 
     def open_task_log_location(self, identifier: str) -> dict[str, Any]:

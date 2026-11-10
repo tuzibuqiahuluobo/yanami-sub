@@ -69,7 +69,7 @@ import { useToast } from "./ToastProvider";
 /** The update panel keeps its own props; this page only passes them through. */
 interface SettingsProps extends UpdateSectionProps {
   state: AppState;
-  focusTarget?: ApiProvider | "agents" | "routing" | null;
+  focusTarget?: ApiProvider | "agents" | "routing" | "credentials" | null;
   focusSequence?: number;
   appearance: AppearanceSettings;
   onAppearanceChange: (changes: Partial<AppearanceSettings>) => void;
@@ -225,9 +225,12 @@ export function Settings({
   useEffect(() => {
     if (!focusTarget) return;
     const id = focusTarget === "agents" ? "settings-agent-paths" :
-      focusTarget === "routing" ? "settings-routing" : `api-key-${focusTarget}`;
+      focusTarget === "routing" ? "settings-routing" : focusTarget === "credentials" ? "settings-credentials" : `api-key-${focusTarget}`;
     const frame = window.requestAnimationFrame(() => {
       const element = document.getElementById(id);
+      for (let parent = element; parent; parent = parent.parentElement) {
+        if (parent instanceof HTMLDetailsElement) parent.open = true;
+      }
       const reduce = document.documentElement.dataset.motion === "off" ||
         window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
       element?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
@@ -278,6 +281,13 @@ export function Settings({
   } as const;
 
   const fonts = useMemo(() => detectAvailableFonts(), []);
+  const probeAgents = async () => {
+    setAgentProbeBusy(true);
+    setRoutingError("");
+    try { await onProbeLocalAgents(); }
+    catch (error) { setRoutingError(error instanceof Error ? error.message : t.settings.routing.probeFailed); }
+    finally { setAgentProbeBusy(false); }
+  };
   const fontOptions = useMemo(
     () => [
       { value: "", label: t.settings.appearance.defaultFont },
@@ -497,7 +507,14 @@ export function Settings({
         </section>
       ) : null}
 
-      <section className="settings-section">
+      <details className="settings-section settings-disclosure credentials-settings" id="settings-credentials" tabIndex={-1}>
+        <summary className="settings-section-heading settings-disclosure-heading">
+          <div><h2>{language === "en" ? "API keys and online services" : "API 密钥与联网服务"}</h2>
+            <p>{language === "en" ? "Translation, search and cloud transcription credentials" : "统一管理翻译、联网检索与云端转写的密钥"}</p></div>
+          <span className="capability-chip is-neutral">{Object.values(state.settings.api_keys).filter((value) => value === "configured").length + customProviders.filter((provider) => provider.configured).length} / {Object.keys(state.settings.api_keys).length + customProviders.length} {language === "en" ? "configured" : "已配置"}</span>
+          <ChevronDown size={18} className="settings-disclosure-chevron" aria-hidden="true" />
+        </summary>
+        <div className="settings-disclosure-body">
         <div className="settings-section-heading">
           <div>
             <h2>{t.settings.translation.title}</h2>
@@ -571,6 +588,20 @@ export function Settings({
             onOpenOfficial={onOpenExternalUrl}
           />
         </div>
+
+        {customProviders.length ? <div className="custom-provider-keys">
+          <h3>{language === "en" ? "Cloud transcription and custom services" : "云端转写与自定义服务"}</h3>
+          <p>{t.settings.routing.customProvidersHint}</p>
+          <div className="api-key-list">{customProviders.map((provider) => <ApiKeyField
+            key={provider.id} inputId={`api-key-${provider.id}`}
+            label={provider.id}
+            description={`${provider.kind} · ${provider.base_url || provider.key_env}`}
+            placeholder={provider.key_env}
+            status={provider.configured ? "configured" : "missing"}
+            onSave={(value) => onSaveProviderKey(provider.id, value)}
+            onDelete={() => onDeleteProviderKey(provider.id)}
+          />)}</div>
+        </div> : null}
 
         <div className="api-key-reveal">
           {revealed === null ? (
@@ -705,18 +736,21 @@ export function Settings({
             <p className="revealed-error">{t.settings.translation.exportError}</p>
           ) : null}
         </div>
-      </section>
+        </div>
+      </details>
 
-      <section className="settings-section routing-settings" id="settings-routing" tabIndex={-1}>
-        <div className="settings-section-heading">
+      <details className="settings-section routing-settings settings-disclosure" id="settings-routing" tabIndex={-1}>
+        <summary className="settings-section-heading settings-disclosure-heading">
           <div>
             <h2>{t.settings.routing.title}</h2>
             <p>{t.settings.routing.description}</p>
           </div>
           <span className={`capability-chip is-${routing.local_agent_bound ? "success" : "neutral"}`}>
-            {routing.local_agent_bound ? t.settings.routing.agentRoute : t.settings.routing.apiRoute}
+            {agentStatuses?.filter((agent) => agent.status === "ready").length ?? 0} {language === "en" ? "CLI ready" : "个 CLI 就绪"}
           </span>
-        </div>
+          <ChevronDown size={18} className="settings-disclosure-chevron" aria-hidden="true" />
+        </summary>
+        <div className="settings-disclosure-body">
 
         {routing.unified_llm_media ? <ConfigMigration onApplied={onConfigMigrated} /> : null}
         {routing.error ? (
@@ -866,11 +900,17 @@ export function Settings({
             </div>
 
             <div className="agent-diagnostics" id="settings-agent-paths" tabIndex={-1}>
-              <h3>{language === "en" ? "Local Agent configuration" : "本地 Agent 独立配置"}</h3>
+              <div className="settings-section-heading compact">
+                <div><h3>{language === "en" ? "Local Agents" : "本地 Agent"}</h3><p>{t.settings.routing.agentsHint}</p></div>
+                <button type="button" className="button button-secondary button-compact" disabled={agentProbeBusy} onClick={() => void probeAgents()}><RefreshCw size={14} />{agentProbeBusy ? t.settings.routing.probing : t.settings.routing.probe}</button>
+              </div>
               <div id="agent-path-list" className="agent-path-list">
               <p className="field-help" id="agent-path-selection-hint">{language === "en" ? "Select a supported CLI file or its installation folder, then save. Only your selected CLI is checked; no other drives are scanned." : "选择受支持的 CLI 文件或安装目录后保存。仅检查选定的 CLI，不扫描其他磁盘。"}</p>
               {agentStatuses?.some((agent) => agent.detected_path) ? <p className="field-help">{t.settings.routing.detectedPathHint}</p> : null}
-              {agentTiers.map((tier) => <AgentConfigDialog name={tier.replace(/^LOCAL_/, "")} key={tier} onDismiss={() => {
+              {agentTiers.map((tier) => <AgentConfigDialog name={tier.replace(/^LOCAL_/, "")} key={tier}
+              status={(() => { const agent = agentStatuses?.find((item) => item.provider_tier === tier); return agent ? <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{agent.status === "ready" ? (language === "en" ? "CLI ready" : "CLI 就绪") : t.settings.routing.agentStatus[agent.status]}</span> : <span className="field-help">{language === "en" ? "Not checked" : "未检测"}</span>; })()}
+              detail={agentStatuses?.find((agent) => agent.provider_tier === tier)?.version}
+              onDismiss={() => {
                 setAgentPaths((current) => ({ ...current, [tier]: savedAgentPaths.current[tier] ?? "" }));
                 if (tier === "LOCAL_CODEX") setRoutingDraft((current) => ({ ...current, local_agent_service_tier: routing.local_agent_service_tier }));
               }}><div className="agent-path-card">
@@ -915,69 +955,15 @@ export function Settings({
                 {tier === "LOCAL_CODEBUDDY" ? <button type="button" className="button button-secondary" onClick={() => void desktopApi.openCodeBuddyLogin().catch((error) => setAgentPathError((current) => ({ ...current, [tier]: String(error) })))}>{language === "en" ? "Open CLI sign-in" : "打开 CLI 登录"}</button> : null}
               </div></AgentConfigDialog>)}
               </div>
-              <div className="settings-section-heading compact">
-                <div>
-                  <h3>{t.settings.routing.agents}</h3>
-                  <p>{t.settings.routing.agentsHint}</p>
-                </div>
-                <button
-                  type="button"
-                  className="button button-secondary button-compact"
-                  disabled={agentProbeBusy}
-                  onClick={async () => {
-                    setAgentProbeBusy(true);
-                    setRoutingError("");
-                    try {
-                      await onProbeLocalAgents();
-                    } catch (error) {
-                      setRoutingError(error instanceof Error ? error.message : t.settings.routing.probeFailed);
-                    } finally {
-                      setAgentProbeBusy(false);
-                    }
-                  }}
-                >
-                  <RefreshCw size={14} /> {agentProbeBusy ? t.settings.routing.probing : t.settings.routing.probe}
-                </button>
-              </div>
-              {agentStatuses ? (
-                <div className="agent-status-list">
-                  {agentStatuses.map((agent) => (
-                    <div className="agent-status-row" key={agent.provider_tier}>
-                      <div><strong>{agent.provider_tier}</strong><small>{agent.driver || agent.models.join(", ")}</small></div>
-                      <span className={`resource-label is-${agent.status === "ready" ? "ready" : agent.status === "missing" ? "neutral" : "failed"}`}>{agent.status === "ready" ? (language === "en" ? "CLI ready" : "CLI 就绪") : t.settings.routing.agentStatus[agent.status]}</span>
-                      <small title={agent.detail}>{agent.version || agent.detail}</small>
-                      {agent.status !== "ready" ? <small className="agent-status-help">{agent.status === "missing" ? t.settings.routing.agentMissingHelp : t.settings.routing.agentBrokenHelp}</small> : <small className="agent-status-help">{language === "en" ? "CLI available; login, model access and quota are not verified." : "CLI 可用；登录状态、模型权限与额度尚未验证。"}</small>}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
               <button type="button" className="button button-secondary button-compact" onClick={() => setWorkBuddyRepairOpen(true)}>{codeBuddy ? (language === "en" ? "CodeBuddy sign-in repair" : "CodeBuddy 登录修复") : (language === "en" ? "WorkBuddy sign-in repair" : "WorkBuddy 登录修复")}</button>
               <WorkBuddyRepairDialog open={workBuddyRepairOpen} onClose={() => setWorkBuddyRepairOpen(false)} onProbe={onProbeLocalAgents} codeBuddy={codeBuddy} />
               {codeBuddy ? <AgentCooperation /> : null}
             </div>
 
-            {customProviders.length ? (
-              <div className="custom-provider-keys">
-                <h3>{t.settings.routing.customProviders}</h3>
-                <p>{t.settings.routing.customProvidersHint}</p>
-                <div className="api-key-list">
-                  {customProviders.map((provider) => (
-                    <ApiKeyField
-                      key={provider.id}
-                      label={provider.id}
-                      description={`${provider.kind} · ${provider.base_url || provider.key_env}`}
-                      placeholder={provider.key_env}
-                      status={provider.configured ? "configured" : "missing"}
-                      onSave={(value) => onSaveProviderKey(provider.id, value)}
-                      onDelete={() => onDeleteProviderKey(provider.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </>
         )}
-      </section>
+        </div>
+      </details>
 
       <UpdateSection {...update} />
 
