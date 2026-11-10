@@ -59,8 +59,8 @@ export function ConfigMigration({ onApplied }: { onApplied?: () => Promise<void>
         {busy ? (zh ? "正在处理…" : "Working…") : (zh ? "预览转换" : "Preview conversion")}
       </button>
     </div>
-    <p className="field-hint">{zh ? "只转换明确的媒体设置；预览不改文件，应用前备份。冲突和失效模型需人工审阅。" :
-      "Convert only unambiguous media settings. Preview is read-only; Apply keeps a backup. Conflicts and retired models require review."}</p>
+    <p className="field-hint">{zh ? "转换旧媒体设置、已改名的模型标识与 PSV 模型目录；预览不改文件，应用前备份。已下线模型、SOCKS 代理或冲突仍需人工审阅。" :
+      "Convert legacy media settings, renamed model IDs and PSV catalogs. Preview is read-only and Apply keeps backups. Retired models, SOCKS proxies and conflicts still need review."}</p>
     {plan ? <div aria-live="polite">
       <code style={{ overflowWrap: "anywhere" }}>{plan.config_path}</code>
       {plan.changes.length ? <><p>{zh ? "拟更改（尚未写入）" : "Proposed changes (not applied)"}</p>

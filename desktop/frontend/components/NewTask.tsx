@@ -47,7 +47,7 @@ export function NewTask({
   onOpenSettings,
   onStart,
 }: NewTaskProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const hasFile = Boolean(state.task.selectedFile);
   // Offering "start" when the run would be refused for a missing component
   // wastes a click and answers with an error banner. The model weights are not
@@ -70,6 +70,7 @@ export function NewTask({
   const cloudTranslation = ["translated-srt", "final-srt"].includes(
     state.task.request.stage,
   );
+  const cloudAsr = Boolean(state.task.request.asr && !["local", "moss-local"].includes(state.task.request.asr));
   // Nothing has finished on this machine yet, so the first run still has to
   // fetch model weights and warm the compiled separator. Several minutes of
   // that happen before any progress appears, which reads as a hang unless it
@@ -84,7 +85,7 @@ export function NewTask({
           {/* <p className="page-kicker">{t.newTask.kicker}</p> */}
           <h1>{t.newTask.pageTitle}</h1>
           <p>
-            {cloudTranslation
+            {cloudAsr ? (language === "en" ? "Audio will be sent to the selected transcription provider; account quota and charges may apply." : "音频将发送到所选云端转写服务，可能消耗账号额度或产生费用。") : cloudTranslation
               ? t.newTask.pageDescriptionCloud
               : t.newTask.pageDescription}
           </p>
@@ -92,7 +93,7 @@ export function NewTask({
         <div className="privacy-note">
           <ShieldCheck size={15} />
           <span>
-            {cloudTranslation
+            {cloudAsr ? (language === "en" ? "Cloud transcription uploads audio" : "云端转写会上传音频") : cloudTranslation
               ? t.newTask.privacyNoteCloud
               : t.newTask.privacyNote}
           </span>

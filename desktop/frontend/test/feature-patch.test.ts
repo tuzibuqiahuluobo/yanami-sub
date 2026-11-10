@@ -19,7 +19,8 @@ test("cooperation and recovery require explicit actions and explain their bounda
 
 test("one task-settings implementation controls batch presets and intake uses its saved request", () => {
   const task = readFileSync(new URL("../components/TaskSettings.tsx", import.meta.url), "utf8");
-  assert.match(task, /llm_preset_defaults: true/);
+  assert.doesNotMatch(task, /Use the preset’s default parameters/);
+  assert.match(task, /knowledge: request.knowledge/);
   assert.match(task, /llm_preset_defaults: false/);
   const batch = readFileSync(new URL("../components/BatchQueue.tsx", import.meta.url), "utf8");
   assert.match(batch, /desktopApi\.appendBatch\(snapshot\.batch_id, sources\)/);

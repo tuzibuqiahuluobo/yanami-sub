@@ -95,7 +95,7 @@ def test_explicit_confirmation_and_matching_preview_are_required(modern):
 
 def test_catalog_changes_invalidate_preview_and_catalog_is_backed_up(modern, monkeypatch):
     from finesub.llm.routing.model_catalog import _catalog_path
-    catalog = modern.parent / "catalog.psv"
+    catalog = modern.parent / "catalog.toml"
     catalog.write_bytes(_catalog_path().read_bytes())
     monkeypatch.setenv("FINESUB_MODEL_CATALOG", str(catalog))
     plan = migration.preview_config_migration(modern)
@@ -105,7 +105,7 @@ def test_catalog_changes_invalidate_preview_and_catalog_is_backed_up(modern, mon
         migration.apply_config_migration(modern, plan["token"], confirmed=True)
     plan = migration.preview_config_migration(modern)
     result = migration.apply_config_migration(modern, plan["token"], confirmed=True)
-    assert (Path(result["backup_path"]) / "model_catalog.psv").read_bytes() == catalog.read_bytes()
+    assert (Path(result["backup_path"]) / "model_catalog.toml").read_bytes() == catalog.read_bytes()
 
 
 def test_backup_failure_never_writes_original(modern, monkeypatch):

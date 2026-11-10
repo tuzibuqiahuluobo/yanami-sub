@@ -1,4 +1,5 @@
 "use client";
+import { presetLabel, policyLabel } from "../lib/routingLabels";
 
 import {
   ArrowLeft,
@@ -22,9 +23,10 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { desktopApi } from "@/lib/bridge";
 import { AgentCooperation } from "./AgentCooperation";
+import { AgentConfigDialog } from "./AgentConfigDialog";
 
 import {
   isStale,
@@ -52,7 +54,6 @@ import {
   type ThemeMode,
 } from "@/lib/useAppearance";
 import { runInterfaceTransition } from "@/lib/viewTransition";
-import { useExitPresence } from "@/lib/useExitPresence";
 
 import { ApiKeyField } from "./ApiKeyField";
 import { ConfigMigration } from "./ConfigMigration";
@@ -121,6 +122,7 @@ export function Settings({
   const { showSuccess } = useToast();
   const [docsOpen, setDocsOpen] = useState(false);
   const [logsError, setLogsError] = useState("");
+  const [rememberLast, setRememberLast] = useState(() => uiValue("rememberLastSettings", true));
   const [routingCatalogOpen, setRoutingCatalogOpen] = useState(false);
   // Preferences are hydrated before this page can be reached, so the initial
   // read is already the durable one.
@@ -193,30 +195,35 @@ export function Settings({
   const [routingBusy, setRoutingBusy] = useState(false);
   const [routingError, setRoutingError] = useState("");
   const [agentProbeBusy, setAgentProbeBusy] = useState(false);
-  const [agentPathsOpen, setAgentPathsOpen] = useState(false);
-  const agentPathsPresence = useExitPresence(agentPathsOpen);
   const [workBuddyRepairOpen, setWorkBuddyRepairOpen] = useState(false);
   const [agentPaths, setAgentPaths] = useState<Record<string, string>>({});
+  const savedAgentPaths = useRef<Record<string, string>>({});
   const [agentPathBusy, setAgentPathBusy] = useState("");
   const [agentPathError, setAgentPathError] = useState<Record<string, string>>({});
   const codeBuddy = routing.unified_llm_media ?? false;
   const agentTiers = ["LOCAL_AGY", "LOCAL_CLAUDE", "LOCAL_CODEX", "LOCAL_DSH", codeBuddy ? "LOCAL_CODEBUDDY" : "LOCAL_WORKBUDDY"];
   useEffect(() => {
-    void desktopApi.getAgentPaths().then((saved) => setAgentPaths((current) => ({ ...current, ...Object.fromEntries(Object.entries(saved.paths).filter(([, path]) => path)) }))).catch(() => undefined);
+    void desktopApi.getAgentPaths().then((saved) => {
+      const paths = Object.fromEntries(Object.entries(saved.paths).filter(([, path]) => path));
+      savedAgentPaths.current = { ...savedAgentPaths.current, ...paths };
+      setAgentPaths((current) => ({ ...current, ...paths }));
+    }).catch(() => undefined);
   }, []);
   useEffect(() => {
     if (!agentStatuses) return;
     setAgentPaths((current) => {
       const next = { ...current };
       for (const agent of agentStatuses) {
-        if (!next[agent.provider_tier] && agent.detected_path) next[agent.provider_tier] = agent.detected_path;
+        if (!next[agent.provider_tier] && agent.detected_path) {
+          next[agent.provider_tier] = agent.detected_path;
+          savedAgentPaths.current[agent.provider_tier] = agent.detected_path;
+        }
       }
       return next;
     });
   }, [agentStatuses]);
   useEffect(() => {
     if (!focusTarget) return;
-    if (focusTarget === "agents") setAgentPathsOpen(true);
     const id = focusTarget === "agents" ? "settings-agent-paths" :
       focusTarget === "routing" ? "settings-routing" : `api-key-${focusTarget}`;
     const frame = window.requestAnimationFrame(() => {
@@ -233,6 +240,7 @@ export function Settings({
     setAgentPathError((current) => ({ ...current, [tier]: "" }));
     try {
       const saved = await desktopApi.setAgentPath(tier, path);
+      savedAgentPaths.current[tier] = saved.path;
       setAgentPaths((current) => ({ ...current, [tier]: saved.path }));
       onAgentPathsChanged();
       showSuccess(t.toast.saved, `agent-path-saved-${tier}`);
@@ -725,7 +733,7 @@ export function Settings({
                   onChange={(value) => setRoutingDraft((current) => ({ ...current, preset: value }))}
                   options={routing.presets.map((preset) => ({
                     value: preset.id,
-                    label: `${preset.name} · ${preset.id}`,
+                    label: presetLabel(preset.id, preset.name, language === "en"),
                   }))}
                 />
               </div>
@@ -736,24 +744,7 @@ export function Settings({
                   ariaLabel={t.settings.routing.policy}
                   disabled={routingBusy}
                   onChange={(value) => setRoutingDraft((current) => ({ ...current, execution_policy: value }))}
-                  options={routing.policies.map((policy) => ({ value: policy, label: policy }))}
-                />
-              </div>
-              <div className="field">
-                <span>{t.settings.routing.serviceTier}</span>
-                <CustomSelect
-                  value={routingDraft.local_agent_service_tier}
-                  ariaLabel={t.settings.routing.serviceTier}
-                  disabled={routingBusy}
-                  onChange={(value) => setRoutingDraft((current) => ({
-                    ...current,
-                    local_agent_service_tier: value as RoutingUpdate["local_agent_service_tier"],
-                  }))}
-                  options={[
-                    { value: "", label: t.settings.routing.followCore },
-                    { value: "fast", label: "fast" },
-                    { value: "flex", label: "flex" },
-                  ]}
+                  options={routing.policies.map((policy) => ({ value: policy, label: policyLabel(policy, language === "en") }))}
                 />
               </div>
               <div className="field">
@@ -875,15 +866,14 @@ export function Settings({
             </div>
 
             <div className="agent-diagnostics" id="settings-agent-paths" tabIndex={-1}>
-              <button type="button" className="agent-path-toggle" aria-expanded={agentPathsOpen} aria-controls="agent-path-list" onClick={() => setAgentPathsOpen((open) => !open)}>
-                <span>{t.settings.routing.dshPath}</span><ChevronDown size={16} aria-hidden="true" className={agentPathsOpen ? "is-open" : ""} />
-              </button>
-              <div id="agent-path-list" className="agent-path-list" hidden={!agentPathsPresence.present}
-                data-closing={!agentPathsOpen || undefined} inert={!agentPathsOpen} aria-hidden={!agentPathsOpen}
-                onAnimationEnd={(event) => { if (event.target === event.currentTarget) agentPathsPresence.finish(); }}>
+              <h3>{language === "en" ? "Local Agent configuration" : "本地 Agent 独立配置"}</h3>
+              <div id="agent-path-list" className="agent-path-list">
               <p className="field-help" id="agent-path-selection-hint">{language === "en" ? "Select a supported CLI file or its installation folder, then save. Only your selected CLI is checked; no other drives are scanned." : "选择受支持的 CLI 文件或安装目录后保存。仅检查选定的 CLI，不扫描其他磁盘。"}</p>
               {agentStatuses?.some((agent) => agent.detected_path) ? <p className="field-help">{t.settings.routing.detectedPathHint}</p> : null}
-              {agentTiers.map((tier) => <div className="agent-path-card" key={tier}>
+              {agentTiers.map((tier) => <AgentConfigDialog name={tier.replace(/^LOCAL_/, "")} key={tier} onDismiss={() => {
+                setAgentPaths((current) => ({ ...current, [tier]: savedAgentPaths.current[tier] ?? "" }));
+                if (tier === "LOCAL_CODEX") setRoutingDraft((current) => ({ ...current, local_agent_service_tier: routing.local_agent_service_tier }));
+              }}><div className="agent-path-card">
                 <label className="field">
                   <span>{tier.replace(/^LOCAL_/, "")}</span>
                   <input
@@ -903,7 +893,27 @@ export function Settings({
                   <button type="button" className="button button-secondary button-compact" disabled={Boolean(agentPathBusy) || !agentPaths[tier]} onClick={() => void saveAgentPath(tier, "")}>{t.settings.routing.dshPathClear}</button>
                 </div>
                 {agentPathError[tier] ? <p className="routing-error" role="alert">{agentPathError[tier]}</p> : null}
-              </div>)}
+                {tier === "LOCAL_CODEX" ? <div className="speaker-model-grid">              <div className="field">
+                <span>{t.settings.routing.serviceTier}</span>
+                <CustomSelect
+                  value={routingDraft.local_agent_service_tier}
+                  ariaLabel={t.settings.routing.serviceTier}
+                  disabled={routingBusy}
+                  onChange={(value) => setRoutingDraft((current) => ({
+                    ...current,
+                    local_agent_service_tier: value as RoutingUpdate["local_agent_service_tier"],
+                  }))}
+                  options={[
+                    { value: "", label: t.settings.routing.followCore },
+                    { value: "fast", label: "fast" },
+                    { value: "flex", label: "flex" },
+                  ]}
+                />
+              </div>
+<button type="button" className="button button-secondary" disabled={routingBusy} onClick={async () => { setRoutingBusy(true); try { await onSaveRouting({ ...toRoutingDraft(), local_agent_service_tier: routingDraft.local_agent_service_tier }); showSuccess(t.toast.saved, "codex-service-saved"); } catch (error) { setAgentPathError((current) => ({ ...current, [tier]: String(error) })); } finally { setRoutingBusy(false); } }}>{language === "en" ? "Save Codex options" : "保存 Codex 选项"}</button></div> : null}
+                <p className="field-help">{agentStatuses?.find((agent) => agent.provider_tier === tier)?.detail || (language === "en" ? "Run CLI detection after saving. Detection does not verify login or quota." : "保存后请运行 CLI 检测；检测不代表登录有效或额度充足。")}</p>
+                {tier === "LOCAL_CODEBUDDY" ? <button type="button" className="button button-secondary" onClick={() => void desktopApi.openCodeBuddyLogin().catch((error) => setAgentPathError((current) => ({ ...current, [tier]: String(error) })))}>{language === "en" ? "Open CLI sign-in" : "打开 CLI 登录"}</button> : null}
+              </div></AgentConfigDialog>)}
               </div>
               <div className="settings-section-heading compact">
                 <div>
@@ -970,6 +980,15 @@ export function Settings({
       </section>
 
       <UpdateSection {...update} />
+
+      <section className="settings-section">
+        <h2>{language === "en" ? "Remember task options" : "记住上次使用的设置"}</h2>
+        <label className="switch-row"><input type="checkbox" checked={rememberLast} onChange={(event) => {
+          setRememberLast(event.target.checked);
+          saveUi({ rememberLastSettings: event.target.checked });
+        }} /><span>{language === "en" ? "Restore options for new tasks, batches and knowledge workflows" : "下次新建任务、批处理与知识库操作时沿用上次选项"}</span></label>
+        <p className="field-help">{language === "en" ? "Input files, notes, credentials and destructive confirmations are not remembered. Turning this off keeps saved choices but stops restoring and updating them." : "不记忆输入文件、任务备注、凭据或危险操作确认。关闭后保留已保存的选项，但不再恢复或更新它们。"}</p>
+      </section>
 
       <section className="settings-section">
         <div className="settings-section-heading">

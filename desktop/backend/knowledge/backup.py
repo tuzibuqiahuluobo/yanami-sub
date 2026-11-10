@@ -20,16 +20,17 @@ import uuid
 
 _DATABASE = "knowledge.sqlite"
 _SQLITE_FILES = {_DATABASE, *(_DATABASE + suffix for suffix in ("-wal", "-shm", "-journal"))}
-_CONFIG_FILES = {"config.toml", "model_catalog.psv"}
+_CONFIG_FILES = {"config.toml", "model_catalog.psv", "model_catalog.toml"}
 _FORMAT = 1
 
 
 def config_sources() -> dict[str, Path]:
     from finesub.paths import resolve_config_file, resolve_model_catalog_override
 
+    catalog = resolve_model_catalog_override()
     return {name: path for name, path in (
         ("config.toml", resolve_config_file()),
-        ("model_catalog.psv", resolve_model_catalog_override()),
+        ("model_catalog.psv" if catalog and catalog.suffix == ".psv" else "model_catalog.toml", catalog),
     ) if path is not None}
 
 

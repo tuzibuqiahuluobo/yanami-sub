@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from desktop.backend.common.core_compat import runtime_preferred
+
 from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 import hashlib
@@ -62,53 +64,6 @@ def _agent_tiers() -> set[str]:
     return {tier for tier, command in commands.items() if command}
 
 
-def _install_transport_fallback() -> None:
-    """FineSub 0.5.1 treats a closed HTTP connection as a permanent error.
-
-    A proxy/server closing before a response is a transport failure, not an
-    invalid key or prompt. Classifying only these concrete httpx exceptions
-    as retryable lets the existing ordered route move to its next candidate.
-    This process-local compatibility shim is shared by single and batch jobs.
-    """
-
-    import httpx
-    from finesub.llm import client
-
-    original = client.is_retryable_provider_error
-    if getattr(original, "_yanami_transport_fallback", False):
-        return
-
-    def retryable(error: BaseException) -> bool:
-        return isinstance(error, (httpx.RemoteProtocolError, httpx.ReadError, httpx.ConnectError)) or original(error)
-
-    retryable._yanami_transport_fallback = True  # type: ignore[attr-defined]
-    client.is_retryable_provider_error = retryable
-
-
-def _meets_correction_floor(routes, target_id: str) -> bool:
-    """Check if a target meets the correction quality floor.
-
-    Uses FineSub's quality_score mechanism instead of group membership.
-    This allows any target (including Claude Code, Codex, and future agents)
-    to qualify for correction as long as it meets the quality threshold,
-    without requiring explicit inclusion in correction-capable groups.
-    """
-    task_groups = getattr(routes, "task_groups", {})
-    correction_group = task_groups.get("correction-text")
-    if correction_group is None:
-        logger.warning(
-            "model routing: correction-text task group not found; "
-            "falling back to quality_score >= 70"
-        )
-        floor = 70
-    else:
-        floor = getattr(correction_group, "floor_score", 70)
-
-    target = routes.target_fact(target_id)
-    quality = getattr(target, "quality_score", 0)
-    return quality >= floor
-
-
 def _correction_capable_targets(routes) -> set[str]:
     """Every target that meets correction quality requirements.
 
@@ -128,10 +83,9 @@ def _correction_capable_targets(routes) -> set[str]:
         for target_id in routes.model_groups.get(group_name, _EmptyModelGroup()).target_ids
     }
 
-    # For all agent targets: add those meeting the quality floor
-    # This includes both packaged groups and unvetted tiers
+    # 0.7 capability tiers are advisory, not an execution gate.
     for target in routes.targets.values():
-        if target.backend == "local_agent" and _meets_correction_floor(routes, target.id):
+        if target.backend == "local_agent":
             correction_targets.add(target.id)
 
     return correction_targets
@@ -233,12 +187,6 @@ def _targets(source: str, *, free_only: bool, selected_agent: str = "") -> tuple
         if free_only and fact.provider_tier != "GEMINI_FREE":
             continue
         # Check if model meets correction quality floor
-        if not _meets_correction_floor(routes, target_id):
-            logger.debug(
-                "model routing: API target %s below correction floor, skipping",
-                target_id
-            )
-            continue
         provider = routes.provider_for_target(target_id)
         key_name = provider.key_env or target.enabled_by
         if key_name and not os.environ.get(key_name, "").strip():
@@ -300,7 +248,7 @@ def _check_media_support(routes, targets: tuple[str, ...], media: str) -> bool:
 
 def _manual_route(request: TaskRequest) -> SourceRoute:
     from finesub.llm.routing.model_routes import (
-        install_runtime_preferred, parse_llm_model_args, runtime_preferred,
+        install_runtime_preferred, parse_llm_model_args,
     )
 
     previous = runtime_preferred()
@@ -343,25 +291,25 @@ def _manual_route(request: TaskRequest) -> SourceRoute:
 
 @contextmanager
 def source_route(request: TaskRequest) -> Iterator[SourceRoute]:
-    if not request.llm_preset or request.stage not in {"translated-srt", "final-srt"}:
-        with _source_route(effective_task_request(request)) as route:
-            yield route
-        return
     # The process-local config is private to this worker, never the user's file.
     _, shared_path = read_config_with_path()
+    original_sources = config_sources()
     previous = os.environ.get("FINESUB_CONFIG_FILE")
     with tempfile.TemporaryDirectory(prefix="yanami-task-preset-") as directory:
         path = Path(directory) / "config.toml"
         if shared_path is not None:
             shutil.copy2(shared_path, path)
-        update_config_file(path, {"llm": {"preset": request.llm_preset}})
+        patch = {"asr": {"moss_pro_paid": request.moss_pro_paid}}
+        if request.llm_preset and request.stage in {"translated-srt", "final-srt"}:
+            patch["llm"] = {"preset": request.llm_preset}
+        update_config_file(path, patch)
         try:
             os.environ["FINESUB_CONFIG_FILE"] = str(path)
             clear_config_cache()
             default_model_routes.cache_clear()
             default_model_routes()  # Unknown presets fail before any model call.
             with _source_route(effective_task_request(request)) as route:
-                yield route
+                yield replace(route, backup_files=original_sources)
         finally:
             if previous is None:
                 os.environ.pop("FINESUB_CONFIG_FILE", None)
@@ -381,7 +329,6 @@ def _source_route(request: TaskRequest) -> Iterator[SourceRoute]:
     Claude Code, Codex) to work.
     """
 
-    _install_transport_fallback()
     install_workbuddy_auth_fix()
     backup_files = config_sources()
     if request.stage not in {"translated-srt", "final-srt"}:

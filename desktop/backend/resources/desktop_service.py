@@ -328,7 +328,7 @@ class DesktopResourceService:
                 resolved[model_fetch.HF_ENDPOINT] = endpoint
             else:
                 resolved.pop(model_fetch.HF_ENDPOINT, None)
-            model_fetch.apply_xet_policy(resolved, endpoint=endpoint)
+            model_fetch.apply_mirror_policy(resolved, endpoint=endpoint)
             if log is not None:
                 log(f"模型下载源：{model_id} · " + ("镜像或自定义端点" if endpoint else "官方源"))
             for route in network_routes():
@@ -388,7 +388,7 @@ class DesktopResourceService:
             if log is not None:
                 log("官方模型源连接失败，改用备用镜像重试")
             alternate = {model_fetch.HF_ENDPOINT: mirror}
-            model_fetch.apply_xet_policy(alternate, endpoint=mirror)
+            model_fetch.apply_mirror_policy(alternate, endpoint=mirror)
             try:
                 run(alternate)
             except Exception as mirror_error:

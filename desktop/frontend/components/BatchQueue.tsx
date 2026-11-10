@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
 import { readProcessingDevice, requestDeviceFields } from "@/lib/processingDevice";
+import { saveUi, uiValue } from "@/lib/preferences";
 import type {
   ApiProvider,
   BatchItemRequest,
@@ -83,7 +84,17 @@ export function BatchQueue({
   const [history, setHistory] = useState<BatchSnapshot[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ message: string; code?: string; action?: string | null; resourceIds?: string[] | null } | null>(null);
-  const [workers, setWorkers] = useState({ download: 2, asr: 1, llm: 2 });
+  const [workers, setWorkers] = useState(() => {
+    const defaults = { download: 2, asr: 1, llm: 2 };
+    if (!uiValue("rememberLastSettings", true)) return defaults;
+    const saved = uiValue<Record<string, unknown>>("batchWorkers", {});
+    for (const key of Object.keys(defaults) as (keyof typeof defaults)[]) {
+      const value = saved[key];
+      if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 8) defaults[key] = value;
+    }
+    return defaults;
+  });
+  useEffect(() => { if (uiValue("rememberLastSettings", true)) saveUi({ batchWorkers: workers }); }, [workers]);
   const [asrQueueSize, setAsrQueueSize] = useState(4);
   const [retryFailed, setRetryFailed] = useState(1);
   const [manifestBusy, setManifestBusy] = useState(false);

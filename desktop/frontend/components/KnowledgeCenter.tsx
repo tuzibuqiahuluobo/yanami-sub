@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
 import { runInterfaceTransition } from "@/lib/viewTransition";
+import { saveUi, uiValue } from "@/lib/preferences";
 import type {
   JobSnapshot,
   KnowledgeEntryDocument,
@@ -78,7 +79,7 @@ function taskLabel(task: CompletedKnowledgeTask): string {
 export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
   const { t, language } = useLanguage();
   const { showSuccess } = useToast();
-  const [tab, setTab] = useState<KnowledgeTab>("library");
+  const [tab, setTab] = useState<KnowledgeTab>(() => uiValue("rememberLastSettings", true) ? uiValue<KnowledgeTab>("knowledgeTab", "library") : "library");
   const [snapshot, setSnapshot] = useState<KnowledgeSnapshot | null>(null);
   const [document, setDocument] = useState<KnowledgeEntryDocument | null>(null);
   const [draft, setDraft] = useState("");
@@ -88,7 +89,8 @@ export function KnowledgeCenter({ tasks }: KnowledgeCenterProps) {
   const [error, setError] = useState("");
   const [output, setOutput] = useState("");
   const [search, setSearch] = useState("");
-  const [category, setCategory] = useState("all");
+  const [category, setCategory] = useState(() => uiValue("rememberLastSettings", true) ? uiValue("knowledgeCategory", "all") : "all");
+  useEffect(() => { if (uiValue("rememberLastSettings", true)) saveUi({ knowledgeTab: tab, knowledgeCategory: category }); }, [tab, category]);
   const selectTab = (next: KnowledgeTab) => {
     if (next === tab) return;
     runInterfaceTransition(() => setTab(next));

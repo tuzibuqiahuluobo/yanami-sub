@@ -1,4 +1,5 @@
 "use client";
+import { presetLabel } from "../lib/routingLabels";
 
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
 import { useState } from "react";
@@ -73,7 +74,7 @@ export function TaskSettings({
   const { t, language } = useLanguage();
   const inherited = Boolean(storedRequest.llm_preset_defaults);
   const preset = routing?.presets.find((item) => item.id === (storedRequest.llm_preset || routing.active_preset_id));
-  const request = inherited ? { ...storedRequest, ...preset?.defaults, llm_correction_media: "" as const, llm_planning_media: "" as const } : storedRequest;
+  const request = inherited ? { ...storedRequest, ...preset?.defaults, knowledge: storedRequest.knowledge, llm_correction_media: "" as const, llm_planning_media: "" as const } : storedRequest;
   const onChange: TaskSettingsProps["onChange"] = (changes) => {
     const custom = inherited && ["llm_media", "llm_correction_media", "llm_planning_media", "llm_retrieval", "llm_difficulty", "llm_continuity", "llm_parallel_windows", "knowledge"].some((key) => key in changes);
     commitChanges(custom ? { ...request, ...changes, llm_preset_defaults: false } : changes);
@@ -228,7 +229,37 @@ export function TaskSettings({
 
       {tab === "speech" ? (
         <div className="field-grid" role="tabpanel">
+          <div className="field field-wide">
+            <span>{language === "en" ? "Transcription engine" : "语音识别引擎"}</span>
+            <CustomSelect value={request.asr ?? "local"} disabled={disabled} onChange={(value) => onChange({ asr: value as TaskRequest["asr"], moss_pro_paid: false })}
+              options={[
+                { value: "local", label: language === "en" ? "Local Whisper (default)" : "本地 Whisper（默认，不上传）" },
+                { value: "moss-local", label: language === "en" ? "Local MOSS · NVIDIA 8 GB+ GPU" : "本地 MOSS（NVIDIA RTX 30+，显存至少 8 GB）" },
+                { value: "gemini-35t", label: "Gemini 3.5 Transcribe · Cloud" },
+                { value: "moss-pro", label: "MOSS Pro · Cloud" },
+                { value: "mai2", label: "MAI-Transcribe-2 · Cloud · Paid" },
+              ]} />
+            <small className="field-help">{language === "en" ? "Joint transcription skips Whisper and separation; timestamps and speakers come from the selected engine. Local MOSS downloads additional weights and requires a supported GPU." : "一体转写不运行 Whisper 和人声分离，时间轴与说话人由所选引擎提供。本地 MOSS 首次需下载模型，仅支持符合条件的 NVIDIA 显卡。"}</small>
+            {request.asr && !["local", "moss-local"].includes(request.asr) ? <div className="inline-note" role="note">
+              <p>{language === "en" ? "Starting uploads this task’s audio to the selected provider. Quota and charges follow your account; MAI2 is paid. Configure credentials in Settings first." : "开始后会将本次音频上传到对应服务商，使用账号额度；MAI2 为付费服务。请先在设置中配置凭据。"}</p>
+              {request.asr === "moss-pro" ? <label className="checkbox-row"><input type="checkbox" checked={request.moss_pro_paid ?? false} disabled={disabled} onChange={(event) => onChange({ moss_pro_paid: event.target.checked })} />{language === "en" ? "Allow MOSS Pro prepaid balance after free quota (this task only)" : "免费额度用完后允许使用 MOSS Pro 预付余额（仅本次，不记忆）"}</label> : null}
+              <button type="button" className="button button-secondary button-compact" onClick={() => onOpenSettings?.("routing")}>{language === "en" ? "Configure cloud credentials" : "配置云端凭据"}</button>
+            </div> : null}
+          </div>
           <SpeakerSettings request={request} disabled={disabled} onChange={onChange} />
+          <details className="field field-wide"><summary>{language === "en" ? "Recognition repair and alignment" : "识别补漏与时间对齐（高级）"}</summary>
+            <div className="speaker-model-grid">
+              <div className="field"><span>{language === "en" ? "Cloud transcription repair" : "云端转写补漏"}</span>
+                <CustomSelect value={request.asr_repair ?? "on"} disabled={disabled} onChange={(value) => onChange({ asr_repair: value as TaskRequest["asr_repair"] })}
+                  options={[{ value: "on", label: language === "en" ? "On (recommended)" : "开启（推荐）" }, { value: "off", label: language === "en" ? "Off" : "关闭" }, { value: "quota", label: language === "en" ? "Allow additional Gemini daily requests" : "允许额外消耗 Gemini 每日请求额度" }]} /></div>
+              {(["squeeze_repair", "gap_fill", "row_fill"] as const).map((key) => <div className="field" key={key}>
+                <span>{({ squeeze_repair: language === "en" ? "Repair collapsed cues" : "修复一闪而过的字幕", gap_fill: language === "en" ? "Fill missing speech gaps" : "补回漏识别的空档", row_fill: language === "en" ? "Recover missing words (optional)" : "补回行内漏字（可选）" })[key]}</span>
+                <CustomSelect value={request[key] ?? (key === "row_fill" ? "off" : "auto")} disabled={disabled} onChange={(value) => onChange({ [key]: value })}
+                  options={[...(key === "row_fill" ? [] : [{ value: "auto", label: language === "en" ? "Automatic (recommended)" : "自动（推荐）" }]), { value: "on", label: language === "en" ? "On" : "开启" }, { value: "off", label: language === "en" ? "Off" : "关闭" }]} /></div>)}
+            </div>
+            <label className="switch-row"><input type="checkbox" checked={request.asr_aligner ?? false} disabled={disabled} onChange={(event) => onChange({ asr_aligner: event.target.checked })} /><span>{language === "en" ? "Use local forced alignment for supported joint-transcription outputs (extra model/computation)" : "对支持的一体转写结果使用本地强制对齐（需额外模型与计算）"}</span></label>
+            <small className="field-help">{language === "en" ? "Options apply only to supported engines. Repair may increase processing time; quota mode can spend more requests." : "各选项仅在支持的引擎中生效。补漏会增加处理时间；quota 模式会额外消耗请求额度。"}</small>
+          </details>
           <div className="field">
             <span>{t.newTask.settings.language}</span>
             <CustomSelect
@@ -294,13 +325,13 @@ export function TaskSettings({
               <span>{language === "en" ? "Preset for this task" : "本次任务预设"}</span>
               <CustomSelect value={request.llm_preset ?? ""} disabled={disabled || !translationSelected}
                 ariaLabel={language === "en" ? "Task preset" : "任务预设"}
-                onChange={(value) => commitChanges({ llm_preset: value, llm_preset_defaults: true })}
+                onChange={(value) => {
+                  const chosen = routing?.presets.find((item) => item.id === (value || routing.active_preset_id));
+                  commitChanges({ ...chosen?.defaults, knowledge: request.knowledge, llm_preset: value, llm_preset_defaults: false });
+                }}
                 options={[{ value: "", label: language === "en" ? "Use settings preset" : "跟随设置中的预设" },
-                  ...(routing?.presets ?? []).map((item) => ({ value: item.id, label: `${item.name || item.id} (${item.id})` }))]} />
-              <label className="checkbox-row"><input type="checkbox" checked={inherited} disabled={disabled || !translationSelected}
-                onChange={(event) => commitChanges(event.target.checked ? { llm_preset_defaults: true } : { ...request, llm_preset_defaults: false })} />
-                {language === "en" ? "Use the preset’s default parameters" : "使用预设默认参数"}</label>
-              <small className="field-help">{language === "en" ? "Applies only to this run. Editing media, quality, retrieval, concurrency or knowledge makes the displayed parameters custom; saved settings are unchanged." : "仅影响本次任务；修改媒体、质量、检索、并发或知识库参数后，切换为自定义参数，不改动全局设置。"}</small>
+                  ...(routing?.presets ?? []).map((item) => ({ value: item.id, label: presetLabel(item.id, item.name, language === "en") }))]} />
+              <small className="field-help">{language === "en" ? "Selecting a preset updates this task’s processing options but keeps your knowledge read/write choice. Review the options below; global routing is unchanged." : "切换预设会更新本任务的处理参数，但保留你选择的知识库读写模式。可在下方继续调整，不修改全局路由。"}</small>
             </div> : null}
             {source === "agent" ? <div className="field field-wide task-route-field">
               <span>{t.newTask.settings.agentChoice}</span>

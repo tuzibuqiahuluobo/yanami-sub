@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from desktop.backend.common.core_compat import runtime_preferred
+
 from contextlib import contextmanager, redirect_stderr, redirect_stdout
 from dataclasses import asdict, is_dataclass
 from io import StringIO
@@ -76,7 +78,6 @@ def _routing_override(values: list[str]) -> Iterator[None]:
     from finesub.llm.routing.model_routes import (
         install_runtime_preferred,
         parse_llm_model_args,
-        runtime_preferred,
     )
 
     previous = runtime_preferred()

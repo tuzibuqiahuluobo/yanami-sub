@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.0",
+    title: { zh: "0.3.0 · FineSub 0.7.0 与任务设置改进", en: "0.3.0 · FineSub 0.7.0 and task settings" },
+    notes: {
+      zh: ["接入本地 MOSS 与云端一体转写、识别补漏及新的纠错能力；默认仍为本地 Whisper。", "旧模型目录和改名路由提供预览、备份与转换；SOCKS API 代理需改用 HTTP 端口。", "修复说话人控件遮挡、阶段换行间距，移除会覆盖知识库模式的预设复选框。", "新增记忆设置开关、逐 Agent 配置弹窗、清晰的模型失败提示与实际响应模型日志。", "采用完整更新包，首次运行按新依赖锁准备环境；请保留旧任务和模型缓存。"],
+      en: ["Add local MOSS, cloud joint transcription and repair options while keeping local Whisper as default.", "Preview, back up and migrate legacy catalogs and renamed routes. API proxies require HTTP rather than SOCKS.", "Fix overlapping speaker controls and wrapped stage spacing; remove the preset checkbox that overwrote knowledge mode.", "Add remembered-options control, per-Agent dialogs, actionable errors and actual-model logs.", "Use a full update; the first run prepares the new locked runtime. Preserve existing tasks and model caches."],
+    },
+  },
+  {
     version: "0.2.1.post3",
     title: { zh: "0.2.1.post3 · 视频下载与代理修复", en: "0.2.1.post3 · Video downloads and proxy support" },
     notes: {

@@ -89,6 +89,16 @@ export function uiValue<T>(key: string, fallback: T): T {
   return value === undefined || value === null ? fallback : (value as T);
 }
 
+export function workflowOptions<T extends Record<string, string>>(key: string, defaults: T): T {
+  if (!uiValue("rememberLastSettings", true)) return defaults;
+  const saved = uiValue<Record<string, unknown>>(key, {});
+  const result = { ...defaults };
+  for (const field of Object.keys(defaults) as (keyof T)[]) {
+    if (typeof saved[field as string] === "string") result[field] = saved[field as string] as T[keyof T];
+  }
+  return result;
+}
+
 export function taskDefaults(): Partial<TaskRequest> {
   return cache.task_defaults;
 }

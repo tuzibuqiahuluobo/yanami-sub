@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 import tomllib
@@ -89,12 +90,31 @@ def _media_text(original: str, llm: dict) -> tuple[str, list[str]]:
     return candidate, changes
 
 
+def _catalog_conversion():
+    from finesub.paths import resolve_model_catalog_override
+    from finesub.llm.routing.migrate_catalog import convert
+    from desktop.backend.knowledge.backup import _not_link
+
+    source = resolve_model_catalog_override()
+    if source is None or source.suffix.lower() != ".psv":
+        return None
+    _not_link(source)
+    if os.environ.get("FINESUB_MODEL_CATALOG"):
+        raise ValueError("自定义 FINESUB_MODEL_CATALOG 仍指向 PSV；请先用上游转换命令生成 TOML，并将该环境变量改为新路径。 / Update the explicit catalog path after conversion.")
+    destination = source.with_name("model_catalog.toml")
+    if destination.exists() or destination.is_symlink():
+        raise ValueError("旧、新模型目录同时存在，无法安全覆盖；请人工审阅。 / Both catalog formats exist; review before conversion.")
+    text, notices = convert(source)
+    return source, destination, text, notices
+
+
 def _plan(path: Path):
     public = {"status": "legacy", "config_path": str(path), "changes": [], "issues": [], "token": ""}
     if not unified_llm_contract():
         return public, {}, b""
     from finesub.paths import resolve_model_catalog_override
-    from finesub.llm.routing.model_catalog import load_model_catalog, merge_catalogs
+    from finesub.llm.routing.model_catalog import load_effective_catalog
+    from finesub.llm.routing.migrate_catalog import RENAMED_TARGETS, MigrationError
     from finesub.llm.routing.model_routes import load_model_routes
     from desktop.backend.knowledge.backup import _not_link
 
@@ -110,22 +130,48 @@ def _plan(path: Path):
         if not isinstance(llm, dict):
             raise ValueError("[llm] must be a table")
         candidate, changes = _media_text(original.decode("utf-8"), llm)
+        lines = candidate.splitlines(keepends=True)
+        token_pattern = re.compile(r""""(?:[^"\\]|\\.)*"|'[^']*'|#[^\r\n]*""")
+        for section, (start, end) in _table_spans(candidate.splitlines()).items():
+            if section != "llm" and not section.startswith("llm."):
+                continue
+            for index in range(start, end):
+                def rename(match):
+                    token = match[0]
+                    value = token[1:-1]
+                    if not token.startswith("#") and value in RENAMED_TARGETS:
+                        replacement = RENAMED_TARGETS[value]
+                        changes.append(f"{value} → {replacement}")
+                        return token[0] + replacement + token[-1]
+                    return token
+                lines[index] = token_pattern.sub(rename, lines[index])
+        candidate = "".join(lines)
         public["changes"] = changes
-        catalog = load_model_catalog()
         override = resolve_model_catalog_override()
         if override is not None:
             _not_link(override)
             contents = override.read_bytes()
-            files["model_catalog.psv"] = (override, contents)
-            catalog = merge_catalogs(catalog, load_model_catalog(override, self_reported=True))
+            files["model_catalog.psv" if override.suffix == ".psv" else "model_catalog.toml"] = (override, contents)
+        conversion = _catalog_conversion()
+        if conversion:
+            _source, destination, text, notices = conversion
+            changes.extend(["模型目录 PSV → TOML / Catalog PSV → TOML", *notices])
+            with tempfile.TemporaryDirectory(prefix="yanami-catalog-preview-") as temporary:
+                draft = Path(temporary) / "model_catalog.toml"
+                draft.write_text(text, encoding="utf-8")
+                catalog = load_effective_catalog(draft)
+        else:
+            catalog = load_effective_catalog(override)
         load_model_routes(user_config=tomllib.loads(candidate).get("llm", {}), catalog=catalog)
         if any(source.read_bytes() != contents for source, contents in files.values()):
             raise ValueError("预览期间配置已变化，请重新预览 / Config changed during preview")
         identity = {name: [str(source), hashlib.sha256(contents).hexdigest()] for name, (source, contents) in files.items()}
         identity["candidate"] = hashlib.sha256(candidate.encode("utf-8")).hexdigest()
+        if conversion:
+            identity["catalog_candidate"] = [str(destination), hashlib.sha256(text.encode("utf-8")).hexdigest()]
         token = hashlib.sha256(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()
         return {**public, "status": "ready" if changes else "current", "token": token if changes else ""}, files, candidate.encode("utf-8")
-    except (OSError, ValueError, RuntimeError) as error:
+    except (OSError, ValueError, RuntimeError, MigrationError) as error:
         return {**public, "status": "blocked", "issues": [str(error)]}, files, b""
 
 
@@ -144,6 +190,7 @@ def apply_config_migration(path: Path, token: str, *, confirmed: bool = False) -
         plan, files, candidate = _plan(path)
         if plan["status"] != "ready" or plan["token"] != token:
             raise ValueError("配置或模型目录已变化，或仍需人工审阅；请重新预览 / Preview is stale or blocked")
+        conversion = _catalog_conversion()
         backups = path.parent / "config-backups"
         backups.mkdir(parents=True, exist_ok=True)
         _not_link(backups)
@@ -172,6 +219,17 @@ def apply_config_migration(path: Path, token: str, *, confirmed: bool = False) -
         write_atomic(path, candidate.decode("utf-8"), newline="")
         if path.read_bytes() != candidate:
             raise RuntimeError(f"配置写入后已变化，请核查；不覆盖当前内容 / Verify config; backup: {final}")
+        if conversion:
+            from finesub.llm.routing.migrate_catalog import _free_backup_name
+            source, destination, text, _notices = conversion
+            # Exclusive creation: never overwrite a catalog written since preview.
+            with destination.open("x", encoding="utf-8", newline="") as stream:
+                stream.write(text)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if any(source.read_bytes() != contents for source, contents in files.values() if source != path):
+                raise ValueError(f"模型目录已变化，原文未移动；备份：{final} / Catalog changed; review backup")
+            source.rename(_free_backup_name(source))
     from finesub.config import clear_config_cache
     from finesub.llm.routing.model_catalog import default_model_catalog
     from finesub.llm.routing.model_routes import default_model_routes

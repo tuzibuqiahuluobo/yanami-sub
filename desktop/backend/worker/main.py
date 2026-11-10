@@ -67,11 +67,14 @@ class WorkerReporter:
         self.task_id = task_id
         self.emit = emit
         self._last_progress: dict[str, tuple[int, int]] = {}
+        self._stage = "startup"
+        self._model_stages: dict[tuple[str, str], set[str]] = {}
 
     def planned(self, stages) -> None:
         return
 
     def stage_started(self, stage: str, *, reused: bool = False, detail: str = "") -> None:
+        self._stage = stage
         # The pipeline names the stage it is entering. Announcing anything
         # before that -- the requested stage, in particular -- is a claim about
         # where the run is that nothing has established: it read as every
@@ -121,12 +124,24 @@ class WorkerReporter:
         self._log(f"Warning: {message}" + (f"（{tail}）" if tail else ""))
 
     def debug(self, message: str, fields=None) -> None:
+        if message in {"llm api call", "agent call"} and fields and fields.get("model"):
+            model = str(fields["model"])
+            provider = str(fields.get("tier") or fields.get("driver") or "unknown")
+            stages = self._model_stages.setdefault((provider, model), set())
+            success = str(fields.get("code")) in {"0", "200"}
+            if not success or self._stage not in stages:
+                self._log(f"模型调用 / Model call: stage={self._stage} provider={provider} model={model} status={'answered' if success else 'failed'} code={fields.get('code', 'unknown')}")
+            if success:
+                stages.add(self._stage)
         body = " ".join(f"{key}={value}" for key, value in (fields or {}).items())
         self.emit(
             WorkerEvent.debug(self.task_id, f"{message} {body}".strip())
         )
 
     def completed(self, output, elapsed_sec: float) -> None:
+        for (provider, model), stages in self._model_stages.items():
+            if stages:
+                self._log(f"实际响应模型 / Responding model: {provider} / {model}; stages={','.join(sorted(stages))}")
         self._log(f"完成：{output}")
 
     def failed(self, stage: str, message: str) -> None:
@@ -346,11 +361,30 @@ def _publish_deliverable(generated: Path, desired: Path, *, source: Path, task_i
     return destination
 
 
+def speech_model_provenance(paths: Any) -> str:
+    """Describe the saved ASR identity, explicitly including reused results."""
+    path = getattr(paths, "aligned_json", None)
+    if not path:
+        return ""
+    try:
+        path = Path(path)
+        if path.is_symlink() or path.stat().st_size > 16 * 1024 * 1024:
+            return ""
+        metadata = json.loads(path.read_text(encoding="utf-8")).get("metadata", {})
+        record = metadata.get("joint_asr") or metadata.get("asr_align") or {}
+        model = record.get("model")
+        if not model:
+            return ""
+        return "识别产物模型（可能复用） / ASR artifact model (may be reused): " + " ".join(str(model).split())[:200]
+    except (OSError, ValueError, AttributeError, TypeError):
+        return ""
+
+
 def _publish_output(paths: Any, request: TaskRequest, *, task_id: str) -> dict[str, str]:
     outputs = _publish_primary_output(paths, request, task_id=task_id)
-    if request.diarize == "off":
+    if request.diarize == "off" and request.asr == "local":
         return outputs
-    for key, attribute in (("speakerTimeline", "diar_json"), ("speakerJudge", "speaker_judge_json")):
+    for key, attribute in (("speakerTimeline", "diar_json"), ("speakerRows", "diar_rows_json"), ("speakerJudge", "speaker_judge_json")):
         report = getattr(paths, attribute, None)
         if report and Path(report).is_file() and not Path(report).is_symlink():
             outputs[key] = str(report)
@@ -413,10 +447,9 @@ def _routing_override(values: list[str]):
     from finesub.llm.routing.model_routes import (
         install_runtime_preferred,
         parse_llm_model_args,
-        runtime_preferred,
     )
-
-    previous = runtime_preferred()
+    from finesub.llm.routing import model_routes
+    previous = dict(model_routes._RUNTIME_PREFERRED)
     install_runtime_preferred(parse_llm_model_args(values))
     try:
         yield
@@ -435,7 +468,7 @@ def _prepare_task_knowledge(
     needs_store = stage in {"translated-srt", "final-srt"} and (
         effective_knowledge != "none" or request.style_mode != "none"
     )
-    if needs_store or (stage != "vocal" and request.asr_context != "off"):
+    if needs_store or (stage != "vocal" and request.asr_context != "off" and effective_knowledge != "none"):
         from finesub.paths import resolve_knowledge_root
         from desktop.backend.knowledge.schema_guard import prepare_knowledge_store
 
@@ -877,6 +910,9 @@ def run_request(
                 )
             effective_request = request.model_copy(update={"stage": effective_stage})
             outputs = _publish_output(paths, effective_request, task_id=task_id)
+            provenance = speech_model_provenance(paths)
+            if provenance:
+                emit(WorkerEvent.log(task_id, provenance))
             if request.diarize != "off" and request.stage in {"stable", "raw-srt", "translated-srt", "final-srt"}:
                 if "speakerTimeline" not in outputs:
                     emit(WorkerEvent.progress(task_id, stage="diarize", skipped=True,
@@ -887,7 +923,7 @@ def run_request(
             if skip_reason:
                 emit(WorkerEvent.log(task_id, skip_reason))
                 emit(WorkerEvent.progress(task_id, stage="translated-srt", message=skip_reason, skipped=True))
-        if request.cleanup_intermediate and outputs:
+        if request.cleanup_intermediate and outputs and not skip_reason:
             # `outputs` is empty for the stages that produce no subtitle
             # (`vocal`/`aligned`/`stable`), and with nothing to preserve the
             # cleanup deleted the very artifact the task was asked for: a green

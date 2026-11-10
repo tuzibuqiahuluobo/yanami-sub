@@ -51,6 +51,7 @@ _MANAGED_MANIFEST_FIELDS = {
 }
 _DESKTOP_ROW_FIELDS = {
     "cleanup_intermediate",
+    "moss_pro_paid",
     "gpu_index",
     "gpu_name",
     "llm_model",

@@ -203,6 +203,13 @@ class TaskDefaults(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     model_name: str | None = None
+    asr: Literal["local", "mai2", "moss-pro", "gemini-35t", "moss-local"] | None = None
+    asr_aligner: bool | None = None
+    asr_repair: Literal["on", "off", "quota"] | None = None
+    squeeze_repair: Literal["auto", "on", "off"] | None = None
+    gap_fill: Literal["auto", "on", "off"] | None = None
+    row_fill: Literal["on", "off"] | None = None
+    moss_pro_paid: bool | None = None
     device: Literal["cuda", "cpu"] | None = None
     gpu_index: int | None = None
     gpu_name: str | None = None
@@ -374,7 +381,14 @@ class TaskRequest(DesktopModel):
     qwen_verify: Literal["auto", "on", "off"] = "auto"
     lang_redecode: Literal["auto", "on", "off"] = "auto"
     asr_decode_batch: AsrDecodeBatch = "auto"
-    asr_context: Literal["off", "terms", "full"] = "off"
+    asr_context: Literal["off", "terms", "full"] = "terms"
+    asr: Literal["local", "mai2", "moss-pro", "gemini-35t", "moss-local"] = "local"
+    asr_aligner: bool = False
+    asr_repair: Literal["on", "off", "quota"] = "on"
+    squeeze_repair: Literal["auto", "on", "off"] = "auto"
+    gap_fill: Literal["auto", "on", "off"] = "auto"
+    row_fill: Literal["on", "off"] = "off"
+    moss_pro_paid: bool = False
     word: bool = False
     asr_stabilize_profile: Literal[-1, 0, 1, 2] = 0
     diarize: Literal["off", "acoustics", "judge-text", "judge-audio"] = "off"
@@ -396,7 +410,7 @@ class TaskRequest(DesktopModel):
     # Empty tries all detected Agents; a tier confines this one task (or batch)
     # to that CLI while retaining its own ordered model fallbacks.
     llm_agent: LocalAgentTier = ""
-    llm_difficulty: LLMDifficulty = "quality"
+    llm_difficulty: LLMDifficulty = "intermediate"
     llm_continuity: Literal["serial", "parallel"] = "serial"
     llm_parallel_windows: int = Field(default=1, ge=1)
     llm_preset: str = Field(default="", max_length=200)
@@ -418,8 +432,8 @@ class TaskRequest(DesktopModel):
     knowledge: KnowledgeMode = "update"
     refined_srt: str | None = None
     postprocess_profile: Literal[-1, 0, 1, 2, 3, 4] = 0
-    max_retries_per_window: int = Field(default=5, ge=0)
-    max_replacements_per_window: int = Field(default=1, ge=0)
+    max_retries_per_window: int = Field(default=3, ge=0)
+    max_replacements_per_window: int = Field(default=2, ge=0)
     resume: bool = True
 
     @field_validator("input")
@@ -432,7 +446,7 @@ class TaskRequest(DesktopModel):
 
     @model_validator(mode="after")
     def validate_speaker_exports(self):
-        if self.speaker_tracks != "off" and self.diarize == "off":
+        if self.speaker_tracks != "off" and self.diarize == "off" and self.asr == "local":
             raise ValueError("分轨导出需要开启说话人分离 / Speaker exports require diarization")
         return self
 
@@ -638,6 +652,9 @@ class BatchRequest(DesktopModel):
         model_sources: set[str] = set()
         agent_tiers: set[str] = set()
         presets: set[tuple[str, bool]] = set()
+        moss_payment = {item.moss_pro_paid for item in self.items}
+        if len(moss_payment) > 1:
+            raise ValueError("同一批次须使用相同的 MOSS 付费许可 / Use the same MOSS payment choice in a batch")
         for item in self.items:
             source = item.input.casefold()
             if source in seen:

@@ -55,6 +55,7 @@ import { useAppearance } from "@/lib/useAppearance";
 
 
 function rememberTaskOptions(changes: Partial<Omit<TaskRequest, "input">>): void {
+  if (!uiValue("rememberLastSettings", true)) return;
   const patch: Record<string, unknown> = {};
   for (const field of REMEMBERED_TASK_FIELDS) {
     if (field in changes) patch[field] = changes[field];

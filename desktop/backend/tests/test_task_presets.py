@@ -14,11 +14,11 @@ def test_preset_uses_core_defaults_without_rewriting_old_task():
     request = old.model_copy(update={"llm_preset_defaults": True})
     resolved = effective_task_request(request)
     expected = preset_defaults("fast")
-    assert all(getattr(resolved, key) == value for key, value in expected.items())
+    assert all(getattr(resolved, key) == value for key, value in expected.items() if key != "knowledge")
     assert resolved.llm_media == "text"
     assert resolved.llm_difficulty == "efficiency"
-    assert resolved.knowledge != "update"
-    assert old.llm_difficulty == "quality" and old.knowledge == "update"
+    assert resolved.knowledge == "update"
+    assert old.llm_difficulty == "intermediate" and old.knowledge == "update"
 
 
 def test_task_preset_is_scoped_and_unknown_is_rejected(tmp_path, monkeypatch):

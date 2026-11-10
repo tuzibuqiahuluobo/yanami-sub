@@ -22,6 +22,8 @@ from desktop.backend.common.models import (
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.common.core_compat import effective_task_request, llm_call_options, speech_call_options, unified_llm_contract
 from desktop.backend.worker.main import (
+    WorkerReporter,
+    speech_model_provenance,
     cleanup_task_intermediates,
     _agent_error_message,
     _agent_route_failures,
@@ -59,6 +61,7 @@ def _item_options(
         options.pop("llm_planning_media", None)
     options["source"] = options.pop("input")
     options.pop("cleanup_intermediate", None)
+    options.pop("moss_pro_paid", None)
     options.pop("llm_model", None)
     options.pop("llm_source", None)
     options.pop("llm_agent", None)
@@ -311,8 +314,11 @@ def run_batch_request(
                             task_id=f"{batch_id}-{index + 1}",
                         )
                         published[key] = outputs
+                        provenance = speech_model_provenance(paths)
+                        if provenance:
+                            emit(BatchWorkerEvent.log(batch_id, f"[{index + 1}] {provenance}"))
                         save_published()
-                        if item_request.cleanup_intermediate and outputs:
+                        if item_request.cleanup_intermediate and outputs and index not in skip_reasons:
                             cleanup_task_intermediates(
                                 paths.final_srt,
                                 preserve=outputs.values(),
@@ -340,6 +346,10 @@ def run_batch_request(
             status_path=batch_root / "batch-status.jsonl",
             publish=publish,
             intake=intake,
+            item_reporter=lambda label: WorkerReporter(f"{batch_id}:{label}", lambda event: emit(
+                BatchWorkerEvent(type="log", batch_id=batch_id, timestamp=event.timestamp,
+                    payload={"message": f"[{label}] {event.payload.get('message', '')}"})
+            )),
         )
     final = snapshots(results)
     emit(

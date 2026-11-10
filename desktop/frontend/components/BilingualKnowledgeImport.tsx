@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { saveUi, uiValue, workflowOptions } from "@/lib/preferences";
 import { FolderOpen, ArrowRight, Check } from "lucide-react";
 import { desktopApi } from "@/lib/bridge";
 import type { KnowledgeSnapshot, TaskRequest, JobSnapshot, RefinedKnowledgeUpdateReport } from "@/lib/types";
@@ -42,7 +43,11 @@ export function BilingualKnowledgeImport({ snapshot, tasks, onApplied }: {
 }) {
   const { language } = useLanguage();
   const zh = language === "zh";
-  const [values, setValues] = useState({ source_srt: "", refined_srt: "", source_encoding: "auto", refined_encoding: "auto", subject: "", style_subject: "", prompt: "", task: "", llm_source: "auto", llm_agent: "", model: "" });
+  const [values, setValues] = useState(() => ({ source_srt: "", refined_srt: "", subject: "", style_subject: "", prompt: "", task: "", ...workflowOptions("knowledgeImportOptions", { source_encoding: "auto", refined_encoding: "auto", llm_source: "auto", llm_agent: "", model: "" }) }));
+  useEffect(() => {
+    if (!uiValue("rememberLastSettings", true)) return;
+    saveUi({ knowledgeImportOptions: { source_encoding: values.source_encoding, refined_encoding: values.refined_encoding, llm_source: values.llm_source, llm_agent: values.llm_agent, model: values.model } });
+  }, [values.source_encoding, values.refined_encoding, values.llm_source, values.llm_agent, values.model]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [inspection, setInspection] = useState<RefinedKnowledgeUpdateReport | null>(null);

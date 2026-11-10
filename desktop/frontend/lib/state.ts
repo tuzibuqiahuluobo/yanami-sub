@@ -16,6 +16,7 @@ import type {
   WorkerEvent,
 } from "./types";
 import { formatTaskLog } from "./formatters";
+import { uiValue } from "./preferences";
 
 
 export type TaskPhase =
@@ -104,6 +105,7 @@ export type AppAction =
  * remembered too, but by processingDevice, which writes the fields it becomes.
  */
 export const REMEMBERED_TASK_FIELDS = [
+  "asr", "asr_aligner", "asr_repair", "squeeze_repair", "gap_fill", "row_fill",
   "stage",
   "model_name",
   "language",
@@ -134,6 +136,8 @@ export const REMEMBERED_TASK_FIELDS = [
   "llm_fast",
   "llm_output_scale",
   "llm_model",
+  "llm_source",
+  "llm_agent",
   "style",
   "style_mode",
   "download_video_source",
@@ -190,7 +194,11 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
   qwen_verify: "auto",
   lang_redecode: "auto",
   asr_decode_batch: "auto",
-  asr_context: "off",
+  asr_context: "terms",
+  asr: "local",
+  asr_aligner: false,
+  asr_repair: "on",
+  moss_pro_paid: false,
   word: false,
   asr_stabilize_profile: 0,
   llm_media: "video",
@@ -198,7 +206,7 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
   llm_planning_media: "",
   llm_retrieval: "local",
   llm_source: "auto",
-  llm_difficulty: "quality",
+  llm_difficulty: "intermediate",
   llm_continuity: "serial",
   llm_parallel_windows: 1,
   llm_fast: "auto",
@@ -214,8 +222,8 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
   knowledge: "update",
   refined_srt: null,
   postprocess_profile: 0,
-  max_retries_per_window: 5,
-  max_replacements_per_window: 1,
+  max_retries_per_window: 3,
+  max_replacements_per_window: 2,
   resume: true,
 };
 
@@ -223,7 +231,7 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
 const emptyTask = (defaults: Partial<TaskRequest> = {}): TaskState => ({
   phase: "empty",
   selectedFile: null,
-  request: { ...defaultRequest, ...defaults },
+  request: { ...defaultRequest, ...(uiValue("rememberLastSettings", true) ? defaults : {}) },
   taskId: null,
   currentStage: null,
   stageProgress: null,
@@ -379,7 +387,7 @@ export function reduceAppState(
 ): AppState {
   switch (action.type) {
     case "bootstrapLoaded": {
-      const remembered = definedOnly(action.payload.preferences?.task_defaults);
+      const remembered = action.payload.preferences?.ui?.rememberLastSettings === false ? {} : definedOnly(action.payload.preferences?.task_defaults);
       return {
         ...state,
         bootstrapped: true,
@@ -472,6 +480,7 @@ export function reduceAppState(
     case "requestChanged": {
       const remembered: Record<string, unknown> = { ...state.taskDefaults };
       for (const field of REMEMBERED_TASK_FIELDS) {
+        if (!uiValue("rememberLastSettings", true)) break;
         if (!(field in action.changes)) continue;
         const value = action.changes[field];
         // Kept in step with what the page persists, so "new task" starts from

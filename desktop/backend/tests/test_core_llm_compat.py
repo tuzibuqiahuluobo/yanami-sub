@@ -14,6 +14,7 @@ from pydantic import ValidationError
 
 from finesub.config import clear_config_cache
 from finesub.llm.routing.model_routes import default_model_routes
+from finesub.llm.routing.execution_policy import load_execution_settings
 from desktop.backend.common.core_compat import (
     check_retired_route_choices, llm_call_options, profile_for_request, unified_llm_contract,
 )

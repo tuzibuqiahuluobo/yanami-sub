@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from desktop.backend.common.core_compat import runtime_preferred
+
 import json
 import os
 import threading
@@ -59,6 +61,12 @@ _PROVIDER_TIER_ENV_NAMES = {
     "GEMINI_FREE": "GEMINI_FREE",
     "GEMINI_PAID": "GEMINI_PAID",
 }
+_ASR_ENV_NAMES = {
+    "MOSS Pro": "MOSS_PRO",
+    "MAI2 OpenRouter": "FINESUB_KEY_OPENROUTER_STT",
+    "MAI2 Azure key": "FINESUB_KEY_AZURE_SPEECH",
+    "MAI2 Azure endpoint": "FINESUB_AZURE_SPEECH_ENDPOINT",
+}
 
 
 class SettingsStore:
@@ -104,6 +112,12 @@ class SettingsStore:
 
     def validate_request(self, request) -> BridgeError | None:
         """Validate launch-time capabilities before the worker starts."""
+        keys = self._read_keys()
+        required = {"moss-pro": ["MOSS_PRO"], "gemini-35t": ["GEMINI_FREE"]}
+        if request.asr in required and not all(keys.get(name) for name in required[request.asr]):
+            return BridgeError(code="asr_credentials_required", message="所选云端转写缺少凭据，请在设置中填写。 / Configure credentials for the selected cloud transcription.", action="open_settings")
+        if request.asr == "mai2" and not (keys.get("FINESUB_KEY_OPENROUTER_STT") or (keys.get("FINESUB_KEY_AZURE_SPEECH") and keys.get("FINESUB_AZURE_SPEECH_ENDPOINT"))):
+            return BridgeError(code="asr_credentials_required", message="MAI2 需要 OpenRouter key 或 Azure 地址与 key。 / Configure an OpenRouter key or Azure endpoint and key.", action="open_settings")
 
         if request.stage in {"translated-srt", "final-srt"}:
             try:
@@ -174,8 +188,7 @@ class SettingsStore:
             from finesub.llm.routing.model_routes import (
                 install_runtime_preferred,
                 parse_llm_model_args,
-                runtime_preferred,
-            )
+                    )
         except (ImportError, OSError, RuntimeError):
             # Keep the settings panel usable if an optional core module is not
             # available; the worker will report the concrete import error.
@@ -534,7 +547,7 @@ class SettingsStore:
         }
 
     def _known_env_names(self) -> set[str]:
-        names = set(_ENV_NAMES.values())
+        names = {*_ENV_NAMES.values(), *_ASR_ENV_NAMES.values()}
         try:
             from finesub.llm.routing.model_routes import default_model_routes
 
@@ -552,6 +565,8 @@ class SettingsStore:
         normalized = provider_id.strip()
         if not normalized:
             raise ValueError("provider id must not be blank")
+        if normalized in _ASR_ENV_NAMES:
+            return _ASR_ENV_NAMES[normalized]
         from finesub.llm.routing.model_routes import default_model_routes
 
         provider = default_model_routes().providers.get(normalized)
@@ -612,6 +627,8 @@ class SettingsStore:
                 )
                 for provider in routes.providers.values()
             ]
+            providers.extend(RoutingProviderSummary(id=name, kind="Cloud transcription", key_env=env,
+                configured=bool(keys.get(env))) for name, env in _ASR_ENV_NAMES.items())
             targets = []
             agent_tiers = self._configured_agent_tiers()
             allowed_backends = routes.policies[execution.policy_id].allowed_backends
@@ -644,7 +661,7 @@ class SettingsStore:
                         supports_video=fact.supports_video,
                         supports_native_search=fact.supports_native_search,
                         is_free=fact.is_free,
-                        quality_score=fact.quality_score,
+                        quality_score=int(fact.effective_capability),
                         available=available,
                     )
                 )

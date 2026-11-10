@@ -169,7 +169,8 @@ def generate_pair(root: Path, payload: dict) -> dict:
     from finesub.llm.client import RoleClient
     from finesub.llm.knowledge.node.repo import KnowledgeRepo
     from finesub.llm.knowledge.node.render import HandleMap
-    from finesub.llm.knowledge.node.repair import render_repair_prompt, REPAIR_MAX_TOKENS
+    from finesub.llm.knowledge.node.repair import render_repair_prompt
+    from finesub.llm.routing.config import SESSION_OUTPUT_MAX_TOKENS
     from finesub.llm.knowledge.node.proposals import parse_model_proposals
     from finesub.llm.knowledge.node.proposals import translate_model_proposals
     from finesub.llm.knowledge.node.envelope import Binding
@@ -205,7 +206,7 @@ def generate_pair(root: Path, payload: dict) -> dict:
                     continue
                 rev = repo.rev
                 response = client.complete(LLMRole.GENERAL_CAPABLE, [{"role": "user", "content": prompt}],
-                    max_tokens=REPAIR_MAX_TOKENS, task_group="knowledge", difficulty=request.llm_difficulty,
+                    max_tokens=SESSION_OUTPUT_MAX_TOKENS, task_group="knowledge", difficulty=request.llm_difficulty,
                     agent_task_extras={"knowledge_root": str(root), "knowledge_identity": f"rev:{rev}",
                         "kb_tools": "propose", "kb_handle_bindings": handles.bindings(), "kb_signal_task": "desktop-bilingual"})
                 # Ingest is one named entry, never an implicit rename/retirement or new subject.

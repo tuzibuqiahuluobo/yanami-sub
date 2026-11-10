@@ -1,115 +1,83 @@
 # Yanami Sub
 
-基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台。
+基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台，提供单任务、批处理、本地 Agent / API 路由、知识库、资源管理和应用内更新。
 
-```text
-音频 / 视频 / URL → 人声分离 → VAD + ASR → 字幕稳定化 → LLM 纠错翻译 → SRT
-```
+当前版本系列：**0.3.0 正式版 / 0.3.1 RC1.0 预览版**，固定使用 [FineSub v0.7.0](https://github.com/caca2331/finesub/releases/tag/v0.7.0)。桌面端与字幕核心独立发版；本仓库不复制或分叉核心实现。
 
-Yanami Sub 为 FineSub 的处理能力提供图形界面、批处理、资源管理、知识库与应用更新。
-字幕核心与命令行仍由上游 FineSub 维护；本仓库不复制或分叉核心实现。
+## 安装与开始
 
-## 快速开始
+1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载对应版本的安装器。
+2. 退出旧版后安装。已有安装可选择原目录覆盖安装，无需先卸载或清空模型、任务与知识库。
+3. 首次使用时在资源页准备 Python 3.12、FFmpeg 等组件；可复用本机受支持的解释器，缺失的依赖与模型按需下载。
+4. 在“新建任务”选择本地音视频或粘贴链接，确认识别引擎、输出阶段与模型来源后开始。
+5. 只需原始字幕时无需 LLM 凭据；需要纠错翻译时配置 API 密钥，或安装、登录对应 Agent CLI。
 
-1. 从 [Releases](https://github.com/tuzibuqiahuluobo/yanami-sub/releases) 下载
-   `Yanami-Sub-0.2.1-Setup.exe`。
-2. 退出正在运行的旧版 FineSub Desktop，然后运行安装器。
-3. 启动 Yanami Sub，在“设置”中填写需要的 API Key，或配置本机 Agent。
-4. 点击“新建任务”，选择本地媒体或粘贴 URL，选择目标阶段后开始处理。
+URL 下载还需要 yt-dlp。首次准备运行环境、模型、URL 下载和在线模型需要可用网络。大文件目录可在应用中迁移；占用随引擎和模型增加，不建议只预留几 GB。
 
-首次使用相关阶段时，程序会准备隔离的 Python 3.12、FFmpeg 和模型资源，完整环境约需
-5 GB。下载器会先扫描本机可用资源并核对大小与 SHA-256；缺失资源可并行下载。中国大陆
-网络的 Python 依赖会优先使用
-[清华大学 TUNA 镜像](https://mirrors.tuna.tsinghua.edu.cn/)，失败时回退官方源。
-准备 Python 前会在后台检查本机可复用的 64 位 Python 3.12（最长约 12 秒），并明确提供
-“使用本机 Python”“指定解释器”或“下载私有 Python”三种选择。
+## 识别引擎怎么选
 
-> `v0.1.0-rc.7.post4`（RC7.4）是升级到 0.1.1 正式版的过渡版本：旧 RC 可先在应用内
-> 安装 RC7.4 完整包，再从应用内升级到正式版。正式版默认不接收后续 RC，除非在设置中
-> 开启“接收预览版本更新”；RC 默认接收更新的 RC 和正式版。魔理沙与八奈见杏菜主题现以浅色为主。
-> 若应用无法启动，可用 0.1.1.post1 安装器选择原安装目录覆盖安装，
-> 无需卸载或清理用户数据。卸载器不再自动递归删除自选安装目录中的
-> 运行环境、模型与缓存；这些残留可由用户确认路径后手动清理。
-> 旧版 FineSub Desktop、RC4 及无法发现更新的旧版本也请使用安装器。
-> 每个桌面 Release 均同时提供在线更新清单和签名。请从本仓库 Release 下载并按页面
-> 提供的 SHA-256 校验。
+| 引擎 | 运行位置与用途 | 注意事项 |
+| --- | --- | --- |
+| Whisper（默认） | 本地分离、识别、稳定化 | 不把音频交给云端识别服务；GPU 推荐，部分计算可回退 CPU |
+| 本地 MOSS | 本地一体转写与说话人标注 | NVIDIA RTX 30 系列或更新，至少 8 GB 显存；首用额外下载约 1.7 GB 模型并编译内核 |
+| Gemini 3.5 Transcribe | 云端一体转写 | 使用 Gemini 免费 key，消耗服务方额度 |
+| MOSS Pro | 云端一体转写 | 配置 MOSS_PRO；超免费额度使用余额须在本次任务中明确开启，默认关闭 |
+| MAI-Transcribe-2 | 云端一体转写 | OpenRouter 或 Azure Speech 凭据，按服务商规则付费 |
 
-> `v0.1.1.post1` 是首个正式版的热修版本，包含 RC7.6 的同一批修复：逐行任务日志时间戳、
-> Python 解释器文件选择器、新启动器与旧任务引擎混用，以及此前的字节码缓存完整性误报与更新回滚修复。
-> 正式版用户无需开启预览更新即可在应用内收到本版；使用完整更新包，保留任务、设置和模型。
-> 预览版用户继续接收数字版本更高的 RC7.6，不会降级到 0.1.1.post1。
+**选择云端引擎并开始任务，会将音频上传给对应服务商。** 额度、价格和模型可用性以账号为准，不保证永久免费。云端原始回答缓存用于续跑，请勿随意删除。切换引擎不会覆盖已有识别产物；要重新识别请新建任务。
 
-> `v0.1.2-rc.7.post6`（RC7.6）为任务与批处理日志加入逐行时间戳，修复“指定解释器”
-> 无法弹出文件选择器，以及重装后新启动器调用旧任务引擎、拒绝 `llm_agent` 的问题。
-> 保留 RC7.5 的字节码缓存与健康回退修复。RC 用户默认可升级；
-> 0.1.1 正式版用户需要先开启“接收预览版本更新”。本版使用完整更新包；
-> 如旧安装已无法启动，退出程序后用 RC7.6 安装器选择原目录覆盖安装，不要求清空任务与模型。
+中文素材在核心 0.7.0 中通常只纠错和基础润色、不翻译；普通话识别会转为简体。具体语言判断和产物语义见 [上游中文素材说明](https://github.com/caca2331/finesub/blob/v0.7.0/docs/manual/chinese.md)。
 
-## 能做什么
+## 纠错翻译与本地 Agent
 
-- 单任务：本地音频、视频或 URL 输入，完整暴露 FineSub 的识别、稳定化、翻译与知识参数。
-- 批处理：混合本地文件和 URL，设置下载 / ASR / LLM 并发、优先级、重试与断点续跑。
-- 模型路由：Gemini 免费 / 付费池、自定义服务商、本机 Agent 和按任务覆盖。
-- 知识库：浏览、修订、任务反馈、材料蒸馏、冲突处理、共享与维护者审核。
-- 资源管理：依赖诊断、多资源并行下载、本地复用、日志查看和大文件目录迁移。
-- 输出管理：本地媒体只把可交付的 `.srt` 字幕发布到源文件旁，内部产物留在受管任务目录。
-- 应用更新：启动公告优先提供应用内下载，历史版本按需展开，GitHub 完整安装器作为备用入口。
+- “自动”优先可用免费 API，没有时使用本地 Agent；也可明确指定 API、某个 Agent 或手动模型路由。
+- 设置中每个 Agent 有独立配置入口，路径用文件选择器指定；Codex 有自己的服务档位设置。通用超时、并发与路由仍为公共设置。
+- CLI 就绪只表示程序、版本和所需能力可用，**不代表已登录、有模型权限或有剩余额度**。
+- CodeBuddy 使用独立 CLI，不复用旧 WorkBuddy 桌面凭据。自动尝试所有 Agent 不会擅自启用可能扣积分的 CodeBuddy 路由。
+- 标准档适合多数任务；精细档可能增加裁判、校对与耗时；快速预设倾向纯文本。实际步骤取决于预设和显式选项。
+- 切换任务预设保留知识库读写选择，不再通过“使用预设默认参数”复选框把更新模式覆盖为只读。
+- 模型失败会给出认证、额度、限流、权限或网络等排查方向；不能确定时明确说明可能性。仅交付原始字幕时会标明纠错已跳过，不冒充完整成功。
 
-各页面的实际操作、数据位置和常见问题见
-[中文使用说明](docs/usage.zh-CN.md)。桌面与核心的功能边界见
-[FineSub 核心兼容矩阵](docs/core-compatibility.md)。0.2.1 正式版和 0.2.2 RC1.0 预览版固定使用 FineSub 0.6.0；
-升级注意事项见 [0.2.1 公告](docs/release-notes-v0.2.1.md)，离线检查和实际验收边界见 [迁移记录](docs/core-060-migration.md)。
+本地 Agent 也可能向其供应商发送任务内容，并非离线模型；联网、音视频支持与计费取决于具体模型和账号。
 
-## 系统要求
+## 批处理、知识库与日志
 
-| 项目 | 要求 |
-| --- | --- |
-| 系统 | Windows 10 / 11，64 位 |
-| 内存 | ASR 建议至少 8 GB；仅 LLM 阶段建议至少 4 GB |
-| 显卡 | 人声分离与 ASR 建议 RTX 20 系或更新、显存至少 4 GB；部分阶段可回退 CPU |
-| 网络 | 首次准备运行环境、模型、URL 下载和在线 LLM 时需要 |
-| 磁盘 | 完整运行资源约 5 GB，模型和缓存可迁移到其他磁盘 |
+- 批处理复用单任务的处理设置，支持本地文件与链接、并发、重试、续跑和运行中追加。
+- 知识库支持浏览、修订、任务反馈、双语字幕材料、预览提案后应用、维护及共享。双语文本可作为术语与润色证据，不等同于音频误听证据。
+- “记住上次使用的设置”控制任务、批处理及知识库选项恢复；不记忆任务文件、正文、凭据或一次性的 MOSS 付费许可。
+- 每个任务有带时间戳的日志；实际响应模型与候选顺序分开记录。设置底部可查看任务日志及应用日志位置。
+- 本地媒体的交付字幕发布到源文件旁；内部产物留在受管目录。名字冲突或已有字幕被人工修改时保守保留，不直接覆盖。
+- 反馈页可收集脱敏诊断包，并用默认浏览器新建 [GitHub Issue](https://github.com/tuzibuqiahuluobo/yanami-sub/issues/new)。提交前自行检查附件里的个人信息；GitHub 无法访问时可检查代理。
 
-更完整的显卡、模型和资源要求以 FineSub 上游的
-[资源说明](https://github.com/caca2331/finesub/blob/v0.6.0/docs/manual/resources.md) 为准。
+## 从 0.2.x 升级
 
-## 数据与上游共享
+本次按新依赖锁核对并重建运行环境，首个任务准备可能较慢。用户数据和模型缓存应保留。
 
-- 设置、API Key、知识库和任务历史：`%LOCALAPPDATA%\FineSub\user-data`
-- 运行环境、模型、缓存和任务目录：默认位于安装目录，也可以在应用内迁移
-- 本地输入的可交付字幕：源媒体所在目录
+- 自定义 model_catalog.psv 改为 model_catalog.toml。在设置中预览转换、核对变更，再备份并应用；已下线模型不会偷偷换成其他模型。
+- 显式设置 FINESUB_MODEL_CATALOG 指向 PSV 时，请按上游转换命令生成 TOML，并手动更新环境变量路径；同时存在新旧目录时先人工审阅。
+- [api] proxy 不支持 SOCKS，请填写代理软件的 HTTP 端口，不能用 SOCKS 端口代替。
+- 旧任务显式选项会保留；精细档行为和耗时可能变化。跨核心版本续跑时部分未完成的 LLM 窗口需要重做，已交付成品不因此改写。
+- 正式版默认只接收更高正式版；开启“接收预览版本更新”后可接收更高 RC。预览版默认能接收更高 RC 和正式版，不会降级。
 
-保留 `FineSub` 用户数据目录是有意的兼容设计：Yanami Sub 与同机安装的 FineSub CLI
-可以共享设置和知识库，不会因产品改名而丢失已有数据。
+更新分析与验证范围见 [0.7.0 合并计划](desktop/docs/core070-update-plan.md)，操作指南见 [中文使用说明](docs/usage.zh-CN.md)。
 
-## 项目关系
+## 系统与数据
 
-- **Yanami Sub 仓库**：<https://github.com/tuzibuqiahuluobo/yanami-sub>
-- **FineSub 上游 / CLI**：<https://github.com/caca2331/finesub>
-- **本分支构建候选核心**：[`FineSub v0.6.0`](https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197)，未发布；身份固定在 `desktop/resources/core-source.json`
-- **桌面端迁移锚点**：[`FineSub 0.5.0pre/desktop`](https://github.com/caca2331/finesub/tree/0.5.0pre/desktop)
+Windows 10 / 11，64 位。Whisper 建议至少 8 GB 内存；支持的 NVIDIA GPU 可加速，具体模型要求见 [上游手册](https://github.com/caca2331/finesub/tree/v0.7.0/docs/manual)。本地 MOSS 不适用于 CPU 或低于要求的显卡。
 
-桌面端从 FineSub `0.5.0pre` 的 `desktop/` 目录独立出来，从 `0.1.0` 开始维护自己的版本号。
-需要新的处理能力时，优先由上游 FineSub 提供稳定接口，Yanami Sub 再跟进接入。
+- 设置、加密 API Key、知识库与历史：%LOCALAPPDATA%/FineSub/user-data。
+- 运行环境、模型、缓存、任务：默认位于安装目录，可在应用中迁移。
+- 数据目录沿用 FineSub 名称，以兼容同机 CLI。卸载前先备份重要知识库、字幕与凭据。
 
-## 文档
+## 开发、构建与来源
 
-- [中文使用说明](docs/usage.zh-CN.md)
-- [桌面端维护与发布](desktop/README_DEV.md)
-- [核心功能兼容矩阵](docs/core-compatibility.md)
-- [来源与第三方许可](NOTICE.md)
-- [FineSub 上游文档](https://github.com/caca2331/finesub/tree/v0.6.0/docs/manual)
+- [桌面端维护与发布](desktop/README_DEV.md) · [GitHub Actions 构建](desktop/docs/cloud-build.md)
+- [核心兼容矩阵](docs/core-compatibility.md) · [来源与第三方许可](NOTICE.md)
+- 核心固定提交：[7123055](https://github.com/caca2331/finesub/tree/7123055da0cd6e037d8e37feb53b82f9e428c5cb)，身份由 desktop/resources/core-source.json 管理。
+- 桌面迁移锚点：[FineSub 0.5.0pre/desktop](https://github.com/caca2331/finesub/tree/0.5.0pre/desktop)。
 
-## 作者与贡献者
-
-- **Yanami Sub 维护者**：[tuzibuqiahuluobo](https://github.com/tuzibuqiahuluobo)
-- **FineSub 原作者 / 上游维护者**：[caca2331](https://github.com/caca2331)
-- **桌面端署名贡献者**：caca2331、tuzibuqiahuluobo、回不去的星光
+维护者：[tuzibuqiahuluobo](https://github.com/tuzibuqiahuluobo)。FineSub 原作者 / 上游维护者：[caca2331](https://github.com/caca2331)。桌面署名贡献者：caca2331、tuzibuqiahuluobo、回不去的星光。
 
 ## 许可证
 
-Yanami Sub 遵循上游当前使用的
-[GNU General Public License v3.0 or later](LICENSE)（SPDX：`GPL-3.0-or-later`）。
-本仓库保留上游来源、作者和许可证信息。随包分发的 FineSub prompt 模板另按其目录中的
-[CC BY-SA 4.0](https://github.com/caca2331/finesub/blob/v0.6.0/src/finesub/llm/prompt_templates/LICENSE.md)
-授权。再分发或修改时请一并保留对应声明。
+[GNU GPL v3 or later](LICENSE)。随包 FineSub prompt 模板按 [CC BY-SA 4.0](https://github.com/caca2331/finesub/blob/v0.7.0/src/finesub/llm/prompt_templates/LICENSE.md) 授权。再分发请保留来源、作者与对应许可。

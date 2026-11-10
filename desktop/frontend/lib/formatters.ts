@@ -146,6 +146,24 @@ export function summarizeTaskError(error?: string | null): string {
   if (!error) {
     return "任务失败。";
   }
+  if (/Authentication required|unauthorized|invalid.?api.?key|HTTP.?401\b/i.test(error)) {
+    return "模型认证失败：请检查 API 密钥，或在对应 Agent CLI 中重新登录。";
+  }
+  if (/quota|insufficient.?credits|RESOURCE_EXHAUSTED|HTTP.?402\b/i.test(error)) {
+    return "模型额度或余额不足：请检查账号额度与余额，或更换可用模型后重试。";
+  }
+  if (/rate.?limit|HTTP.?429\b/i.test(error)) {
+    return "模型请求过于频繁：请稍后重试或降低并发；也可能已达到服务方限额。";
+  }
+  if (/model.{0,40}(not found|does not exist|unavailable)|PERMISSION_DENIED|HTTP.?403\b/i.test(error)) {
+    return "模型不存在、已下线或账号无权调用：请检查模型名称与账号权限。";
+  }
+  if (/ConnectError|ProxyError|Server disconnected|connection reset|unreachable/i.test(error)) {
+    return "模型连接中断或不可达：请检查网络、代理及服务地址；这不一定是额度不足。";
+  }
+  if (/TimeoutError|timed out/i.test(error)) {
+    return "模型调用超时：可能是服务繁忙或网络问题，请查看详细日志后重试。";
+  }
   if (
     error.includes("CapabilityUnavailableError") ||
     error.includes("retrieval=native")

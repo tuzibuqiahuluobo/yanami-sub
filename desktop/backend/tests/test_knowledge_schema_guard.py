@@ -212,7 +212,7 @@ def test_knowledge_worker_prepares_store_before_opening_it(tmp_path, monkeypatch
     assert calls == [root.resolve()]
 
 
-@pytest.mark.parametrize("stage, count", [("raw-srt", 0), ("translated-srt", 1), ("final-srt", 1)])
+@pytest.mark.parametrize("stage, count", [("raw-srt", 1), ("translated-srt", 1), ("final-srt", 1)])
 def test_single_and_batch_pipeline_entry_use_the_same_guard(tmp_path, monkeypatch, stage, count):
     from desktop.backend.common.models import TaskRequest
     from desktop.backend.worker.main import _execute_pipeline
@@ -258,6 +258,6 @@ def test_asr_knowledge_context_is_protected_without_an_llm_stage(tmp_path, monke
     monkeypatch.setenv("FINESUB_KNOWLEDGE_ROOT", str(root))
     calls = []
     monkeypatch.setattr(schema_guard, "prepare_knowledge_store", lambda value: calls.append(value))
-    request = TaskRequest(input="input.mp4", asr_context="terms", knowledge="none", style_mode="none")
+    request = TaskRequest(input="input.mp4", asr_context="terms", knowledge="read", style_mode="none")
     _execute_pipeline(request, stage=stage, task_id="test", pipeline=lambda *args, **kwargs: None)
     assert calls == [root.resolve()] * count

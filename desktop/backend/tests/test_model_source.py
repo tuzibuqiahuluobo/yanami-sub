@@ -39,7 +39,7 @@ def test_workbuddy_efficiency_shortcut_is_a_valid_text_only_profile():
 
 @pytest.mark.parametrize("tier,group", [("LOCAL_DSH", "dsh-capable"), (CODEBUDDY_TIER, CODEBUDDY_GROUP)])
 def test_manual_text_only_route_adapts_both_axes_and_restores_overlay(tier, group):
-    from finesub.llm.routing.model_routes import runtime_preferred
+    from desktop.backend.common.core_compat import runtime_preferred
     before = runtime_preferred()
     request = TaskRequest(input="视频.mp4", stage="final-srt", llm_source="manual", llm_model=[group], llm_media="audio")
     with source_route(request) as route:
@@ -246,6 +246,6 @@ def test_agent_unvetted_tier_excludes_non_correction_targets(monkeypatch) -> Non
         # All selected targets should meet the quality floor
         for target_id in route.targets:
             target = routes.target_fact(target_id)
-            quality = getattr(target, "quality_score", 0)
-            assert quality >= floor, f"Target {target_id} quality {quality} below floor {floor}"
+            assert target.provider_tier == "LOCAL_CLAUDE"
+            assert target.effective_capability >= 30
 

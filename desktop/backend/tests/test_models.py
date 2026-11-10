@@ -21,17 +21,17 @@ def test_task_request_defaults_to_local_raw_srt() -> None:
     assert request.language is None
     assert request.gap_sec == 0.3
     assert request.asr_decode_batch == "auto"
-    assert request.asr_context == "off"
+    assert request.asr_context == "terms"
     assert request.llm_media == "audio"
     assert request.llm_correction_media == ""
     assert request.llm_planning_media == ""
     assert request.llm_retrieval == "local"
-    assert request.llm_difficulty == "quality"
+    assert request.llm_difficulty == "intermediate"
     assert request.llm_continuity == "serial"
     assert request.llm_parallel_windows == 1
     assert request.llm_model == []
-    assert request.max_retries_per_window == 5
-    assert request.max_replacements_per_window == 1
+    assert request.max_retries_per_window == 3
+    assert request.max_replacements_per_window == 2
     assert request.resume is True
 
 

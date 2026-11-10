@@ -1,13 +1,14 @@
-"""Temporary 0.5.1 -> 0.6.0 call boundary, not another settings resolver.
-
-Keep explicit choices from existing desktop tasks. Only translate the two
-retired spellings here; the core still owns defaults, routing and validation.
-Remove the legacy branch when the runtime/build pin moves to 0.6.0.
-"""
+"""Desktop call boundary and archival spellings; core owns routing/defaults."""
 
 from __future__ import annotations
 
 from typing import Any
+
+
+def runtime_preferred() -> dict[str, str]:
+    from finesub.llm.routing import model_routes
+    # shortcut: 0.7 removed the public getter; mirror only the pinned core's overlay.
+    return dict(model_routes._RUNTIME_PREFERRED)
 
 
 def preset_defaults(preset_id: str = "") -> dict[str, Any]:
@@ -33,7 +34,7 @@ def effective_task_request(request: Any):
         return request
     if not unified_llm_contract():
         raise ValueError("任务预设继承需要 FineSub 0.6.0 / Task presets require FineSub 0.6.0")
-    return request.model_copy(update={**preset_defaults(request.llm_preset),
+    return request.model_copy(update={**preset_defaults(request.llm_preset), "knowledge": request.knowledge,
         "llm_correction_media": "", "llm_planning_media": "", "llm_preset_defaults": False})
 
 
@@ -69,7 +70,8 @@ def llm_call_options(request: Any, *, route: Any = None, knowledge: str | None =
 
 
 def speech_call_options(request: Any) -> dict[str, Any]:
-    keys = ("diarize", "diarize_backend", "diarize_max_speakers", "speaker_tracks")
+    keys = ("diarize", "diarize_backend", "diarize_max_speakers", "speaker_tracks",
+            "asr", "asr_aligner", "asr_repair", "squeeze_repair", "gap_fill", "row_fill")
     if unified_llm_contract():
         return {key: getattr(request, key) for key in keys}
     if request.diarize != "off" or request.speaker_tracks != "off":

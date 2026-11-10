@@ -222,7 +222,7 @@ def test_worker_maps_request_to_pipeline_keywords(tmp_path: Path) -> None:
 
 
 def test_worker_applies_and_restores_one_run_model_routing(tmp_path: Path) -> None:
-    from finesub.llm.routing.model_routes import runtime_preferred
+    from desktop.backend.common.core_compat import runtime_preferred
 
     source = tmp_path / "a.wav"
     source.write_bytes(b"audio")

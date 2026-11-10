@@ -235,6 +235,13 @@ export interface TaskRequest {
   lang_redecode: "auto" | "on" | "off";
   asr_decode_batch: number | "auto";
   asr_context: "off" | "terms" | "full";
+  asr?: "local" | "mai2" | "moss-pro" | "gemini-35t" | "moss-local";
+  asr_aligner?: boolean;
+  asr_repair?: "on" | "off" | "quota";
+  squeeze_repair?: "auto" | "on" | "off";
+  gap_fill?: "auto" | "on" | "off";
+  row_fill?: "on" | "off";
+  moss_pro_paid?: boolean;
   word: boolean;
   asr_stabilize_profile: -1 | 0 | 1 | 2;
   diarize?: "off" | "acoustics" | "judge-text" | "judge-audio";

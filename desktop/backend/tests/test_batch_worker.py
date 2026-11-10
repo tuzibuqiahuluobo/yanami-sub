@@ -6,7 +6,7 @@ import json
 from types import SimpleNamespace
 
 from finesub.scheduler import BatchItem, ItemResult
-from finesub.llm.routing.model_routes import runtime_preferred
+from desktop.backend.common.core_compat import runtime_preferred
 
 from desktop.backend.batches.protocol import BatchWorkerEvent
 from desktop.backend.common.models import BatchRequest

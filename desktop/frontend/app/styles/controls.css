@@ -218,6 +218,41 @@
   gap: 10px;
 }
 
+.speaker-model-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 16px;
+}
+.agent-config-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.dialog-card.agent-config-dialog {
+  width: min(640px, calc(100vw - 40px));
+  max-height: calc(100dvh - 48px);
+  overflow: auto;
+  color: var(--text);
+  background: var(--panel, var(--background, white));
+}
+.agent-config-dialog::backdrop { background: rgb(0 0 0 / 45%); }
+
+.field > .custom-select { min-width: 0; }
+.field .checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.field .checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  flex: 0 0 16px;
+}
+
 .field {
   display: grid;
   min-width: 0;

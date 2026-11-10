@@ -7,7 +7,7 @@ from desktop.backend.common.models import RoutingUpdate, TaskRequest
 from desktop.backend.settings.store import SettingsStore
 from desktop.backend.settings.local_agents import COMMANDS_ENV
 from finesub_bootstrap import secrets
-from finesub.llm.routing.api_keys import (
+from finesub.api_keys import (
     EXA_POOL,
     GEMINI_FREE_POOL,
     GEMINI_PAID_POOL,
@@ -314,9 +314,8 @@ def test_native_retrieval_requires_a_configured_native_search_route(
 
     error = store.validate_request(request)
 
-    assert error is not None
-    assert error.code == "native_search_unavailable"
-    assert error.action == "open_settings"
+    # 0.7 defaults native-search support from the selected model's catalog.
+    assert error is None
 
 
 def test_paid_native_route_passes_the_launch_guard(tmp_path: Path):

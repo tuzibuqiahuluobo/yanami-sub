@@ -1,7 +1,7 @@
 # FineSub core compatibility
 
-Yanami Sub 0.2.1.post1 and 0.2.2 RC1.1 target the exact upstream
-[FineSub `v0.6.0`](https://github.com/caca2331/finesub/tree/5caf422cbad36f0402c98eb565e4c29aee4ac197)
+Yanami Sub 0.3.0 and 0.3.1 RC1.0 target the exact upstream
+[FineSub `v0.7.0`](https://github.com/caca2331/finesub/tree/7123055da0cd6e037d8e37feb53b82f9e428c5cb)
 source snapshot in `desktop/resources/core-source.json`.
 The desktop repository owns presentation, Windows integration,
 resource installation, and update delivery; FineSub core remains the only owner
@@ -21,8 +21,8 @@ use that verified snapshot. Read the documented acceptance limits and
 | Every production pipeline stage | Supported | Vocal, aligned, stable, raw SRT, translated SRT, and final SRT are selectable. |
 | ASR and separation tuning | Supported | Model, language, device/GPU tier, separation/rate, VAD assist, Qwen verification, language re-decode, context, decode batch, gap, stabilization, word timestamps, and split scale are forwarded to core. |
 | Optional speaker labels/judging/exports | Supported, opt-in | Acoustic and experimental text/audio judging, backend and optional speaker cap use core defaults and loaders. Normal SRT stays unchanged; separate SRT/ASS and timeline/judge records are retained. Missing optional output is reported, not marked as success. |
-| Per-task routing presets | Supported | One shared form for single tasks and batches; explicit follow-preset defaults use core resolution. Historical explicit settings remain unchanged. Knowledge feedback inherits the saved selection. |
-| LLM correction/translation tuning | Supported | Unified media, retrieval, difficulty, continuity, parallel windows, output scale, per-task model routes, retry budgets, extra context/style, named styles, and resume are forwarded to core. Removed planning/media and old fast-mode arguments are not sent to 0.6.0. |
+| Per-task routing presets | Supported | One shared form for single tasks and batches; preset parameters use core resolution while preserving the explicit knowledge read/write choice. Historical explicit settings remain unchanged. Knowledge feedback inherits the saved selection. |
+| LLM correction/translation tuning | Supported | Unified media, retrieval, difficulty, continuity, parallel windows, output scale, per-task model routes, retry budgets, extra context/style, named styles, and resume are forwarded to core. Removed planning/media and old fast-mode arguments are not sent to 0.7.0. |
 | Knowledge collection/update and refined-SRT feedback | Supported | The task form and Knowledge Center use the core knowledge implementation in an isolated worker. |
 | Multiple files/URLs | Supported | The batch page uses the core scheduler, worker limits, queue back-pressure, priorities, retries, failure isolation, durable progress, cancel, resume, and core-compatible static JSONL manifest import/export. |
 | API-key pools and custom providers | Supported | Free/paid Gemini pools, Exa, Tavily, and provider keys from the core catalog use the same encrypted `.env`; plaintext export is available through a native Save dialog. |
@@ -39,6 +39,12 @@ and keeps intermediate task state under the managed task store. This is a
 desktop product policy, not a second pipeline implementation.
 
 ## Deliberate CLI-only or partial surfaces
+
+0.7.0 adds local MOSS and cloud joint-transcription selection, optional forced alignment,
+repair modes and collapsed-cue/gap/word recovery to the shared task/batch form.
+Cloud keys use the encrypted settings store. MOSS Pro paid overflow is task-local,
+off by default and excluded from remembered preferences. Voice/LLM quality and timing
+still belong to core; mock/integration checks do not establish real-provider accuracy.
 
 These boundaries remain intentional:
 
