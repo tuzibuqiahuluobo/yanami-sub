@@ -437,7 +437,7 @@ def cleanup_task_intermediates(output_srt, *, preserve=()) -> None:
         # keep the original artifacts rather than fail a published task.
         LOGGER.warning("无法保留本任务的风格选择，已跳过中间产物清理 / Style record could not be retained; kept intermediates: %s", error)
         return
-    cleanup_intermediate(output_srt, preserve=preserve)
+    cleanup_intermediate(output_srt, preserve=[*preserve, output_srt])
 
 
 @contextmanager

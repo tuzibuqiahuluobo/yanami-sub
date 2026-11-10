@@ -1143,6 +1143,9 @@ def test_bridge_forwards_owned_knowledge_workflows_and_rejects_unknown_commands(
             assert task_id == "task-1"
             return TaskRequest(input="D:/media/a.wav", output=str(final_srt))
 
+        def history(self):
+            return [SimpleNamespace(task_id="task-1", outputs={"finalSrt": str(tmp_path / "exported.srt")})]
+
     knowledge = FakeKnowledge(tmp_path / "knowledge")
     bridge = DesktopBridge(
         jobs=JobsWithRequest(),
@@ -1164,6 +1167,7 @@ def test_bridge_forwards_owned_knowledge_workflows_and_rejects_unknown_commands(
         {
             "task_id": "task-1",
             "refined_srt": str(tmp_path / "refined.srt"),
+            "source_srt": "  E:/重新选择的原字幕.srt  ",
             "apply": False,
         }
     )["ok"] is True
@@ -1177,6 +1181,8 @@ def test_bridge_forwards_owned_knowledge_workflows_and_rejects_unknown_commands(
     refined = next(value for kind, value in knowledge.calls if kind == "refined_update")
     assert refined["final_srt"] == str(final_srt)
     assert refined["task_id"] == "task-1"
+    assert refined["exported_srt"] == str(tmp_path / "exported.srt")
+    assert refined["source_srt"] == "E:/重新选择的原字幕.srt"
 
 
 def test_bridge_routes_missing_knowledge_runtime_to_resources(tmp_path: Path) -> None:

@@ -53,8 +53,11 @@ test("knowledge import uses the core-specific Agent and does not silently substi
   const html = renderToStaticMarkup(createElement(BilingualKnowledgeImport, {
     snapshot: null, tasks: [], routing: { ...initialState.routing, unified_llm_media: true }, onApplied: async () => {},
   }));
-  assert.match(html, /LOCAL_CODEBUDDY/);
+  const source = readFileSync(new URL("../components/BilingualKnowledgeImport.tsx", import.meta.url), "utf8");
+  assert.match(source, /routing\?\.unified_llm_media \? "LOCAL_CODEBUDDY" : "LOCAL_WORKBUDDY"/);
   assert.match(html, /不会自动切换/);
-  assert.match(html, /LOCAL_WORKBUDDY · 需重新选择/);
-  assert.match(html, /手动指定模型 ID/);
+  assert.match(html, /上次选择的 Agent 不适用于当前核心，请重新选择/);
+  assert.match(source, /手动指定模型 ID/);
+  assert.match(html, /role="combobox"/);
+  assert.doesNotMatch(html, /<select/);
 });

@@ -501,6 +501,7 @@ export interface KnowledgeFeedback {
 export interface RefinedKnowledgeUpdateRequest {
   task_id: string;
   refined_srt: string;
+  source_srt?: string;
   task_summary?: string;
   llm_model?: string[];
   apply?: boolean;

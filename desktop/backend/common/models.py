@@ -584,6 +584,7 @@ class KnowledgeShareCommandRequest(DesktopModel):
 class RefinedKnowledgeUpdateRequest(DesktopModel):
     task_id: str = Field(min_length=1, max_length=200)
     refined_srt: str = Field(min_length=1, max_length=32_768)
+    source_srt: str = Field(default="", max_length=32_768)
     task_summary: str = Field(default="", max_length=20_000)
     llm_model: list[str] = Field(default_factory=list)
     apply: bool = False

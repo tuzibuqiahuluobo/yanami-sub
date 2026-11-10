@@ -464,6 +464,12 @@
   animation: select-menu-out 150ms ease-in forwards;
 }
 
+.custom-select-menu[data-side="top"] {
+  top: auto;
+  bottom: calc(100% + 6px);
+  transform-origin: bottom;
+}
+
 @keyframes select-menu-out {
   to { opacity: 0; transform: translateY(-3px) scale(.98); }
 }

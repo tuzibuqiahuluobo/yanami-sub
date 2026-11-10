@@ -37,6 +37,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { KnowledgeStructure } from "./KnowledgeStructure";
 import { KnowledgeDocument } from "./KnowledgeDocument";
 import { KnowledgeRecovery } from "./KnowledgeRecovery";
+import { CustomSelect } from "./CustomSelect";
 import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
 
@@ -95,7 +96,8 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
   const [category, setCategory] = useState(() => uiValue("rememberLastSettings", true) ? uiValue("knowledgeCategory", "all") : "all");
   useEffect(() => { if (uiValue("rememberLastSettings", true)) saveUi({ knowledgeTab: tab, knowledgeCategory: category }); }, [tab, category]);
   const selectTab = (next: KnowledgeTab) => {
-    if (next === tab) return;
+    if (next === tab || busy) return;
+    setError(""); setOutput("");
     runInterfaceTransition(() => setTab(next));
   };
 
@@ -115,11 +117,15 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
   const [feedbackTaskId, setFeedbackTaskId] = useState("");
   const [feedback, setFeedback] = useState<KnowledgeFeedback | null>(null);
   const [refinedPath, setRefinedPath] = useState("");
+  const [sourcePath, setSourcePath] = useState("");
+  const [refinedError, setRefinedError] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
   const [refinedProposal, setRefinedProposal] = useState<RefinedKnowledgeUpdateReport | null>(null);
   const [confirmation, setConfirmation] = useState<{ message: string; action: () => void } | null>(null);
   const confirmAction = (message: string, action: () => void) => setConfirmation({ message, action });
 
-  useEffect(() => { setRefinedProposal(null); }, [refinedPath, feedbackTaskId]);
+  useEffect(() => { setRefinedProposal(null); setRefinedError(""); }, [refinedPath, sourcePath, feedbackTaskId]);
+  useEffect(() => { setSourcePath(""); setFeedback(null); setFeedbackError(""); }, [feedbackTaskId]);
 
   const [candidateReason, setCandidateReason] = useState("");
   const [restoreId, setRestoreId] = useState("");
@@ -257,24 +263,26 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
   const loadFeedback = async () => {
     if (!feedbackTaskId) return;
     setBusy(true);
-    setError("");
+    setFeedbackError("");
     try {
       setFeedback(await desktopApi.getTaskKnowledgeFeedback(feedbackTaskId));
     } catch (reason) {
-      setError(errorMessage(reason));
+      setFeedbackError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
   };
 
-  const chooseFile = async (target: "refined" | "material") => {
+  const chooseFile = async (target: "refined" | "source" | "material") => {
     try {
       const chosen = await desktopApi.selectSubtitleFile();
       if (!chosen.path) return;
       if (target === "refined") setRefinedPath(chosen.path);
+      else if (target === "source") setSourcePath(chosen.path);
       else setIngest((current) => ({ ...current, material: chosen.path || "" }));
     } catch (reason) {
-      setError(errorMessage(reason));
+      if (target === "material") setError(errorMessage(reason));
+      else setRefinedError(errorMessage(reason));
     }
   };
 
@@ -283,11 +291,12 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
     if (apply && !refinedProposal?.draft_id) return;
     if (!apply) setRefinedProposal(null);
     setBusy(true);
-    setError("");
+    setRefinedError("");
     try {
       const report = apply && refinedProposal?.draft_id ? await desktopApi.applyKnowledgeProposal(refinedProposal.draft_id) : await desktopApi.runRefinedKnowledgeUpdate({
         task_id: selectedTask.task_id,
         refined_srt: refinedPath.trim(),
+        source_srt: sourcePath.trim(),
         task_summary: selectedTask.request.task_summary,
         llm_model: selectedTask.request.llm_model,
         apply: false,
@@ -298,7 +307,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
       await loadSnapshot();
       if (report.status === "applied" || report.status === "generated" || report.status === "evidence_only") showSuccess(knowledgeOutcome(report, language === "zh"), "knowledge-refined-update");
     } catch (reason) {
-      setError(errorMessage(reason));
+      setRefinedError(errorMessage(reason));
     } finally {
       setBusy(false);
     }
@@ -345,6 +354,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
               className={tab === item.id ? "is-active" : ""}
               role="tab"
               aria-selected={tab === item.id}
+              disabled={busy}
               onClick={() => selectTab(item.id)}
             >
               <Icon size={15} />
@@ -359,7 +369,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
         <p>{language === "zh" ? ({ library: "先选择左侧条目阅读；需要修改时展开“编辑原文”并保存。停用可在“检查与恢复”中撤销。新建任务的“知识库”选项决定是否读取或更新这些内容。", feedback: "只有两份时间轴一致的字幕？使用“双语字幕导入”，不需要原任务。若有本应用的原任务，可选择任务并导入精修字幕。两种方式都先生成提案，审阅后再写入。生成会调用所选模型，应用同一提案不再次调用模型。", maintenance: "重建缓存和确定性迁移不调用模型。其他工具的“查看计划”只展示工作范围；“生成建议”调用模型但不写入，“生成并写入”会调用模型并更新知识库。它们不是应用同一份预览提案。", sharing: "共享为可选功能，需要你提供可信的服务器地址。先连接并拉取，再标记准备共享的内容，最后提交审核。知识内容会发送到该服务器；不要共享私人材料。" }[tab]) : ({ library: "Choose an entry to read it. Expand Edit source to make changes, then save. Retired entries can be restored under Check & restore. Each task controls whether this knowledge is read or updated.", feedback: "Two matching subtitle files need no original task: use bilingual import. For an existing app task, import a refined SRT below. Generate a proposal first, review it, then apply that exact proposal without another model call.", maintenance: "Cache rebuilding and deterministic migration make no model calls. View plan shows scope only; Generate suggestions calls models without writing; Generate & write calls models and changes the store. These are separate runs, not application of the same preview proposal.", sharing: "Sharing is optional and requires a trusted server URL. Connect and pull, mark shareable content, then submit for review. Content is sent to that server; keep private material local." }[tab])}</p>
       </aside>
 
-      {error ? <div className="inline-error knowledge-error">{error}</div> : null}
+      {error ? <div className="inline-error knowledge-error" role="alert">{error}</div> : null}
       {loading ? <div className="primary-panel knowledge-loading">{t.knowledge.loading}</div> : null}
 
       {!loading && tab === "library" ? (
@@ -370,12 +380,8 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
                 <Search size={15} />
                 <input value={search} placeholder={t.knowledge.search} onChange={(event) => setSearch(event.target.value)} />
               </label>
-              <select value={category} onChange={(event) => setCategory(event.target.value)} aria-label={t.knowledge.category}>
-                <option value="all">{t.knowledge.categories.all}</option>
-                <option value="streamer">{t.knowledge.categories.streamer}</option>
-                <option value="common">{t.knowledge.categories.common}</option>
-                <option value="style">{t.knowledge.categories.style}</option>
-              </select>
+              <CustomSelect value={category} onChange={setCategory} ariaLabel={t.knowledge.category}
+                options={["all", "streamer", "common", "style"].map((value) => ({ value, label: t.knowledge.categories[value as keyof typeof t.knowledge.categories] }))} />
             </div>
             <div className="knowledge-entry-count">
               {t.knowledge.entryCount.replace("{count}", String(visibleEntries.length))}
@@ -421,25 +427,21 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
                   </div>
                 </div>
                 <div className="knowledge-form-grid">
-                  <label className="field">
+                  <div className="field">
                     <span>{t.knowledge.category}</span>
-                    <select value={newEntry.category} onChange={(event) => setNewEntry((current) => ({ ...current, category: event.target.value }))}>
-                      <option value="streamer">{t.knowledge.categories.streamer}</option>
-                      <option value="common">{t.knowledge.categories.common}</option>
-                      <option value="style">{t.knowledge.categories.style}</option>
-                    </select>
-                  </label>
+                    <CustomSelect value={newEntry.category} ariaLabel={t.knowledge.category} onChange={(value) => setNewEntry((current) => ({ ...current, category: value }))}
+                      options={["streamer", "common", "style"].map((value) => ({ value, label: t.knowledge.categories[value as "streamer" | "common" | "style"] }))} />
+                  </div>
                   <label className="field">
                     <span>{t.knowledge.create.key}</span>
                     <input value={newEntry.key} onChange={(event) => setNewEntry((current) => ({ ...current, key: event.target.value }))} />
                   </label>
                   {newEntry.category === "common" ? (
-                    <label className="field">
+                    <div className="field">
                       <span>{t.knowledge.create.type}</span>
-                      <select value={newEntry.entryType} onChange={(event) => setNewEntry((current) => ({ ...current, entryType: event.target.value }))}>
-                        {ENTRY_TYPES.map((value) => <option value={value} key={value}>{t.knowledge.entryTypes[value]}</option>)}
-                      </select>
-                    </label>
+                      <CustomSelect value={newEntry.entryType} ariaLabel={t.knowledge.create.type} onChange={(value) => setNewEntry((current) => ({ ...current, entryType: value }))}
+                        options={ENTRY_TYPES.map((value) => ({ value, label: t.knowledge.entryTypes[value] }))} />
+                    </div>
                   ) : null}
                   <label className="field">
                     <span>{t.knowledge.create.aliases}</span>
@@ -509,17 +511,16 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
               <div><h2>{t.knowledge.feedback.title}</h2><p>{t.knowledge.feedback.hint}</p></div>
             </div>
             <div className="knowledge-action-grid">
-              <label className="field">
+              <div className="field">
                 <span>{t.knowledge.feedback.task}</span>
-                <select disabled={busy} value={feedbackTaskId} onChange={(event) => { setFeedbackTaskId(event.target.value); setFeedback(null); }}>
-                  <option value="">{t.knowledge.feedback.noTask}</option>
-                  {completedTasks.map((task) => <option key={task.task_id} value={task.task_id}>{taskLabel(task)}</option>)}
-                </select>
-              </label>
+                <CustomSelect disabled={busy} value={feedbackTaskId} ariaLabel={t.knowledge.feedback.task} onChange={setFeedbackTaskId}
+                  options={[{ value: "", label: t.knowledge.feedback.noTask }, ...completedTasks.map((task) => ({ value: task.task_id, label: taskLabel(task) }))]} />
+              </div>
               <button type="button" className="button button-secondary knowledge-form-action" disabled={busy || !feedbackTaskId} onClick={() => void loadFeedback()}>
                 <BookOpenText size={15} />{t.knowledge.feedback.inspect}
               </button>
             </div>
+            {feedbackError ? <p className="knowledge-error" role="alert">{feedbackError}</p> : null}
             {feedback ? (
               <div className="feedback-summary-grid">
                 <article><strong>{feedback.merged_hints.length}</strong><span>{t.knowledge.feedback.hints}</span></article>
@@ -544,15 +545,33 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
             <div className="section-heading">
               <div><h2>{t.knowledge.feedback.refinedTitle}</h2><p>{t.knowledge.feedback.refinedHint}</p></div>
             </div>
+            <ol className="knowledge-steps" aria-label={language === "zh" ? "精修学习步骤" : "Refinement steps"}>
+              <li>{language === "zh" ? "选择上方原任务" : "Select the task above"}</li>
+              <li>{language === "zh" ? "选择人工精修 SRT" : "Choose the refined SRT"}</li>
+              <li>{language === "zh" ? "生成并审阅提案" : "Generate and review"}</li>
+              <li>{language === "zh" ? "确认写入知识库" : "Apply to knowledge"}</li>
+            </ol>
+            <div className="knowledge-source-info">
+              <strong>{language === "zh" ? "原任务字幕（自动定位）" : "Original task subtitle (automatic)"}</strong>
+              <p>{selectedTask ? (selectedTask.outputs?.finalSrt || selectedTask.request.output) : (language === "zh" ? "请先在上方选择已完成任务" : "Select a completed task above")}</p>
+              <details className="knowledge-source-editor"><summary>{language === "zh" ? "原文件已移动？补选原任务字幕" : "Original moved? Select the task subtitle"}</summary>
+                <p className="field-hint">{language === "zh" ? "选择本应用原先导出的、未经人工修改的字幕。不要重复选择下方的精修文件；任务识别材料仍从原任务目录读取。" : "Choose the app's unedited exported subtitle, not the refined file below. Evidence is still read from the original task folder."}</p>
+                <div className="knowledge-file-row"><input value={sourcePath} disabled={busy} aria-label={language === "zh" ? "补选原任务字幕" : "Original task subtitle override"} placeholder={language === "zh" ? "留空：自动查找原任务与导出位置" : "Empty: locate original/export automatically"} onChange={(event) => setSourcePath(event.target.value)} /><button type="button" className="button button-secondary" disabled={busy} onClick={() => void chooseFile("source")}>{t.knowledge.browse}</button></div>
+              </details>
+            </div>
             <div className="knowledge-workflow-row">
+              <label className="field field-span-all"><span>{language === "zh" ? "人工精修后的 SRT（必填）" : "Manually refined SRT (required)"}</span>
               <div className="knowledge-file-row">
                 <input disabled={busy} value={refinedPath} placeholder={t.knowledge.feedback.refinedPlaceholder} aria-label={t.knowledge.feedback.refinedPlaceholder} onChange={(event) => setRefinedPath(event.target.value)} />
                 <button type="button" disabled={busy} className="button button-secondary" onClick={() => void chooseFile("refined")}>{t.knowledge.browse}</button>
               </div>
+              </label>
+              {refinedError ? <div className="knowledge-error field-span-all" role="alert"><strong>{language === "zh" ? "未生成或应用提案" : "Proposal not generated or applied"}</strong><p>{refinedError}</p></div> : null}
               <div className="knowledge-actions">
                 <button type="button" className="button button-secondary" disabled={busy || !selectedTask || !refinedPath.trim()} onClick={() => void applyRefined(false)}>{t.knowledge.feedback.propose}</button>
                 <button type="button" className="button button-primary" disabled={busy || !canApplyProposal(refinedProposal)} onClick={() => confirmAction(t.knowledge.feedback.applyConfirm, () => void applyRefined(true))}>{language === "zh" ? "应用已审阅提案" : "Apply reviewed proposal"}</button>
               </div>
+              <p className="field-hint field-span-all" role="status">{busy ? (language === "zh" ? "正在处理，请稍候…" : "Working, please wait…") : !selectedTask ? (language === "zh" ? "先在上方选择已完成任务，才能生成提案。" : "Select a completed task above first.") : !refinedPath.trim() ? (language === "zh" ? "请选择人工精修的 SRT。生成会调用模型；审阅后应用同一份提案，不再调用模型。" : "Choose a refined SRT. Generation calls a model; applying the reviewed proposal does not.") : (language === "zh" ? "文件已选择。点击“生成提案”，检查下方内容后再点击“应用已审阅提案”。" : "File selected. Generate a proposal, review it below, then apply it.")}</p>
               {refinedProposal ? <ProposalReview report={refinedProposal} /> : null}
             </div>
           </section>
@@ -616,7 +635,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.maintenance.ingest}</h2><p>{t.knowledge.maintenance.ingestHint}</p></div></div>
             <div className="knowledge-form-grid">
-              <label className="field field-span-all"><span>{t.knowledge.maintenance.subject}</span><select value={ingest.subject} onChange={(event) => setIngest((current) => ({ ...current, subject: event.target.value }))}><option value="">{t.common.select}</option>{snapshot?.entries.map((entry) => <option value={entry.qualified_name} key={entry.id}>{entry.qualified_name}</option>)}</select></label>
+              <div className="field field-span-all"><span>{t.knowledge.maintenance.subject}</span><CustomSelect disabled={busy} ariaLabel={t.knowledge.maintenance.subject} value={ingest.subject} onChange={(value) => setIngest((current) => ({ ...current, subject: value }))} options={[{ value: "", label: t.common.select }, ...(snapshot?.entries || []).map((entry) => ({ value: entry.qualified_name, label: entry.qualified_name }))]} /></div>
               <label className="field field-span-all"><span>{t.knowledge.maintenance.material}</span><div className="knowledge-file-row"><input value={ingest.material} onChange={(event) => setIngest((current) => ({ ...current, material: event.target.value }))} /><button type="button" className="button button-secondary" onClick={() => void chooseFile("material")}>{t.knowledge.browse}</button></div></label>
               <label className="field field-span-all"><span>{t.knowledge.maintenance.prompt}</span><textarea rows={3} value={ingest.prompt} onChange={(event) => setIngest((current) => ({ ...current, prompt: event.target.value }))} /></label>
             </div>
@@ -645,7 +664,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.publish}</h2><p>{t.knowledge.sharing.publishHint}</p></div></div>
             <div className="knowledge-form-grid knowledge-form-grid-three">
-              <label className="field"><span>{t.knowledge.sharing.subject}</span><select value={selectedName} onChange={(event) => setSelectedName(event.target.value)}><option value="">{t.common.select}</option>{snapshot?.entries.map((entry) => <option key={entry.id} value={entry.qualified_name}>{entry.qualified_name}</option>)}</select></label>
+              <div className="field"><span>{t.knowledge.sharing.subject}</span><CustomSelect disabled={busy} ariaLabel={t.knowledge.sharing.subject} value={selectedName} onChange={setSelectedName} options={[{ value: "", label: t.common.select }, ...(snapshot?.entries || []).map((entry) => ({ value: entry.qualified_name, label: entry.qualified_name }))]} /></div>
               <label className="field"><span>{t.knowledge.sharing.kinds}</span><input value={shareKinds} placeholder="note,rule" onChange={(event) => setShareKinds(event.target.value)} /></label>
               <label className="field"><span>{t.knowledge.sharing.match}</span><input value={shareMatch} onChange={(event) => setShareMatch(event.target.value)} /></label>
             </div>

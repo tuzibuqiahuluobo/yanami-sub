@@ -89,12 +89,16 @@ class KnowledgeService:
         apply: bool,
         resume: bool,
         request: dict[str, Any] | None = None,
+        source_srt: str = "",
+        exported_srt: str = "",
     ) -> dict[str, Any]:
         return self._invoke(
             {
                 "action": "refined_update",
                 "final_srt": str(final_srt),
                 "refined_srt": str(refined_srt),
+                "source_srt": source_srt,
+                "exported_srt": exported_srt,
                 "task_id": task_id,
                 "task_summary": task_summary,
                 "llm_model": llm_model,

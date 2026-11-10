@@ -96,6 +96,60 @@ def test_material_capture_uses_core_multilingual_windows_and_detects_edits(tmp_p
     assert feedback.capture_materials(paths, refined)["fingerprint"] != before["fingerprint"]
 
 
+def test_refined_recovers_recorded_export_and_keeps_original_evidence(tmp_path, monkeypatch):
+    root = knowledge_root(tmp_path, monkeypatch)
+    paths, refined = task_files(tmp_path)
+    exported = tmp_path / "导出目录" / "另一个文件名.srt"
+    exported.parent.mkdir()
+    paths["final_srt"].replace(exported)
+    seen = []
+    @contextmanager
+    def route(values):
+        yield TaskRequest.model_validate(values), SimpleNamespace(source="api", targets=["fixture"])
+    monkeypatch.setattr(workflow, "_route", route)
+    monkeypatch.setattr("finesub.llm.client.RoleClient", lambda: object())
+    monkeypatch.setattr(workflow, "task_style", lambda *_args: ((), {}))
+    def update(**kwargs):
+        seen.append(kwargs)
+        assert kwargs["final_srt"] == exported
+        assert kwargs["stable_json"] == paths["stable_json"]
+        assert kwargs["annotated_csv"] == paths["annotated_csv"]
+        return {"chunks": [], "mode": "refined_aligned"}
+    monkeypatch.setattr("finesub.llm.knowledge.update.run_knowledge_update", update)
+    values = {**payload(paths, refined), "exported_srt": str(exported)}
+    report = workflow.generate_refined(root, values)
+    assert report["status"] == "generated" and len(seen) == 1
+    assert not paths["final_srt"].exists()
+
+    # A deliberate manual selection wins over both stored paths.
+    override = tmp_path / "手动原字幕.srt"
+    override.write_bytes(exported.read_bytes())
+    values["source_srt"] = str(override)
+    monkeypatch.setattr("finesub.llm.knowledge.update.run_knowledge_update", lambda **kwargs: (
+        {"chunks": [], "mode": "refined_aligned"} if kwargs["final_srt"] == override else pytest.fail("override ignored")))
+    workflow.generate_refined(root, values)
+
+
+def test_missing_original_fails_before_model_routing_and_never_uses_refined_as_original(tmp_path, monkeypatch):
+    paths, refined = task_files(tmp_path)
+    paths["final_srt"].unlink()
+    monkeypatch.setattr(workflow, "_route", lambda *_args: pytest.fail("must not start model routing"))
+    with pytest.raises(ValueError, match="Original task subtitle missing"):
+        workflow.generate_refined(tmp_path / "knowledge", payload(paths, refined))
+    assert refined.is_file()
+
+
+def test_cleanup_preserves_internal_final_when_export_is_elsewhere(tmp_path, monkeypatch):
+    from desktop.backend.worker.main import cleanup_task_intermediates
+    paths, _refined = task_files(tmp_path)
+    monkeypatch.setattr(feedback, "retain_task_style", lambda *_args: None)
+    exported = tmp_path / "export" / "字幕.srt"
+    exported.parent.mkdir()
+    exported.write_bytes(paths["final_srt"].read_bytes())
+    cleanup_task_intermediates(paths["final_srt"], preserve=[exported])
+    assert paths["final_srt"].is_file() and exported.is_file()
+
+
 @pytest.mark.skipif(not unified_llm_contract(), reason="0.6.0 task-pinned auto style")
 def test_auto_style_inherits_context_over_artifacts_and_filters_retired_write_target(tmp_path, monkeypatch):
     root = knowledge_root(tmp_path, monkeypatch)

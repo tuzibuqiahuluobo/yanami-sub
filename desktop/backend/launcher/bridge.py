@@ -1423,6 +1423,8 @@ class DesktopBridge:
             request = self.jobs.request_for(values.task_id)
             if not request.output:
                 raise ValueError("该任务没有可定位的最终字幕路径。")
+            exported_srt = next((task.outputs.get("finalSrt", "") for task in self.jobs.history()
+                                 if task.task_id == values.task_id), "")
             return self.knowledge.refined_update(
                 final_srt=request.output,
                 refined_srt=values.refined_srt,
@@ -1432,6 +1434,8 @@ class DesktopBridge:
                 apply=values.apply,
                 resume=values.resume,
                 request=request.model_dump(mode="json"),
+                source_srt=values.source_srt.strip(),
+                exported_srt=exported_srt,
             )
 
         return self._knowledge_guard(update)

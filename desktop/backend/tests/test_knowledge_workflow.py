@@ -109,6 +109,8 @@ def test_commit_receipt_recovers_after_desktop_exit(tmp_path, monkeypatch):
 
 def test_refined_inherits_route_difficulty_and_writable_style(tmp_path, monkeypatch):
     root = setup_root(tmp_path, monkeypatch)
+    for name in ("final.srt", "refined.srt"):
+        (tmp_path / name).write_text("1\n00:00:00,000 --> 00:00:01,000\n字幕\n", encoding="utf-8")
     requests, kwargs_seen = [], []
     @contextmanager
     def route(values):

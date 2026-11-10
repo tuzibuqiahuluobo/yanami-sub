@@ -41,6 +41,8 @@ def _read_srt(path: str, encoding: str) -> tuple[list, str, str]:
     from finesub.subtitles.model import parse_srt
 
     source = Path(path).expanduser().resolve()
+    if not source.is_file():
+        raise ValueError(f"字幕文件不存在或无法访问，请重新选择 / Subtitle file missing or inaccessible: {source}")
     if source.suffix.lower() != ".srt" or source.stat().st_size > 8 * 1024 * 1024:
         raise ValueError("请选择不超过 8 MB 的 SRT / Choose an SRT smaller than 8 MB")
     data = source.read_bytes()
@@ -127,17 +129,30 @@ def generate_refined(root: Path, payload: dict) -> dict:
     from finesub.llm.client import RoleClient
     from finesub.llm.knowledge.update import derive_task_paths, ensure_research_context_path, run_knowledge_update
 
+    paths = derive_task_paths(payload["final_srt"])
+    source = Path(payload.get("source_srt") or paths["final_srt"])
+    if not payload.get("source_srt") and not source.is_file() and payload.get("exported_srt"):
+        source = Path(payload["exported_srt"])
+    if not source.is_file():
+        raise ValueError(
+            "原任务字幕不存在或无法访问（不是你选择的精修文件）。请在“补选原任务字幕”中选择原任务导出的、未经精修的 SRT。 / "
+            f"Original task subtitle missing; select the unedited exported SRT: {source}"
+        )
+    _read_srt(str(source), "auto")
+    _read_srt(payload["refined_srt"], "auto")
     values = dict(payload.get("request") or {"input": payload["final_srt"], "llm_model": payload.get("llm_model", [])})
     if payload.get("llm_model"):
         values["llm_model"] = payload["llm_model"]
     with _route(values) as (request, route):
-        paths = derive_task_paths(payload["final_srt"])
         paths["research_context"] = ensure_research_context_path(artifact_dir=paths["artifact_dir"],
             stem=paths["final_srt"].stem, run_dir=paths["final_srt"].parent)
         style_names, style_metadata = task_style(request, root, paths)
+        # Exported names may differ; keep the original task's evidence/context siblings.
+        paths["final_srt"] = source.resolve()
         materials = capture_materials(paths, payload["refined_srt"])
         client = CapturingClient(RoleClient())
-        report = run_knowledge_update(final_srt=payload["final_srt"], refined_srt=payload["refined_srt"],
+        report = run_knowledge_update(final_srt=paths["final_srt"], refined_srt=payload["refined_srt"],
+            stable_json=paths["stable_json"], annotated_csv=paths["annotated_csv"],
             artifact_dir=paths["artifact_dir"], research_context=paths["research_context"], task_id=payload["task_id"],
             task_summary=payload.get("task_summary", ""), knowledge_root=root, execute=True, apply=False,
             resume=payload.get("resume", True), client=client, difficulty=request.llm_difficulty,

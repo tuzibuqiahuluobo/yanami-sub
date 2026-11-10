@@ -48,6 +48,8 @@ export function CustomSelect({
   const presence = useExitPresence(open);
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLUListElement>(null);
+  const [menuLayout, setMenuLayout] = useState({ above: false, maxHeight: 420 });
   const listboxId = useId();
   const triggerId = `${listboxId}-trigger`;
 
@@ -150,6 +152,33 @@ export function CustomSelect({
     }
   }, [open, handleOutsideClick]);
 
+  useEffect(() => {
+    if (!open) return;
+    const position = () => {
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const below = window.innerHeight - rect.bottom - 12;
+      const above = rect.top - 12;
+      const useAbove = below < 240 && above > below;
+      setMenuLayout({ above: useAbove, maxHeight: Math.max(80, Math.min(420, useAbove ? above : below)) });
+    };
+    position();
+    window.addEventListener("resize", position);
+    window.addEventListener("scroll", position, true);
+    return () => { window.removeEventListener("resize", position); window.removeEventListener("scroll", position, true); };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    const menu = menuRef.current;
+    const item = menu?.children[activeIndex] as HTMLElement | undefined;
+    if (!menu || !item) return;
+    if (item.offsetTop < menu.scrollTop) menu.scrollTop = item.offsetTop;
+    else if (item.offsetTop + item.offsetHeight > menu.scrollTop + menu.clientHeight) {
+      menu.scrollTop = item.offsetTop + item.offsetHeight - menu.clientHeight;
+    }
+  }, [open, activeIndex, menuLayout.maxHeight]);
+
   return (
     <div
       ref={containerRef}
@@ -189,8 +218,11 @@ export function CustomSelect({
 
       {presence.present ? (
         <ul
+          ref={menuRef}
           id={listboxId}
           className="custom-select-menu"
+          data-side={menuLayout.above ? "top" : "bottom"}
+          style={{ maxHeight: menuLayout.maxHeight }}
           data-closing={!open || undefined}
           inert={!open}
           aria-hidden={!open || undefined}

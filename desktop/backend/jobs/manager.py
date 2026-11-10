@@ -430,7 +430,7 @@ class JobManager:
                 delivered = artifacts.deliverable(output, "final-srt")
                 if delivered is None:
                     raise ValueError("This task recorded no output location")
-                keep = [value for value in snapshot.outputs.values() if value]
+                keep = [delivered, *(value for value in snapshot.outputs.values() if value)]
                 if snapshot.state != "completed":
                     keep.append(artifacts.artifact_directory(delivered))
                 artifacts.cleanup_intermediate(delivered, preserve=keep)
