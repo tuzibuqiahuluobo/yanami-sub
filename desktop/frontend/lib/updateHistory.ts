@@ -17,8 +17,8 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
-    version: "0.3.0.post2",
-    title: { zh: "0.3.0.post2 · 知识库字幕定位与界面修复", en: "0.3.0.post2 · Knowledge subtitles and layout repair" },
+    version: "0.3.1-rc.1.post2",
+    title: { zh: "0.3.1 RC1.2 · 知识库字幕定位与界面修复", en: "0.3.1 RC1.2 · Knowledge subtitles and layout repair" },
     notes: {
       zh: ["修复精修学习读取已清理的内部字幕；旧任务回退到记录的导出位置，支持手动补选原字幕。", "清理中间产物时保留内部最终字幕；原字幕、精修字幕分别校验，缺失时在调用模型前给出处理办法。", "知识学习显示步骤、下一步提示和文件角色，错误不串到其他标签页。", "知识库下拉框统一圆角菜单，支持键盘长列表滚动与上下自适应展开。", "维护按钮随卡片空间换行；验证中英文、深浅色及放大字体布局。", "采用完整更新，保留任务、知识库、配置和模型缓存；核心仍为 FineSub 0.7.0。"],
       en: ["Recover cleaned task subtitles from the recorded export, with a manual original-file override.", "Keep the internal final SRT during cleanup and validate both files before model routing.", "Show learning steps, next actions and distinct file roles; keep errors within their workflow.", "Use rounded knowledge menus with keyboard scrolling and automatic upward/downward placement.", "Wrap maintenance actions within cards; verify both languages, themes and large fonts.", "Full update preserves tasks, knowledge, settings and models; core remains FineSub 0.7.0."],
