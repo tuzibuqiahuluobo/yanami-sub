@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1",
+    title: { zh: "0.3.1 RC1.0 · 0.7.0 核心预览通道", en: "0.3.1 RC1.0 · Core 0.7.0 preview channel" },
+    notes: {
+      zh: ["与 0.3.0 正式版使用相同的核心和功能基线。", "保留预览通道，面向开启预览更新的用户；默认不推送给正式通道。", "升级及费用隐私注意事项请参阅 0.3.0 更新内容。"],
+      en: ["Shares the core and feature baseline with stable 0.3.0.", "Keeps the preview update channel for opted-in users; not offered to stable-channel users by default.", "See 0.3.0 notes for migration, cost and privacy details."],
+    },
+  },
+  {
     version: "0.3.0",
     title: { zh: "0.3.0 · FineSub 0.7.0 与任务设置改进", en: "0.3.0 · FineSub 0.7.0 and task settings" },
     notes: {
