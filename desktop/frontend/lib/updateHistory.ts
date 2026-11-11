@@ -17,8 +17,8 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
-    version: "0.3.0.post3",
-    title: { zh: "0.3.0.post3 · Qwen 本地校验兼容修复", en: "0.3.0.post3 · Local Qwen attention compatibility" },
+    version: "0.3.1-rc.1.post3",
+    title: { zh: "0.3.1 RC1.3 · Qwen 本地校验兼容修复", en: "0.3.1 RC1.3 · Local Qwen attention compatibility" },
     notes: {
       zh: ["在单任务与批处理 Worker 中加入 Qwen CUDA 注意力内核不可用的兼容处理；不修改固定的上游源码。", "只对明确的内核不可用错误进行一次模型内 eager 注意力重试，成功后仍在原 GPU 执行校验。", "不更改进程级 SDPA 开关，避免干扰批处理中并行的人声分离；正常推理不变。", "日志记录兼容尝试、设备、精度与输入形状；显存不足等其他错误不吞掉，重试失败也不冒充成功。", "已用本机缓存 Qwen 权重完成离线 GPU 兼容验收；尚未复跑原故障长视频。", "完整更新保留任务、模型与知识库；核心仍为 FineSub 0.7.0。"],
       en: ["Add a Worker-side Qwen CUDA attention compatibility layer for both tasks and batches without changing pinned upstream source.", "Retry only recognized kernel-unavailable errors once with model-local eager attention, retaining verification on the original GPU.", "Keep process-wide SDPA flags unchanged so parallel separation is not disturbed; normal inference stays unchanged.", "Log recovery, device, dtype and input shape. OOM and unrelated errors remain failures; failed recovery is not reported as success.", "Offline acceptance with cached Qwen weights passed on the local GPU; the original long failing video was not rerun.", "Full update preserves tasks, models and knowledge; core remains FineSub 0.7.0."],
