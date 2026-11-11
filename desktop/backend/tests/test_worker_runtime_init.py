@@ -45,6 +45,7 @@ def test_each_isolated_worker_initializes_paths_before_dispatch(module):
     assert calls["initialize_native_paths"] < calls[dispatch]
     if module in {"main", "batch_main"}:
         assert calls["initialize_native_paths"] < calls["configure_compiler_output"] < calls[dispatch]
+        assert calls["configure_compiler_output"] < calls["configure_qwen_attention"] < calls[dispatch]
 
 
 def test_single_and_batch_share_style_retaining_cleanup():

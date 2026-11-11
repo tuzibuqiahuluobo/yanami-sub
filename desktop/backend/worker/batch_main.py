@@ -39,6 +39,7 @@ from desktop.backend.worker.main import (
 from desktop.backend.worker.model_source import source_route
 from desktop.backend.worker.protocol import EventLogWriter
 from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
+from desktop.backend.worker.qwen_attention import configure_qwen_attention
 from desktop.backend.worker.compiler_output import configure_compiler_output
 
 
@@ -402,6 +403,7 @@ def main() -> int:
         ):
             initialize_native_paths()
             configure_compiler_output()
+            configure_qwen_attention()
             final = run_batch_request(
                 request,
                 batch_id=args.batch_id,
