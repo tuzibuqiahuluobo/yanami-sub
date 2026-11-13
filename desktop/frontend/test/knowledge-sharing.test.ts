@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import { createDesktopApi } from "../lib/bridge";
 import { KnowledgeFileExchange } from "../components/KnowledgeFileExchange";
 
@@ -20,4 +21,14 @@ test("preview never pretends native knowledge file operations succeeded", async 
   const api = createDesktopApi({ preview: true });
   await assert.rejects(api.selectKnowledgeDocument(), /desktop app/);
   await assert.rejects(api.exportKnowledgeEntry("common/example"), /desktop app/);
+});
+
+test("a completed local import refreshes both the entry document and source editor", () => {
+  const page = readFileSync(new URL("../components/KnowledgeCenter.tsx", import.meta.url), "utf8");
+  const callback = page.match(/<KnowledgeFileExchange[\s\S]*?onChanged=\{async \(\) => \{([\s\S]*?)\}\}/)?.[1];
+  assert.ok(callback);
+  assert.match(callback, /await loadSnapshot\(\)/);
+  assert.match(callback, /await desktopApi\.getKnowledgeEntry\(selectedName\)/);
+  assert.match(callback, /setDocument\(next\)/);
+  assert.match(callback, /setDraft\(next\.text\)/);
 });

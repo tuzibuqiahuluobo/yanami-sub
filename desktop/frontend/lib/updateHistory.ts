@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.0.post5",
+    title: { zh: "0.3.0.post5 · 知识导入即时刷新", en: "0.3.0.post5 · Refresh imported knowledge" },
+    notes: {
+      zh: ["补齐本地 Markdown 导入后的条目正文和原文编辑缓存刷新，避免已写入却仍显示旧内容。", "包含 post4 的下拉菜单、默认社区地址、本地文件交换与简化共享流程。", "完整更新保留用户数据，核心仍为 FineSub 0.7.0；未增加视频压制功能。"],
+      en: ["Refresh both the entry document and source editor after a local Markdown import, so committed content is immediately visible.", "Includes post4 dropdown layering, default community address, local file exchange and sharing guidance.", "Full update preserves user data; core remains FineSub 0.7.0. No video encoding feature is added."],
+    },
+  },
+  {
     version: "0.3.0.post4",
     title: { zh: "0.3.0.post4 · 下拉菜单与社区共享", en: "0.3.0.post4 · Menus and knowledge exchange" },
     notes: {

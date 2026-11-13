@@ -658,7 +658,11 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
 
       {!loading && tab === "sharing" ? (
         <div className="knowledge-stack">
-          <KnowledgeFileExchange snapshot={snapshot} selected={selectedName} onSelect={setSelectedName} busy={busy} setBusy={setBusy} onChanged={async () => { await loadSnapshot(); }} />
+          <KnowledgeFileExchange snapshot={snapshot} selected={selectedName} onSelect={setSelectedName} busy={busy} setBusy={setBusy} onChanged={async () => {
+            await loadSnapshot();
+            const next = await desktopApi.getKnowledgeEntry(selectedName);
+            setDocument(next); setDraft(next.text);
+          }} />
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.connection}</h2><p>{t.knowledge.sharing.connectionHint}</p></div></div>
             <p className="field-hint">{language === "zh" ? "当前地址：" : "Current address: "}<span className="knowledge-server-address">{remote.trim() || snapshot?.default_remote || (language === "zh" ? "上游默认社区" : "Upstream default community")}</span></p>
