@@ -126,7 +126,8 @@
 }
 
 .settings-section:focus-within,
-.settings-section:has(.is-open) {
+.settings-section:has(.is-open),
+.primary-panel:has(.custom-select.is-open) {
   position: relative;
   z-index: 50;
 }

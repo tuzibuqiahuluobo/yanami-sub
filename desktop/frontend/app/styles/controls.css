@@ -440,16 +440,16 @@
 }
 
 .custom-select-menu {
-  position: absolute;
+  position: fixed;
   z-index: 50;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 100%;
+  inset: auto;
+  box-sizing: border-box;
   margin: 0;
   padding: 5px;
   list-style: none;
   max-height: min(420px, 50vh);
   overflow-y: auto;
+  overscroll-behavior: contain;
   border: 1px solid var(--glass-border);
   border-radius: calc(var(--radius-control) + 4px);
   background: var(--glass-bg);
@@ -465,8 +465,6 @@
 }
 
 .custom-select-menu[data-side="top"] {
-  top: auto;
-  bottom: calc(100% + 6px);
   transform-origin: bottom;
 }
 

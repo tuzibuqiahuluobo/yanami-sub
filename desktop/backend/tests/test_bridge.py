@@ -1185,6 +1185,47 @@ def test_bridge_forwards_owned_knowledge_workflows_and_rejects_unknown_commands(
     assert refined["source_srt"] == "E:/重新选择的原字幕.srt"
 
 
+def test_knowledge_file_dialogs_preview_and_export_only_text(tmp_path: Path) -> None:
+    knowledge = FakeKnowledge(tmp_path / "knowledge")
+    bridge = DesktopBridge(jobs=FakeJobs(), resources=FakeResources(),
+                           settings=SettingsStore(tmp_path / "data"), knowledge=knowledge)
+    source = tmp_path / "日本語 知识.md"
+    source.write_text("# entry\n\n你好 / 日本語 / hello\n", encoding="utf-8-sig")
+    bridge.knowledge_file_selector = lambda: str(source)
+    preview = bridge.select_knowledge_document()
+    assert preview["ok"] is True
+    assert preview["data"]["text"].startswith("# entry")
+    assert knowledge.calls == []  # Choosing a file must never write the store.
+    target = tmp_path / "export.md"
+    bridge.knowledge_export_selector = lambda: str(target)
+    assert bridge.export_knowledge_entry("common/entry")["ok"] is True
+    assert target.read_text(encoding="utf-8") == "# entry"
+    target.write_text("keep existing", encoding="utf-8")
+    assert bridge.export_knowledge_entry("common/entry")["ok"] is False
+    assert target.read_text(encoding="utf-8") == "keep existing"
+    bridge.knowledge_export_selector = lambda: None
+    assert bridge.export_knowledge_entry("common/entry")["data"]["path"] is None
+    bridge.knowledge_file_selector = lambda: None
+    assert bridge.select_knowledge_document()["data"]["path"] is None
+
+
+@pytest.mark.parametrize("filename,content", [("binary.exe", b"MZ"), ("huge.md", b"x" * (2 * 1024 * 1024 + 1)), ("empty.md", b" "), ("bad.md", b"\xff"), ("null.md", b"a\x00b")])
+def test_knowledge_file_dialog_rejects_bad_documents(tmp_path, filename, content):
+    bridge = DesktopBridge(jobs=FakeJobs(), resources=FakeResources(), settings=SettingsStore(tmp_path / "data"))
+    source = tmp_path / filename
+    source.write_bytes(content)
+    bridge.knowledge_file_selector = lambda: str(source)
+    assert bridge.select_knowledge_document()["ok"] is False
+
+
+def test_knowledge_export_rejects_internal_and_non_markdown_targets(tmp_path):
+    bridge = DesktopBridge(jobs=FakeJobs(), resources=FakeResources(), settings=SettingsStore(tmp_path / "data"), knowledge=FakeKnowledge(tmp_path / "knowledge"))
+    for target in [tmp_path / "data" / "export.md", tmp_path / "export.exe"]:
+        bridge.knowledge_export_selector = lambda: str(target)
+        assert bridge.export_knowledge_entry("common/entry")["ok"] is False
+        assert not target.exists()
+
+
 def test_bridge_routes_missing_knowledge_runtime_to_resources(tmp_path: Path) -> None:
     resources = FakeResources()
     resources.ready = False

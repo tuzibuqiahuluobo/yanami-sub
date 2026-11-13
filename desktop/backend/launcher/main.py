@@ -123,6 +123,8 @@ PUBLIC_BRIDGE_METHODS = (
     "get_knowledge_entry",
     "run_knowledge_maintenance",
     "run_knowledge_share",
+    "select_knowledge_document",
+    "export_knowledge_entry",
     "get_task_knowledge_feedback",
     "run_refined_knowledge_update",
     "run_bilingual_knowledge_update",
@@ -1044,6 +1046,21 @@ def create_application(
         return str(result[0]) if result else None
 
     bridge.subtitle_file_selector = select_subtitle_file
+
+    def select_knowledge_document() -> str | None:
+        result = window.create_file_dialog(webview.FileDialog.OPEN,
+            file_types=("知识条目 Markdown (*.md;*.txt)",))
+        return str(result[0]) if result else None
+
+    def select_knowledge_export() -> str | None:
+        result = window.create_file_dialog(webview.FileDialog.SAVE,
+            save_filename="knowledge-entry.md", file_types=("Markdown (*.md)",))
+        if not result:
+            return None
+        return str(result[0] if isinstance(result, (list, tuple)) else result)
+
+    bridge.knowledge_file_selector = select_knowledge_document
+    bridge.knowledge_export_selector = select_knowledge_export
 
     def select_batch_files() -> list[str]:
         result = window.create_file_dialog(

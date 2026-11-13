@@ -807,6 +807,8 @@ function previewApi(): DesktopApi {
         output: `preview: ${request.command} completed`,
       };
     },
+    async selectKnowledgeDocument() { throw new Error("请在桌面应用中选择文件 / File selection requires the desktop app"); },
+    async exportKnowledgeEntry() { throw new Error("请在桌面应用中导出文件 / Export requires the desktop app"); },
     async runKnowledgeShare(request) {
       return {
         command: request.command,
@@ -1097,6 +1099,8 @@ function nativeApi(): DesktopApi {
     runKnowledgeMaintenance: (request) =>
       call("run_knowledge_maintenance", request),
     runKnowledgeShare: (request) => call("run_knowledge_share", request),
+    selectKnowledgeDocument: () => call("select_knowledge_document"),
+    exportKnowledgeEntry: (name) => call("export_knowledge_entry", name),
     getTaskKnowledgeFeedback: (taskId) =>
       call("get_task_knowledge_feedback", taskId),
     runRefinedKnowledgeUpdate: (request) =>

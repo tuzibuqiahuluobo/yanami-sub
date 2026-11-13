@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.0.post4",
+    title: { zh: "0.3.0.post4 · 下拉菜单与社区共享", en: "0.3.0.post4 · Menus and knowledge exchange" },
+    notes: {
+      zh: ["修复下拉菜单被后方卡片盖住、点击误落到其他选择栏的问题；保留键盘、滚动与上下自适应展开。", "社区共享默认使用上游地址，不再要求用户填服务器；修正地址列表混入库编号的问题。", "新增本地知识条目 Markdown 导出、全文预览与确认导入，不调用模型、不上传文件。", "精简共享步骤，折叠服务器与维护者高级操作，上传和合并前明确确认。", "更新 README 与视频封装/压制可行性评估；本次不增加视频压制功能。", "完整更新保留任务、配置、知识库和模型；核心仍为 FineSub 0.7.0。"],
+      en: ["Keep dropdowns above later glass cards and prevent clicks reaching another control; retain keyboard and viewport-aware positioning.", "Use the upstream community by default and return actual server URLs instead of corpus IDs.", "Export an entry as Markdown, review a local file, then confirm import without model calls or uploads.", "Simplify sharing steps and collapse advanced server and maintainer tools; confirm uploads and merges.", "Refresh the README and assess video muxing/encoding; no encoding feature is added.", "Full update preserves user data and models; core remains FineSub 0.7.0."],
+    },
+  },
+  {
     version: "0.3.0.post3",
     title: { zh: "0.3.0.post3 · Qwen 本地校验兼容修复", en: "0.3.0.post3 · Local Qwen attention compatibility" },
     notes: {

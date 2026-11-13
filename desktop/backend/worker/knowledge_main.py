@@ -94,6 +94,7 @@ def _snapshot() -> dict[str, Any]:
     from finesub.llm.knowledge.node.repo import KnowledgeRepo
     from finesub.llm.knowledge.share.conflicts import describe, open_conflicts
     from finesub.llm.knowledge.share.cli import PUSH_LOG_FILENAME
+    from finesub.llm.knowledge.share.mailbox import default_remote
 
     root = _root()
     repo = KnowledgeRepo.open(root)
@@ -138,10 +139,11 @@ def _snapshot() -> dict[str, Any]:
 
     remotes = []
     for row in repo.store.conn.execute(
-        "SELECT key FROM meta WHERE key LIKE 'share:%:token' ORDER BY key"
+        "SELECT key, value FROM meta WHERE key LIKE 'share:url:%' ORDER BY key"
     ).fetchall():
         key = str(row["key"])
-        remotes.append(key[len("share:") : -len(":token")])
+        if repo.store.meta(f"share:{row['value']}:token"):
+            remotes.append(key[len("share:url:") :])
 
     pushes: list[dict[str, Any]] = []
     push_path = root / PUSH_LOG_FILENAME
@@ -174,6 +176,7 @@ def _snapshot() -> dict[str, Any]:
         "pending_candidates": pending,
         "conflicts": conflicts,
         "registered_remotes": remotes,
+        "default_remote": default_remote(),
         "pushes": pushes,
     }
 

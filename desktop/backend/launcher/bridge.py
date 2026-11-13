@@ -168,6 +168,8 @@ class DesktopBridge:
         self.update_installs = update_installs
         self.file_selector = file_selector
         self.subtitle_file_selector: Callable[[], str | None] | None = None
+        self.knowledge_file_selector: Callable[[], str | None] | None = None
+        self.knowledge_export_selector: Callable[[], str | None] | None = None
         self.batch_file_selector = batch_file_selector
         self.batch_manifest_selector = batch_manifest_selector
         self.batch_manifest_export_selector = batch_manifest_export_selector
@@ -1399,6 +1401,48 @@ class DesktopBridge:
         return self._knowledge_guard(
             lambda: self.knowledge.share(request.command, request.args)
         )
+
+    def select_knowledge_document(self) -> dict[str, Any]:
+        def read_document() -> dict[str, Any]:
+            if self.knowledge_file_selector is None:
+                raise ValueError("文件选择窗口不可用 / File picker unavailable")
+            selected = self.knowledge_file_selector()
+            if not selected:
+                return {"path": None, "text": ""}
+            path = Path(selected)
+            if path.suffix.lower() not in {".md", ".txt"}:
+                raise ValueError("请选择知识条目 Markdown / Choose a knowledge Markdown file")
+            with path.open("rb") as stream:
+                raw = stream.read(2 * 1024 * 1024 + 1)
+            if len(raw) > 2 * 1024 * 1024:
+                raise ValueError("文件不能超过 2 MiB / File must not exceed 2 MiB")
+            try:
+                text = raw.decode("utf-8-sig")
+            except UnicodeDecodeError as error:
+                raise ValueError("请将文件保存为 UTF-8 / Save the file as UTF-8") from error
+            if not text.strip() or "\0" in text:
+                raise ValueError("文件为空或不是文本 / Empty or non-text file")
+            return {"path": str(path.resolve()), "text": text}
+        return self._guard(read_document)
+
+    def export_knowledge_entry(self, name: str) -> dict[str, Any]:
+        def export_document() -> dict[str, Any]:
+            if self.knowledge_export_selector is None:
+                raise ValueError("文件保存窗口不可用 / Save dialog unavailable")
+            document = self.knowledge.entry(name)
+            selected = self.knowledge_export_selector()
+            if not selected:
+                return {"path": None}
+            path = Path(selected).resolve()
+            if path.suffix.lower() != ".md":
+                raise ValueError("请保存为 .md 文件 / Save as a .md file")
+            if path.is_relative_to(self.settings.user_data.resolve()):
+                raise ValueError("请导出到用户数据目录以外 / Export outside the app data folder")
+            # Avoid replacing unrelated files even if a stale dialog approved that name.
+            with path.open("x", encoding="utf-8", newline="\n") as stream:
+                stream.write(document["text"])
+            return {"path": str(path)}
+        return self._knowledge_guard(export_document)
 
     def get_task_knowledge_feedback(self, task_id: str) -> dict[str, Any]:
         def read_feedback() -> dict[str, Any]:

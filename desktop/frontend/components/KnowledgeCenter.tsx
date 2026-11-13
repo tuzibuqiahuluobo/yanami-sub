@@ -37,6 +37,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { KnowledgeStructure } from "./KnowledgeStructure";
 import { KnowledgeDocument } from "./KnowledgeDocument";
 import { KnowledgeRecovery } from "./KnowledgeRecovery";
+import { KnowledgeFileExchange } from "./KnowledgeFileExchange";
 import { CustomSelect } from "./CustomSelect";
 import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
@@ -132,6 +133,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
   const [ingest, setIngest] = useState({ subject: "", material: "", prompt: "" });
 
   const [remote, setRemote] = useState("");
+  const remoteArgs = remote.trim() ? ["--remote", remote.trim()] : [];
   const [shareKinds, setShareKinds] = useState("");
   const [shareMatch, setShareMatch] = useState("");
   const [queueId, setQueueId] = useState("");
@@ -142,7 +144,6 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
     setError("");
     const next = await desktopApi.getKnowledgeSnapshot();
     setSnapshot(next);
-    if (!remote && next.registered_remotes.length) setRemote(next.registered_remotes[0]);
     if (!feedbackTaskId && completedTasks.length) setFeedbackTaskId(completedTasks[0].task_id);
     if (!keepSelection || !next.entries.some((entry) => entry.qualified_name === selectedName)) {
       setSelectedName(next.entries[0]?.qualified_name || "");
@@ -236,7 +237,14 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
       showSuccess(language === "zh" ? "共享操作已完成，请查看报告" : "Sharing operation finished; review the report", `knowledge-share-${command}`);
       return result;
     } catch (reason) {
-      setError(errorMessage(reason));
+      const raw = errorMessage(reason);
+      const hint = /not registered/i.test(raw)
+        ? (language === "zh" ? "请先点击“首次投稿：注册”，再提交。" : "Register once before submitting.")
+        : /no .*shareable|no .*marked|nothing to push/i.test(raw)
+          ? (language === "zh" ? "请先选择条目并“标记可共享”。" : "Choose an entry and mark it shareable first.")
+          : ["register", "pull", "push", "status"].includes(command)
+            ? (language === "zh" ? "请检查地址与网络；默认社区不可用时可稍后重试，或先用本地文件交换。请勿为重试而清空知识库。" : "Check the address and connection. If the community is unavailable, retry later or exchange a local file. Do not clear your library to retry.") : "";
+      setError(hint ? `${hint}\n${raw}` : raw);
       return null;
     } finally {
       setBusy(false);
@@ -366,7 +374,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
 
       <aside className="knowledge-guide" aria-label={language === "zh" ? "操作指南" : "Workflow guide"}>
         <strong>{language === "zh" ? ({ library: "管理会反复用到的术语、译名和字幕风格", feedback: "把人工修订的字幕变成可复用知识", maintenance: "排查知识库问题，或找回之前的内容", sharing: "与社区交换知识；不影响本地独立使用" }[tab]) : ({ library: "Manage reusable terms, names and subtitle styles", feedback: "Learn reusable knowledge from refined subtitles", maintenance: "Check the store or restore earlier content", sharing: "Exchange knowledge with a community server" }[tab])}</strong>
-        <p>{language === "zh" ? ({ library: "先选择左侧条目阅读；需要修改时展开“编辑原文”并保存。停用可在“检查与恢复”中撤销。新建任务的“知识库”选项决定是否读取或更新这些内容。", feedback: "只有两份时间轴一致的字幕？使用“双语字幕导入”，不需要原任务。若有本应用的原任务，可选择任务并导入精修字幕。两种方式都先生成提案，审阅后再写入。生成会调用所选模型，应用同一提案不再次调用模型。", maintenance: "重建缓存和确定性迁移不调用模型。其他工具的“查看计划”只展示工作范围；“生成建议”调用模型但不写入，“生成并写入”会调用模型并更新知识库。它们不是应用同一份预览提案。", sharing: "共享为可选功能，需要你提供可信的服务器地址。先连接并拉取，再标记准备共享的内容，最后提交审核。知识内容会发送到该服务器；不要共享私人材料。" }[tab]) : ({ library: "Choose an entry to read it. Expand Edit source to make changes, then save. Retired entries can be restored under Check & restore. Each task controls whether this knowledge is read or updated.", feedback: "Two matching subtitle files need no original task: use bilingual import. For an existing app task, import a refined SRT below. Generate a proposal first, review it, then apply that exact proposal without another model call.", maintenance: "Cache rebuilding and deterministic migration make no model calls. View plan shows scope only; Generate suggestions calls models without writing; Generate & write calls models and changes the store. These are separate runs, not application of the same preview proposal.", sharing: "Sharing is optional and requires a trusted server URL. Connect and pull, mark shareable content, then submit for review. Content is sent to that server; keep private material local." }[tab])}</p>
+        <p>{language === "zh" ? ({ library: "先选择左侧条目阅读；需要修改时展开“编辑原文”并保存。停用可在“检查与恢复”中撤销。新建任务的“知识库”选项决定是否读取或更新这些内容。", feedback: "只有两份时间轴一致的字幕？使用“双语字幕导入”，不需要原任务。若有本应用的原任务，可选择任务并导入精修字幕。两种方式都先生成提案，审阅后再写入。生成会调用所选模型，应用同一提案不再次调用模型。", maintenance: "重建缓存和确定性迁移不调用模型。其他工具的“查看计划”只展示工作范围；“生成建议”调用模型但不写入，“生成并写入”会调用模型并更新知识库。它们不是应用同一份预览提案。", sharing: "发给朋友：用下方“本地文件交换”，无需服务器。获取或贡献社区知识：用“联网社区”，默认地址已内置。共享为可选功能，发出前请核对正文隐私。" }[tab]) : ({ library: "Choose an entry to read it. Expand Edit source to make changes, then save. Retired entries can be restored under Check & restore. Each task controls whether this knowledge is read or updated.", feedback: "Two matching subtitle files need no original task: use bilingual import. For an existing app task, import a refined SRT below. Generate a proposal first, review it, then apply that exact proposal without another model call.", maintenance: "Cache rebuilding and deterministic migration make no model calls. View plan shows scope only; Generate suggestions calls models without writing; Generate & write calls models and changes the store. These are separate runs, not application of the same preview proposal.", sharing: "Send to a friend with Local file exchange; no server is needed. Receive or contribute knowledge with Online community; its default address is built in. Sharing is optional. Review text for private content before sending." }[tab])}</p>
       </aside>
 
       {error ? <div className="inline-error knowledge-error" role="alert">{error}</div> : null}
@@ -650,38 +658,39 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
 
       {!loading && tab === "sharing" ? (
         <div className="knowledge-stack">
+          <KnowledgeFileExchange snapshot={snapshot} selected={selectedName} onSelect={setSelectedName} busy={busy} setBusy={setBusy} onChanged={async () => { await loadSnapshot(); }} />
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.connection}</h2><p>{t.knowledge.sharing.connectionHint}</p></div></div>
-            <div className="knowledge-connection-row">
-              <label className="field"><span>{t.knowledge.sharing.remote}</span><input list="knowledge-remotes" value={remote} placeholder="https://…" onChange={(event) => setRemote(event.target.value)} /><datalist id="knowledge-remotes">{snapshot?.registered_remotes.map((value) => <option value={value} key={value} />)}</datalist></label>
+            <p className="field-hint">{language === "zh" ? "当前地址：" : "Current address: "}<span className="knowledge-server-address">{remote.trim() || snapshot?.default_remote || (language === "zh" ? "上游默认社区" : "Upstream default community")}</span></p>
+            <details className="knowledge-source-editor"><summary>{language === "zh" ? "其他服务器（可选）" : "Other server (optional)"}</summary><p className="field-hint">{language === "zh" ? "仅填写共享库维护者提供的完整 HTTP(S) 地址，不是 GitHub 仓库链接或本机文件夹。留空使用上游配置 / 内置地址。服务器是否在线及何时审核，由该社区维护者决定。" : "Use the complete HTTP(S) address from the library maintainer, not a GitHub repository URL or local folder. Leave blank for the configured/built-in default. Availability and review timing depend on that community."}</p><label className="field"><span>{t.knowledge.sharing.remote}</span><input disabled={busy} list="knowledge-remotes" value={remote} placeholder={language === "zh" ? "留空使用默认社区" : "Leave blank for the default community"} onChange={(event) => setRemote(event.target.value)} /><datalist id="knowledge-remotes">{snapshot?.registered_remotes.map((value) => <option value={value} key={value} />)}</datalist></label></details>
               <div className="knowledge-command-row">
-                <button type="button" className="button button-secondary" disabled={busy || !remote.trim()} onClick={() => void runShare("register", ["--remote", remote.trim()])}><ShieldCheck size={15} />{t.knowledge.sharing.register}</button>
-                <button type="button" className="button button-secondary" disabled={busy || !remote.trim()} onClick={() => void runShare("pull", ["--remote", remote.trim()])}><Download size={15} />{t.knowledge.sharing.pull}</button>
+                <button type="button" className="button button-primary" disabled={busy} onClick={() => confirmAction(language === "zh" ? "下载社区知识并合并到本地？同一字段双方都修改时保留本地版本并记录冲突，不会上传本地条目。" : "Download and merge community knowledge? Conflicting local changes are preserved and recorded. No local entries are uploaded.", () => void runShare("pull", remoteArgs))}><Download size={15} />{t.knowledge.sharing.pull}</button>
+                <button type="button" className="button button-secondary" disabled={busy} onClick={() => void runShare("register", remoteArgs)}><ShieldCheck size={15} />{t.knowledge.sharing.register}</button>
               </div>
-            </div>
           </section>
 
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.publish}</h2><p>{t.knowledge.sharing.publishHint}</p></div></div>
             <div className="knowledge-form-grid knowledge-form-grid-three">
               <div className="field"><span>{t.knowledge.sharing.subject}</span><CustomSelect disabled={busy} ariaLabel={t.knowledge.sharing.subject} value={selectedName} onChange={setSelectedName} options={[{ value: "", label: t.common.select }, ...(snapshot?.entries || []).map((entry) => ({ value: entry.qualified_name, label: entry.qualified_name }))]} /></div>
-              <label className="field"><span>{t.knowledge.sharing.kinds}</span><input value={shareKinds} placeholder="note,rule" onChange={(event) => setShareKinds(event.target.value)} /></label>
-              <label className="field"><span>{t.knowledge.sharing.match}</span><input value={shareMatch} onChange={(event) => setShareMatch(event.target.value)} /></label>
+              <details className="knowledge-source-editor field-span-all"><summary>{language === "zh" ? "筛选共享内容（可选）" : "Filter shared content (optional)"}</summary><div className="knowledge-form-grid"><label className="field"><span>{t.knowledge.sharing.kinds}</span><input disabled={busy} value={shareKinds} placeholder="note,rule" onChange={(event) => setShareKinds(event.target.value)} /></label>
+              <label className="field"><span>{t.knowledge.sharing.match}</span><input disabled={busy} value={shareMatch} onChange={(event) => setShareMatch(event.target.value)} /></label></div></details>
             </div>
             <div className="knowledge-split-actions">
               <div className="knowledge-command-row">
                 <button type="button" className="button button-secondary" disabled={busy || !selectedName} onClick={() => void runShare("mark", [selectedName, ...(shareKinds ? ["--kinds", shareKinds] : []), ...(shareMatch ? ["--match", shareMatch] : [])])}>{t.knowledge.sharing.mark}</button>
                 <button type="button" className="button button-secondary" disabled={busy || !selectedName} onClick={() => void runShare("unmark", [selectedName, ...(shareKinds ? ["--kinds", shareKinds] : []), ...(shareMatch ? ["--match", shareMatch] : [])])}>{t.knowledge.sharing.unmark}</button>
-                <button type="button" className="button button-primary" disabled={busy || !selectedName || !remote.trim()} onClick={() => void runShare("push", [selectedName, "--remote", remote.trim()])}><Upload size={15} />{t.knowledge.sharing.push}</button>
+                <button type="button" className="button button-primary" disabled={busy || !selectedName} onClick={() => confirmAction(language === "zh" ? `将「${selectedName}」中已标记可共享的内容上传至当前社区审核？请先检查正文是否含私人信息。提交不代表审核通过，也不会上传密钥或任务日志。` : `Upload marked content in ${selectedName} for community review? Check for private text first. Submission is not approval; keys and task logs are not uploaded.`, () => void runShare("push", [selectedName, ...remoteArgs]))}><Upload size={15} />{t.knowledge.sharing.push}</button>
               </div>
               <div className="knowledge-inline-form">
                 <input value={queueId} inputMode="numeric" placeholder={t.knowledge.sharing.queueId} aria-label={t.knowledge.sharing.queueId} onChange={(event) => setQueueId(event.target.value)} />
-                <button type="button" className="button button-secondary" disabled={busy || !remote.trim() || !queueId} onClick={() => void runShare("status", ["--remote", remote.trim(), "--queue-id", queueId])}>{t.knowledge.sharing.status}</button>
+                <button type="button" className="button button-secondary" disabled={busy || !/^\d+$/.test(queueId)} onClick={() => void runShare("status", [...remoteArgs, "--queue-id", queueId])}>{t.knowledge.sharing.status}</button>
               </div>
             </div>
           </section>
 
-          <section className="primary-panel knowledge-section">
+          <details className="primary-panel knowledge-section knowledge-sharing-advanced"><summary>{language === "zh" ? "高级：冲突处理与维护者审核" : "Advanced: conflicts and maintainer review"}</summary>
+          <section className="knowledge-advanced-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.conflicts}</h2><p>{t.knowledge.sharing.conflictsHint}</p></div></div>
             <input value={conflictReason} placeholder={t.knowledge.reason} onChange={(event) => setConflictReason(event.target.value)} />
             <div className="knowledge-list compact">
@@ -703,7 +712,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
             </div>
           </section>
 
-          <section className="primary-panel knowledge-section">
+          <section className="knowledge-advanced-section">
             <div className="section-heading"><div><h2>{t.knowledge.sharing.review}</h2><p>{t.knowledge.sharing.reviewHint}</p></div></div>
             <div className="knowledge-form-grid knowledge-form-grid-three">
               <label className="field"><span>{t.knowledge.sharing.maintainerToken}</span><input type="password" value={maintainer.token} onChange={(event) => setMaintainer((current) => ({ ...current, token: event.target.value }))} /></label>
@@ -712,15 +721,16 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
             </div>
             <div className="knowledge-command-row">
               {(["preview", "run", "post"] as const).map((mode) => {
-                const args = ["--remote", remote.trim(), "--maintainer-token", maintainer.token];
+                const args = ["--remote", remote.trim() || snapshot?.default_remote || "", "--maintainer-token", maintainer.token];
                 if (maintainer.queueId) args.push("--queue-id", maintainer.queueId);
                 if (mode !== "preview") args.push("--execute");
                 if (mode === "post") args.push("--post");
                 if (maintainer.override) args.push("--override-thresholds", maintainer.override);
-                return <button type="button" key={mode} className={`button ${mode === "post" ? "button-primary" : "button-secondary"}`} disabled={busy || !remote.trim() || !maintainer.token} onClick={() => void runShare("review", args)}>{mode === "preview" ? t.knowledge.preview : mode === "run" ? t.knowledge.run : t.knowledge.sharing.post}</button>;
+                return <button type="button" key={mode} className={`button ${mode === "post" ? "button-primary" : "button-secondary"}`} disabled={busy || !(remote.trim() || snapshot?.default_remote) || !maintainer.token} onClick={() => void runShare("review", args)}>{mode === "preview" ? t.knowledge.preview : mode === "run" ? t.knowledge.run : t.knowledge.sharing.post}</button>;
               })}
             </div>
           </section>
+          </details>
         </div>
       ) : null}
 

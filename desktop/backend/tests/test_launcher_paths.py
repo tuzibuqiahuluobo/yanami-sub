@@ -318,6 +318,8 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "get_knowledge_entry",
         "run_knowledge_maintenance",
         "run_knowledge_share",
+        "select_knowledge_document",
+        "export_knowledge_entry",
         "get_task_knowledge_feedback",
         "run_refined_knowledge_update",
         "run_bilingual_knowledge_update",

@@ -3,8 +3,8 @@
 工作流：`.github/workflows/build-windows.yml`，名称 **Build Windows installer**。
 只接受手动运行，不响应 push/tag，不创建 Release，不修改用户更新频道。
 测试、前端构建、PyInstaller 和 Inno Setup 均在 GitHub 的 Windows runner 中执行，不占用本地构建资源。
-本开发分支的 FineSub 构建候选固定为 v0.6.0，完整提交见 `desktop/resources/core-source.json`；不是跟随 main/tag 的浮动拉取。
-工作流按该提交 checkout，再核对核心版本、提交及受跟踪的运行时清单/两份锁。应用版本仍取选中分支的已提交 VERSION，不在 CI 临时改号；0.2.1 / 0.2.2 RC1.0 的升级边界见对应公告。
+本版本的 FineSub 核心固定为 v0.7.0，完整提交见 `desktop/resources/core-source.json`；不是跟随 main/tag 的浮动拉取。
+工作流按该提交 checkout，再核对核心版本、提交及受跟踪的运行时清单/两份锁。应用版本仍取选中分支的已提交 VERSION，不在 CI 临时改号；0.3.x 的升级边界见对应公告。
 
 ## 使用
 

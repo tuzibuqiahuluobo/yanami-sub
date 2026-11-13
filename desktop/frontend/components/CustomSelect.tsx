@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -49,7 +50,7 @@ export function CustomSelect({
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLUListElement>(null);
-  const [menuLayout, setMenuLayout] = useState({ above: false, maxHeight: 420 });
+  const [menuLayout, setMenuLayout] = useState({ above: false, maxHeight: 420, left: 0, width: 0, edge: 0 });
   const listboxId = useId();
   const triggerId = `${listboxId}-trigger`;
 
@@ -152,17 +153,23 @@ export function CustomSelect({
     }
   }, [open, handleOutsideClick]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
     const position = () => {
       const rect = containerRef.current?.getBoundingClientRect();
       if (!rect) return;
+      if (rect.bottom < 0 || rect.top > window.innerHeight) { setOpen(false); return; }
       const below = window.innerHeight - rect.bottom - 12;
       const above = rect.top - 12;
       const useAbove = below < 240 && above > below;
-      setMenuLayout({ above: useAbove, maxHeight: Math.max(80, Math.min(420, useAbove ? above : below)) });
+      const width = Math.min(rect.width, window.innerWidth - 16);
+      setMenuLayout({ above: useAbove, maxHeight: Math.max(0, Math.min(420, useAbove ? above : below)),
+        width, left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+        edge: useAbove ? window.innerHeight - rect.top + 6 : rect.bottom + 6 });
     };
     position();
+    // The browser top layer escapes glass-panel stacking and clipping, even in dialogs.
+    menuRef.current?.showPopover?.();
     window.addEventListener("resize", position);
     window.addEventListener("scroll", position, true);
     return () => { window.removeEventListener("resize", position); window.removeEventListener("scroll", position, true); };
@@ -201,7 +208,9 @@ export function CustomSelect({
         aria-activedescendant={
           open ? `${listboxId}-option-${activeIndex}` : undefined
         }
-        onClick={() => {
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
           if (open) {
             setOpen(false);
           } else {
@@ -221,8 +230,11 @@ export function CustomSelect({
           ref={menuRef}
           id={listboxId}
           className="custom-select-menu"
+          popover="manual"
           data-side={menuLayout.above ? "top" : "bottom"}
-          style={{ maxHeight: menuLayout.maxHeight }}
+          style={{ maxHeight: menuLayout.maxHeight, left: menuLayout.left, width: menuLayout.width,
+            top: menuLayout.above ? "auto" : menuLayout.edge,
+            bottom: menuLayout.above ? menuLayout.edge : "auto" }}
           data-closing={!open || undefined}
           inert={!open}
           aria-hidden={!open || undefined}
@@ -239,7 +251,7 @@ export function CustomSelect({
               className={`custom-select-option${option.value === value ? " is-selected" : ""}${index === activeIndex ? " is-active" : ""}`}
               onMouseEnter={() => setActiveIndex(index)}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => selectIndex(index)}
+              onClick={(event) => { event.preventDefault(); event.stopPropagation(); selectIndex(index); }}
             >
               {option.label}
             </li>

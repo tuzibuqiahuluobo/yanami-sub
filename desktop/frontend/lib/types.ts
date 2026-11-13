@@ -416,6 +416,7 @@ export interface KnowledgePushRecord {
 }
 
 export interface KnowledgeSnapshot {
+  default_remote?: string;
   root: string;
   revision: number;
   version: string;
@@ -813,6 +814,8 @@ export interface DesktopApi {
     command: KnowledgeShareCommand;
     args?: string[];
   }): Promise<KnowledgeCommandResult>;
+  selectKnowledgeDocument(): Promise<{ path: string | null; text: string }>;
+  exportKnowledgeEntry(name: string): Promise<{ path: string | null }>;
   getTaskKnowledgeFeedback(taskId: string): Promise<KnowledgeFeedback>;
   runRefinedKnowledgeUpdate(
     request: RefinedKnowledgeUpdateRequest,

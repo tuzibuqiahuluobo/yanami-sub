@@ -128,3 +128,37 @@ def test_knowledge_snapshot_tolerates_a_non_numeric_push_queue_id(
     snapshot = _dispatch({"action": "snapshot"})
 
     assert snapshot["pushes"][0]["queue_id"] == "manual"
+
+
+def test_knowledge_snapshot_exposes_remote_urls_not_corpus_tokens(tmp_path, monkeypatch):
+    from finesub.llm.knowledge.node.repo import KnowledgeRepo
+    from finesub.llm.knowledge.share.mailbox import default_remote
+
+    root = tmp_path / "knowledge"
+    monkeypatch.setenv("FINESUB_KNOWLEDGE_ROOT", str(root))
+    _dispatch({"action": "snapshot"})
+    repo = KnowledgeRepo.open(root)
+    for key, value in [("share:url:https://example.test", "aabbccdd"),
+                       ("share:aabbccdd:token", "secret-value"),
+                       ("share:url:https://pulled-only.test", "eeff0011")]:
+        repo.store.conn.execute("INSERT OR REPLACE INTO meta(key,value) VALUES (?,?)", (key, value))
+    repo.store.conn.commit()
+    snapshot = _dispatch({"action": "snapshot"})
+    assert snapshot["registered_remotes"] == ["https://example.test"]
+    assert snapshot["default_remote"] == default_remote()
+    assert "secret-value" not in json.dumps(snapshot)
+
+
+def test_markdown_local_exchange_round_trip_uses_core_revision(tmp_path, monkeypatch):
+    monkeypatch.setenv("FINESUB_KNOWLEDGE_ROOT", str(tmp_path / "knowledge"))
+    _dispatch({"action": "maintenance", "command": "new", "args": ["common", "Local", "--intro", "before", "--type", "其他"]})
+    before = _dispatch({"action": "entry", "name": "common/Local"})
+    updated = before["text"].replace("before", "after / 更新")
+    _dispatch({"action": "maintenance", "command": "edit", "args": ["common/Local"], "content": updated})
+    after = _dispatch({"action": "entry", "name": "common/Local"})
+    assert "after / 更新" in after["text"]
+    assert after["revision"] > before["revision"]
+    assert _dispatch({"action": "entry", "name": "common/Local", "rev": before["revision"]})["text"] == before["text"]
+    with pytest.raises(Exception, match="unclosed HTML comment"):
+        _dispatch({"action": "maintenance", "command": "edit", "args": ["common/Local"], "content": updated + "\n<!-- unclosed"})
+    assert _dispatch({"action": "entry", "name": "common/Local"})["revision"] == after["revision"]
