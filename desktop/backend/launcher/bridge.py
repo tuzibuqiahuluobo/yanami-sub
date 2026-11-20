@@ -321,6 +321,9 @@ class DesktopBridge:
             "action": "preview", "reference": payload, "reaction": reaction,
         }))
 
+    def programme_frame_rate(self, path: str) -> dict[str, Any]:
+        return self._guard(lambda: self._programme_worker({"action": "frame_rate", "path": path}))
+
     def _programme_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
         from desktop.backend.jobs.cooperation import invoke_worker
 

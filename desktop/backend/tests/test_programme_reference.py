@@ -103,9 +103,9 @@ def test_preview_uses_real_video_through_runtime_process(tmp_path):
     clip = tmp_path / "节目.mp4"
     reaction = tmp_path / "主播.mp4"
     subtitle = tmp_path / "节目.srt"
-    subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", "color=s=32x32:r=5:d=4",
-                    "-threads", "1", "-c:v", "mpeg4", str(clip)], check=True, timeout=15)
-    shutil.copyfile(clip, reaction)
+    for path, fps in [(clip, 24), (reaction, 60)]:
+        subprocess.run(["ffmpeg", "-v", "error", "-f", "lavfi", "-i", f"color=s=32x32:r={fps}:d=4",
+                        "-threads", "1", "-c:v", "mpeg4", str(path)], check=True, timeout=15)
     subtitle.write_bytes("1\n00:00:01,000 --> 00:00:02,000\n节目台词\n".encode("utf-16"))
     context = SimpleNamespace(python_executable=sys.executable, environment={}, working_directory=None)
     payload = {"action": "preview", "reaction": str(reaction), "reference": {
@@ -116,6 +116,20 @@ def test_preview_uses_real_video_through_runtime_process(tmp_path):
     assert result == {"duration_ms": 4000, "count": 1, "sample": [
         {"start_ms": 2000, "end_ms": 3000, "text": "节目台词"},
     ]}
+    for path, fps in [(clip, 24), (reaction, 60)]:
+        assert invoke_worker(context, "desktop.backend.worker.programme_tools", {
+            "action": "frame_rate", "path": str(path),
+        }) == {"fps": fps}
+
+
+def test_frame_rate_uses_video_average_and_handles_unknown(tmp_path, monkeypatch):
+    clip = tmp_path / "clip.mp4"
+    clip.touch()
+    probe = {"streams": [{"avg_frame_rate": "30000/1001"}]}
+    monkeypatch.setattr(reference, "_probe_video", lambda path: probe)
+    assert reference.video_frame_rate(str(clip)) == pytest.approx(30000 / 1001)
+    probe["streams"][0]["avg_frame_rate"] = "0/0"
+    assert reference.video_frame_rate(str(clip)) is None
 
 
 def test_exports_translation_and_preserves_all_uncertain_cues(tmp_path):

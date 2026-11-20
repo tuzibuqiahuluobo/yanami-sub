@@ -735,6 +735,7 @@ export interface KnowledgeRecoveryResult {
 export interface DesktopApi {
   selectSubtitleFile(): Promise<{ path: string | null }>;
   previewProgrammeReference(reaction: string, reference: ProgrammeReference): Promise<ProgrammeReferencePreview>;
+  programmeFrameRate(path: string): Promise<{ fps: number | null }>;
   programmeSubtitleRoles(taskId: string, assignment?: Record<string, string>): Promise<SubtitleRoleResult>;
   runBilingualKnowledgeUpdate(request: BilingualKnowledgeRequest): Promise<RefinedKnowledgeUpdateReport>;
   applyKnowledgeProposal(draftId: string): Promise<RefinedKnowledgeUpdateReport>;

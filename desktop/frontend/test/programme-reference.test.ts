@@ -6,6 +6,7 @@ import { ProgrammeReferenceSettings } from "../components/ProgrammeReference";
 import { ProgrammeRoleExport } from "../components/ProgrammeRoleExport";
 import { initialState, reduceAppState } from "../lib/state";
 import { preferredTaskOutput, taskOutputEntries } from "../lib/subtitleOutputs";
+import { timecodeMilliseconds, timecodeParts, type TimecodeParts } from "../lib/programmeTimecode";
 
 test("programme reference explains preview, matching and what goes to the model", () => {
   const html = renderToStaticMarkup(createElement(ProgrammeReferenceSettings, {
@@ -17,6 +18,29 @@ test("programme reference explains preview, matching and what goes to the model"
     assert.ok(html.includes(label), label);
   }
   assert.doesNotMatch(html, /用于本次翻译/);
+  assert.match(html, /切片位置 · 时/);
+  assert.match(html, /主播视频位置 · 帧/);
+  assert.match(html, /连续播放时长 · 分/);
+  assert.match(html, /切片在整场 SRT 中的起点 · 秒/);
+});
+
+test("timecode keeps the same hours, minutes and seconds but uses each video's frame rate", () => {
+  const parts: TimecodeParts = ["01", "02", "03", "12"];
+  assert.equal(timecodeMilliseconds(parts, 24), 3_723_500);
+  assert.equal(timecodeMilliseconds(parts, 60), 3_723_200);
+  assert.equal(timecodeMilliseconds(parts, 30_000 / 1001), 3_723_400);
+  assert.equal(timecodeMilliseconds(["00", "02", "30", "15"], 30), 150_500);
+  assert.deepEqual(timecodeParts(150_500, 30), ["00", "02", "30", "15"]);
+});
+
+test("timecode validates limits but preserves unedited millisecond values", () => {
+  assert.equal(timecodeMilliseconds(["24", "00", "00", "00"], 30), null);
+  assert.equal(timecodeMilliseconds(["00", "60", "00", "00"], 30), null);
+  assert.equal(timecodeMilliseconds(["00", "00", "60", "00"], null), null);
+  assert.equal(timecodeMilliseconds(["00", "00", "00", "24"], 24), null);
+  assert.equal(timecodeMilliseconds(["00", "00", "00", "01"], null), null);
+  assert.equal(timecodeMilliseconds(["", "02", "30", ""], null), 150_000);
+  assert.equal(timecodeMilliseconds(150_987, null), 150_987);
 });
 
 test("role export explains review without changing the preferred subtitle", () => {

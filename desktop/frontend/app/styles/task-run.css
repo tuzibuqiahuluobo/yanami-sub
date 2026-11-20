@@ -600,7 +600,17 @@
 .programme-reference .button { min-height: 44px; white-space: normal; }
 .programme-span { min-width: 0; padding: 8px; margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius-control); }
 .programme-span > button { margin-top: 8px; }
-.programme-time-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr)); gap: 8px; }
+.programme-time-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 236px), 1fr)); gap: 12px; }
+.programme-timecode-parts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.programme-timecode-parts .field { text-align: center; }
+.programme-timecode .programme-timecode-parts input {
+  min-height: 44px;
+  padding-inline: 2px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, Consolas, monospace;
+}
+.programme-timecode code { font-variant-numeric: tabular-nums; }
 .programme-reference-preview { padding: 12px; border-radius: var(--radius-control); background: var(--panel); }
 .programme-reference-preview code { display: block; font-variant-numeric: tabular-nums; }
 .programme-reference-preview li + li, .speaker-output-group .output-row { margin-top: 8px; }

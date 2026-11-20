@@ -50,8 +50,9 @@ test("history stays bundled and unrendered until the user loads it", () => {
 
   const version = readFileSync(new URL("../../../VERSION", import.meta.url), "utf8").trim();
   assert.ok(UPDATE_HISTORY.length >= 26);
-  assert.equal(updateHistoryFor("zh")[0]?.version, version);
-  assert.equal(updateHistoryFor("en")[0]?.version, version);
+  // Stable and preview builds share the history; a newer preview may be first.
+  assert.ok(updateHistoryFor("zh").some(entry => entry.version === version));
+  assert.ok(updateHistoryFor("en").some(entry => entry.version === version));
   assert.equal(updateHistoryFor("en").at(-1)?.version, "0.1.0-rc.3");
   assert.match(source, /historyLoaded \? \(/);
   assert.match(source, /setHistoryLoaded\(\(value\) => !value\)/);

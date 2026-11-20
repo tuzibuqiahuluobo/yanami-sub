@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1.post7",
+    title: { zh: "0.3.1 RC1.7 · 节目对齐时间码", en: "0.3.1 RC1.7 · Programme alignment timecode" },
+    notes: {
+      zh: ["对齐时可填时、分、秒、帧，也可直接粘贴时间码。", "节目切片和主播视频分别读取帧率并显示换算结果；调整后须重新预览。"],
+      en: ["Enter hours, minutes, seconds and frames or paste a timecode.", "Clip and reaction video frame rates are read separately. Preview again after editing."],
+    },
+  },
+  {
     version: "0.3.1-rc.1.post6",
     title: { zh: "0.3.1 RC1.6 · 节目字幕对齐参考", en: "0.3.1 RC1.6 · Aligned programme references" },
     notes: {

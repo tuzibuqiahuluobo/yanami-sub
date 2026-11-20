@@ -1,6 +1,8 @@
 """Validate and place programme subtitles on a reaction video's timeline."""
 from __future__ import annotations
 
+from fractions import Fraction
+import json
 import math
 from pathlib import Path
 import shutil
@@ -49,7 +51,7 @@ def _local_file(value: str, extensions: set[str], description: str) -> Path:
         raise ValueError(f"请选择可读取的本地{description} / Choose a readable local {description}") from error
 
 
-def _video_duration_ms(path: Path, *, search_path: str | None) -> int:
+def _probe_video(path: Path, *, search_path: str | None = None) -> dict:
     binary = shutil.which("ffprobe", path=search_path)
     if not binary:
         raise ValueError("请先在资源页安装 FFmpeg / Install FFmpeg in Resources first")
@@ -57,19 +59,38 @@ def _video_duration_ms(path: Path, *, search_path: str | None) -> int:
         result = subprocess.run(
             [binary, "-v", "error", "-protocol_whitelist", "file",
              "-format_whitelist", "mov,mp4,m4a,3gp,3g2,mj2,matroska,webm",
-             "-select_streams", "v:0", "-show_entries", "stream=index:format=duration",
+             "-select_streams", "V:0", "-show_entries", "stream=avg_frame_rate:format=duration",
              "-of", "json", str(path)],
             capture_output=True, encoding="utf-8", errors="replace", check=True, timeout=10,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
-        import json
         metadata = json.loads(result.stdout)
+        if not metadata.get("streams"):
+            raise ValueError
+        return metadata
+    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+        raise ValueError("无法读取视频，请确认文件能正常播放 / Could not read the video") from error
+
+
+def _video_duration_ms(path: Path, *, search_path: str | None) -> int:
+    metadata = _probe_video(path, search_path=search_path)
+    try:
         seconds = float(metadata["format"]["duration"])
-        if not metadata.get("streams") or not math.isfinite(seconds) or seconds <= 0:
+        if not math.isfinite(seconds) or seconds <= 0:
             raise ValueError
         return round(seconds * 1000)
-    except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as error:
+    except (KeyError, TypeError, ValueError) as error:
         raise ValueError("无法读取视频时长，请确认文件能正常播放 / Could not read video duration") from error
+
+
+def video_frame_rate(value: str) -> float | None:
+    path = _local_file(value, VIDEO_EXTENSIONS, "视频 / video")
+    metadata = _probe_video(path)
+    try:
+        fps = float(Fraction(metadata["streams"][0]["avg_frame_rate"]))
+    except (KeyError, TypeError, ValueError, ZeroDivisionError, OverflowError):
+        return None
+    return fps if 0 < fps <= 1000 else None
 
 
 def load_alignment(reference: ProgrammeReference, reaction: str, *, search_path: str | None = None):

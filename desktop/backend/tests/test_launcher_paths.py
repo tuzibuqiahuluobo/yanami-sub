@@ -256,6 +256,7 @@ def test_bridge_exposes_only_the_public_desktop_api(tmp_path: Path) -> None:
         "select_input_file",
         "select_subtitle_file",
         "preview_programme_reference",
+        "programme_frame_rate",
         "programme_subtitle_roles",
         "select_batch_files",
         "import_batch_manifest",

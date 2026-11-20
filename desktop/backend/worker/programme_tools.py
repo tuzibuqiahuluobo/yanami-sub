@@ -5,11 +5,13 @@ import json
 from pathlib import Path
 import sys
 
-from desktop.backend.common.programme_reference import ProgrammeReference, load_alignment
+from desktop.backend.common.programme_reference import ProgrammeReference, load_alignment, video_frame_rate
 from desktop.backend.common.subtitle_roles import describe_roles, export_roles, translated_rows
 
 
 def run(payload: dict) -> dict:
+    if payload["action"] == "frame_rate":
+        return {"fps": video_frame_rate(payload["path"])}
     if payload["action"] == "preview":
         reference = ProgrammeReference.model_validate(payload["reference"])
         cues, duration_ms = load_alignment(reference, payload["reaction"])

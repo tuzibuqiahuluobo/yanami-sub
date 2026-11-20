@@ -886,6 +886,7 @@ function previewApi(): DesktopApi {
     },
     async selectSubtitleFile() { return { path: String.raw`D:\subtitles\refined.srt` }; },
     async previewProgrammeReference() { throw new Error("时间对齐预览需要桌面应用 / Alignment preview requires the desktop app"); },
+    async programmeFrameRate() { return { fps: null }; },
     async programmeSubtitleRoles() { throw new Error("按角色导出需要桌面应用 / Role export requires the desktop app"); },
     async runBilingualKnowledgeUpdate(request) {
       return { status: "generated" as const, count: 48, pairs: [],
@@ -1109,6 +1110,7 @@ function nativeApi(): DesktopApi {
       call("run_refined_knowledge_update", request),
     selectSubtitleFile: () => call("select_subtitle_file"),
     previewProgrammeReference: (reaction, reference) => call("preview_programme_reference", reaction, reference),
+    programmeFrameRate: (path) => call("programme_frame_rate", path),
     programmeSubtitleRoles: (taskId, assignment) => assignment === undefined
       ? call("programme_subtitle_roles", taskId) : call("programme_subtitle_roles", taskId, assignment),
     runBilingualKnowledgeUpdate: (request) => call("run_bilingual_knowledge_update", request),
