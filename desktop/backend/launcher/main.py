@@ -60,6 +60,8 @@ PUBLIC_BRIDGE_METHODS = (
     "get_diagnostics",
     "select_input_file",
     "select_subtitle_file",
+    "preview_programme_reference",
+    "programme_subtitle_roles",
     "select_batch_files",
     "import_batch_manifest",
     "export_batch_manifest",

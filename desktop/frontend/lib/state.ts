@@ -442,7 +442,7 @@ export function reduceAppState(
           // A pinned output belongs to the previous file: a cancelled task
           // leaves its directory here (so restarting it is cheap), and a new
           // file must not write into it.
-          request: { ...state.task.request, output: null },
+          request: { ...state.task.request, output: null, programme_reference: null },
           error: null,
           outputs: {},
           logs: [],
@@ -468,6 +468,7 @@ export function reduceAppState(
             ...state.task.request,
             stage: "final-srt",
             output: previous.output,
+            programme_reference: null,
             extra_info:
               state.task.request.extra_info || previous.extra_info || "",
           },

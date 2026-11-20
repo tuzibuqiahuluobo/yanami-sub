@@ -17,6 +17,7 @@ import type {
 
 import { CustomSelect } from "./CustomSelect";
 import { SpeakerSettings } from "./SpeakerSettings";
+import { ProgrammeReferenceSettings } from "./ProgrammeReference";
 import { useLanguage } from "./LanguageProvider";
 
 
@@ -27,6 +28,7 @@ interface TaskSettingsProps {
   apiKeys?: Record<ApiProvider, "configured" | "missing">;
   disabled?: boolean;
   batchMode?: boolean;
+  inputPath?: string;
   onChange: (changes: Partial<Omit<TaskRequest, "input">>) => void;
   onOpenSettings?: (target: ApiProvider | "agents" | "routing") => void;
 }
@@ -68,6 +70,7 @@ export function TaskSettings({
   apiKeys,
   disabled,
   batchMode = false,
+  inputPath,
   onChange: commitChanges,
   onOpenSettings,
 }: TaskSettingsProps) {
@@ -403,6 +406,11 @@ export function TaskSettings({
                 }
               />
             </label>
+            {!batchMode && translationSelected && inputPath && /\.(mp4|mkv|mov|webm|m4v)$/i.test(inputPath) ? (
+              <ProgrammeReferenceSettings key={inputPath} inputPath={inputPath} disabled={disabled}
+                reuse={Boolean(request.output) && !request.programme_reference}
+                value={request.programme_reference} onChange={programme_reference => onChange({ programme_reference })} />
+            ) : null}
             <div className="field">
               <span>{t.newTask.settings.knowledge}</span>
               <CustomSelect

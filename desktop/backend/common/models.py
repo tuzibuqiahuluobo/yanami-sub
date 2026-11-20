@@ -13,6 +13,8 @@ from pydantic import (
     model_serializer,
 )
 
+from desktop.backend.common.programme_reference import ProgrammeReference
+
 
 PipelineStage = Literal[
     "vocal",
@@ -422,6 +424,7 @@ class TaskRequest(DesktopModel):
     llm_model: list[str] = Field(default_factory=list)
     llm_video: str | None = None
     extra_info: str = ""
+    programme_reference: ProgrammeReference | None = None
     extra_style: str = ""
     task_summary: str = ""
     style: str | None = None
@@ -435,6 +438,13 @@ class TaskRequest(DesktopModel):
     max_retries_per_window: int = Field(default=3, ge=0)
     max_replacements_per_window: int = Field(default=2, ge=0)
     resume: bool = True
+
+    @model_serializer(mode="wrap")
+    def serialize_task(self, handler):
+        data = handler(self)
+        if self.programme_reference is None:
+            data.pop("programme_reference", None)
+        return data
 
     @field_validator("input")
     @classmethod
@@ -657,6 +667,8 @@ class BatchRequest(DesktopModel):
         if len(moss_payment) > 1:
             raise ValueError("同一批次须使用相同的 MOSS 付费许可 / Use the same MOSS payment choice in a batch")
         for item in self.items:
+            if item.programme_reference:
+                raise ValueError("节目参考仅支持单任务 / Programme reference is only available for single tasks")
             source = item.input.casefold()
             if source in seen:
                 raise ValueError(f"batch source is listed twice: {item.input}")

@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1.post6",
+    title: { zh: "0.3.1 RC1.6 · 节目字幕对齐参考", en: "0.3.1 RC1.6 · Aligned programme references" },
+    notes: {
+      zh: ["给本地视频添加节目切片和 SRT，手动对齐并预览后再用于纠错翻译。", "按已确认轨号导出主播与节目译文；重叠和未分组句子保留在待确认文件。", "完整字幕保持不变，原始说话人分轨默认折叠。"],
+      en: ["Add a programme clip and matching SRT to a local video. Align and preview before enabling it for correction.", "Group confirmed speaker tracks into host and programme translations. Overlap and unassigned cues go to Review.", "The complete subtitle remains unchanged. Raw speaker tracks are collapsed by default."],
+    },
+  },
+  {
     version: "0.3.0.post5",
     title: { zh: "0.3.0.post5 · 知识导入即时刷新", en: "0.3.0.post5 · Refresh imported knowledge" },
     notes: {

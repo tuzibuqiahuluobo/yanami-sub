@@ -127,6 +127,7 @@ export function NewTask({
           </div>
           <TaskSettings
             request={state.task.request}
+            inputPath={state.task.selectedFile ?? undefined}
             capabilities={state.capabilities}
             routing={state.routing}
             apiKeys={state.settings.api_keys}

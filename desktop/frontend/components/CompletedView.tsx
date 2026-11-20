@@ -16,6 +16,7 @@ import {
   taskOutputEntries,
 } from "@/lib/subtitleOutputs";
 import { useLanguage } from "./LanguageProvider";
+import { ProgrammeRoleExport } from "./ProgrammeRoleExport";
 import { useEffect, useState } from "react";
 import { desktopApi } from "@/lib/bridge";
 
@@ -44,6 +45,21 @@ export function CompletedView({
   }, [task.taskId]);
   const outputLabels: Record<string, string> = t.completed.labels;
   const outputs = taskOutputEntries(task.outputs);
+  const speakerOutputs = outputs.filter(([key]) => key.startsWith("speaker:"));
+  const outputRow = ([key, path]: [string, string]) => (
+    <button type="button" className="output-row" key={key} onClick={() => onOpen(path)}>
+      <span className="output-icon"><FileText size={16} /></span>
+      <span>
+        <strong>{key.startsWith("speaker:") ? `${language === "en" ? "Speaker export" : "分轨字幕"} · ${fileName(path)}`
+          : key === "speakerTimeline" ? (language === "en" ? "Speaker timeline" : "说话人时间线")
+          : key === "speakerJudge" ? (language === "en" ? "Speaker judge report" : "说话人裁判记录")
+          : key === "programmeReference" ? (language === "en" ? "Programme subtitles (aligned reference)" : "节目字幕（已对齐的参考）")
+          : outputLabels[key] ?? key}</strong>
+        <small className="result-path">{path}</small>
+      </span>
+      <ExternalLink size={14} />
+    </button>
+  );
   const preferred = preferredTaskOutput(task.outputs);
   const rawFallback = ["translated-srt", "final-srt"].includes(task.request.stage)
     && Boolean(task.outputs.rawSrt)
@@ -79,23 +95,14 @@ export function CompletedView({
         <div className="output-list">
           {task.request.speaker_tracks && task.request.speaker_tracks !== "off" && !outputs.some(([key]) => key.startsWith("speaker:")) ? <p className="inline-note" role="status">{language === "en" ? "No speaker export was produced. Review the task log; the normal subtitle result is still available." : "分轨字幕未产出，请检查任务日志；普通字幕结果仍可使用。"}</p> : null}
           {task.request.diarize?.startsWith("judge-") && ["translated-srt", "final-srt"].includes(task.request.stage) && !task.outputs.speakerJudge ? <p className="inline-note" role="status">{language === "en" ? "No speaker-judge report was produced. Review the optional-stage log." : "本次未生成说话人裁判报告，请查看可选阶段日志。"}</p> : null}
-          {outputs.map(([key, path]) => (
-            <button
-              type="button"
-              className="output-row"
-              key={key}
-              onClick={() => onOpen(path)}
-            >
-              <span className="output-icon">
-                <FileText size={16} />
-              </span>
-              <span>
-                <strong>{key.startsWith("speaker:") ? `${language === "en" ? "Speaker export" : "分轨字幕"} · ${fileName(path)}` : key === "speakerTimeline" ? (language === "en" ? "Speaker timeline" : "说话人时间线") : key === "speakerJudge" ? (language === "en" ? "Speaker judge report" : "说话人裁判记录") : outputLabels[key] ?? key}</strong>
-                <small className="result-path">{path}</small>
-              </span>
-              <ExternalLink size={14} />
-            </button>
-          ))}
+          {outputs.filter(([key]) => !key.startsWith("speaker:")).map(outputRow)}
+          {task.taskId && (task.outputs.finalSrt || task.outputs.translatedSrt)
+            && (task.outputs.speakerTimeline || task.outputs.speakerJudge)
+            ? <ProgrammeRoleExport key={task.taskId} taskId={task.taskId} /> : null}
+          {speakerOutputs.length ? <details className="speaker-output-group">
+            <summary>{language === "en" ? `Raw speaker exports (${speakerOutputs.length})` : `原始说话人分轨（${speakerOutputs.length}）`}</summary>
+            {speakerOutputs.map(outputRow)}
+          </details> : null}
         </div>
 
         <div className="result-location"><strong>{language === "en" ? "Task log" : "任务日志"}</strong><code className="result-path">{logPath || (language === "en" ? "Log not available yet" : "日志暂不可用")}</code><button type="button" className="button button-secondary button-compact" disabled={!task.taskId} onClick={async () => { try { await desktopApi.openTaskLogLocation(task.taskId!); } catch (caught) { setError(String(caught)); } }}>{language === "en" ? "Open log location" : "打开日志位置"}</button></div>

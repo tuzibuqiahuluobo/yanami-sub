@@ -68,6 +68,8 @@ def _item_options(
     options.pop("llm_agent", None)
     options.pop("llm_preset", None)
     options.pop("llm_preset_defaults", None)
+    if options.pop("programme_reference", None):
+        raise ValueError("节目参考暂仅支持新建单任务 / Programme reference is available for single tasks only")
     options["task_id"] = task_id
     options["_batch_workers"] = workers
     return options

@@ -11,6 +11,7 @@ const TASK_OUTPUT_KEYS = [
   "vocalAudio",
   "speakerTimeline",
   "speakerJudge",
+  "programmeReference",
 ] as const;
 
 
@@ -44,7 +45,7 @@ export function taskOutputEntries(
   outputs: Record<string, string> | undefined,
 ): [string, string][] {
   return [...orderedOutputEntries(TASK_OUTPUT_KEYS, outputs),
-    ...Object.entries(outputs ?? {}).filter(([key, path]) => key.startsWith("speaker:") && Boolean(path)).sort(([a], [b]) => a.localeCompare(b))];
+    ...Object.entries(outputs ?? {}).filter(([key, path]) => key.startsWith("speaker:") && Boolean(path)).sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))];
 }
 
 

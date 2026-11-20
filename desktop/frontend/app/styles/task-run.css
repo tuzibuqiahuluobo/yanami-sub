@@ -581,6 +581,32 @@
   margin: 22px 0;
 }
 
+.programme-reference, .speaker-output-group {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--panel-subtle);
+}
+.programme-reference summary, .speaker-output-group summary { cursor: pointer; color: var(--text); font-weight: 650; }
+.programme-reference-tools, .programme-reference-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-block: 12px;
+}
+.programme-reference-tools span, .programme-reference-preview li { overflow-wrap: anywhere; }
+.programme-reference .button { min-height: 44px; white-space: normal; }
+.programme-span { min-width: 0; padding: 8px; margin: 12px 0; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.programme-span > button { margin-top: 8px; }
+.programme-time-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 128px), 1fr)); gap: 8px; }
+.programme-reference-preview { padding: 12px; border-radius: var(--radius-control); background: var(--panel); }
+.programme-reference-preview code { display: block; font-variant-numeric: tabular-nums; }
+.programme-reference-preview li + li, .speaker-output-group .output-row { margin-top: 8px; }
+.programme-role-track { margin-block: 12px; overflow-wrap: anywhere; }
+.speaker-output-group p { overflow-wrap: anywhere; }
+
 .output-row {
   display: grid;
   min-height: 54px;

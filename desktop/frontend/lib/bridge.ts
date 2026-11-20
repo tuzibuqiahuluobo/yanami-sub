@@ -885,6 +885,8 @@ function previewApi(): DesktopApi {
       return { path: "C:\\Yanami Sub\\tasks" };
     },
     async selectSubtitleFile() { return { path: String.raw`D:\subtitles\refined.srt` }; },
+    async previewProgrammeReference() { throw new Error("时间对齐预览需要桌面应用 / Alignment preview requires the desktop app"); },
+    async programmeSubtitleRoles() { throw new Error("按角色导出需要桌面应用 / Role export requires the desktop app"); },
     async runBilingualKnowledgeUpdate(request) {
       return { status: "generated" as const, count: 48, pairs: [],
         ...(request.execute ? { draft_id: "00000000000000000000000000000002", proposal_count: 1,
@@ -1106,6 +1108,9 @@ function nativeApi(): DesktopApi {
     runRefinedKnowledgeUpdate: (request) =>
       call("run_refined_knowledge_update", request),
     selectSubtitleFile: () => call("select_subtitle_file"),
+    previewProgrammeReference: (reaction, reference) => call("preview_programme_reference", reaction, reference),
+    programmeSubtitleRoles: (taskId, assignment) => assignment === undefined
+      ? call("programme_subtitle_roles", taskId) : call("programme_subtitle_roles", taskId, assignment),
     runBilingualKnowledgeUpdate: (request) => call("run_bilingual_knowledge_update", request),
     applyKnowledgeProposal: (draftId) => call("apply_knowledge_proposal", draftId),
     openKnowledgeDirectory: () => call("open_knowledge_directory"),

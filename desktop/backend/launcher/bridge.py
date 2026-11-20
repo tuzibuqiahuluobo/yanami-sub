@@ -316,6 +316,36 @@ class DesktopBridge:
             return _failure(BridgeError(code="unavailable", message="字幕选择窗口不可用"))
         return self._guard(lambda: {"path": self.subtitle_file_selector()})
 
+    def preview_programme_reference(self, reaction: str, payload: dict[str, Any]) -> dict[str, Any]:
+        return self._guard(lambda: self._programme_worker({
+            "action": "preview", "reference": payload, "reaction": reaction,
+        }))
+
+    def _programme_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
+        from desktop.backend.jobs.cooperation import invoke_worker
+
+        return invoke_worker(self.jobs.worker_context, "desktop.backend.worker.programme_tools", payload)
+
+    def programme_subtitle_roles(
+        self, task_id: str, assignment: dict[str, str] | None = None
+    ) -> dict[str, Any]:
+        from finesub_bootstrap.artifacts import deliverable
+
+        def run() -> dict[str, Any]:
+            task = next((item for item in self.jobs.history() if item.task_id == task_id), None)
+            if (not task or task.state != "completed" or not task.request.output
+                    or not (task.outputs.get("finalSrt") or task.outputs.get("translatedSrt"))):
+                raise ValueError("请先完成纠错翻译 / Complete correction and translation first")
+            output = deliverable(task.request.output, "final-srt")
+            root = self.jobs.output_root
+            if output is None or root is None or not output.resolve().is_relative_to(Path(root).resolve()):
+                raise ValueError("只能操作应用任务目录下的字幕 / Select subtitles in the app task directory")
+            return self._programme_worker({
+                "action": "roles", "output": str(output), "assignment": assignment,
+            })
+
+        return self._guard(run)
+
     def select_batch_files(self) -> dict[str, Any]:
         if self.batch_file_selector is None:
             return _failure(

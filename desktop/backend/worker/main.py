@@ -383,6 +383,12 @@ def speech_model_provenance(paths: Any) -> str:
 
 def _publish_output(paths: Any, request: TaskRequest, *, task_id: str) -> dict[str, str]:
     outputs = _publish_primary_output(paths, request, task_id=task_id)
+    if request.programme_reference and (outputs.get("finalSrt") or outputs.get("translatedSrt")):
+        from desktop.backend.worker.programme_reference import reference_output
+
+        reference = reference_output(paths.final_srt)
+        if reference.is_file() and not reference.is_symlink():
+            outputs["programmeReference"] = str(reference)
     if request.diarize == "off" and request.asr == "local":
         return outputs
     for key, attribute in (("speakerTimeline", "diar_json"), ("speakerRows", "diar_rows_json"), ("speakerJudge", "speaker_judge_json")):
@@ -489,7 +495,10 @@ def _execute_pipeline(
 ) -> Any:
     _prepare_task_knowledge(request, stage=stage, knowledge=knowledge,
         config_files=getattr(route, "backup_files", None))
-    return pipeline(
+    from desktop.backend.worker.programme_reference import run_with_reference
+
+    return run_with_reference(
+        pipeline, request,
         request.input,
         output_path=_resolve_output_path(request),
         stage=stage,
@@ -932,10 +941,12 @@ def run_request(
             # offers the subtitle stages today, so this was a bridge-contract
             # hole rather than a visible one -- but `TaskRequest` accepts all of
             # them and `validate_stage` only guards the two LLM stages.
-            cleanup_task_intermediates(
-                paths.final_srt,
-                preserve=outputs.values(),
-            )
+            preserve = list(outputs.values())
+            if outputs.get("speakerTimeline") and outputs.get("finalSrt"):
+                # Role export uses the translation before final subtitle reflow.
+                final_path = Path(paths.final_srt)
+                preserve.append(str(final_path.with_name(f"{final_path.stem}-translated.srt")))
+            cleanup_task_intermediates(paths.final_srt, preserve=preserve)
     except Exception as error:
         emit(WorkerEvent.failed(task_id, _agent_error_message(error)))
         raise

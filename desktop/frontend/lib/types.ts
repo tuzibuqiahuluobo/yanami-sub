@@ -204,6 +204,27 @@ export type GpuTier =
   | "standard_large_vram"
   | "high";
 
+export interface ProgrammeReference {
+  clip: string;
+  subtitle: string;
+  subtitle_offset_ms: number;
+  spans: { clip_ms: number; reaction_ms: number; length_ms: number }[];
+}
+
+export interface ProgrammeReferencePreview {
+  duration_ms: number;
+  count: number;
+  sample: { start_ms: number; end_ms: number; text: string }[];
+}
+
+export interface SubtitleRoleTrack { track: string; count: number; sample_ms: number; sample: string }
+export interface SubtitleRoleResult {
+  tracks?: SubtitleRoleTrack[];
+  total?: number;
+  directory?: string;
+  counts?: Record<"host" | "programme" | "review", number>;
+}
+
 export interface TaskRequest {
   input: string;
   output?: string | null;
@@ -267,6 +288,7 @@ export interface TaskRequest {
   llm_model: string[];
   llm_video?: string | null;
   extra_info: string;
+  programme_reference?: ProgrammeReference | null;
   extra_style: string;
   task_summary?: string;
   style?: string | null;
@@ -712,6 +734,8 @@ export interface KnowledgeRecoveryResult {
 
 export interface DesktopApi {
   selectSubtitleFile(): Promise<{ path: string | null }>;
+  previewProgrammeReference(reaction: string, reference: ProgrammeReference): Promise<ProgrammeReferencePreview>;
+  programmeSubtitleRoles(taskId: string, assignment?: Record<string, string>): Promise<SubtitleRoleResult>;
   runBilingualKnowledgeUpdate(request: BilingualKnowledgeRequest): Promise<RefinedKnowledgeUpdateReport>;
   applyKnowledgeProposal(draftId: string): Promise<RefinedKnowledgeUpdateReport>;
   listTaskLogs(query?: string, offset?: number): Promise<{ items: TaskLogLocation[]; total: number }>;
