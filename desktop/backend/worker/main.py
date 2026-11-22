@@ -4,6 +4,7 @@ import argparse
 from collections.abc import Callable
 from contextlib import ExitStack, contextmanager, redirect_stderr, redirect_stdout
 import hashlib
+from functools import partial
 import json
 import logging
 import os
@@ -496,9 +497,10 @@ def _execute_pipeline(
     _prepare_task_knowledge(request, stage=stage, knowledge=knowledge,
         config_files=getattr(route, "backup_files", None))
     from desktop.backend.worker.programme_reference import run_with_reference
+    from desktop.backend.worker.url_input import run_after_url_download
 
     return run_with_reference(
-        pipeline, request,
+        partial(run_after_url_download, pipeline), request,
         request.input,
         output_path=_resolve_output_path(request),
         stage=stage,

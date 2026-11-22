@@ -16,6 +16,7 @@ from finesub_bootstrap.locks import (
     try_lock,
 )
 
+from desktop.backend.common.core_compat import unified_llm_contract
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.worker.main import (
     _agent_error_message,
@@ -1073,13 +1074,18 @@ def test_a_second_stranger_pushes_the_serial_along(tmp_path: Path) -> None:
     assert (tmp_path / "a-raw.finesub.srt").read_text(encoding="utf-8") == "also theirs"
 
 
-def test_a_url_task_publishes_into_the_run_directory(tmp_path: Path) -> None:
+def test_a_url_task_publishes_into_the_run_directory(tmp_path: Path, monkeypatch) -> None:
     # There is no source file next to which a subtitle could be published, so
     # the generated path is the result. Path("https://...").is_file() is what
     # decides this, and it must not be mistaken for a relative path.
     paths = _fake_paths(tmp_path / "run")
     paths.final_srt.parent.mkdir(parents=True)
     paths.raw_srt.write_text("raw", encoding="utf-8")
+    if unified_llm_contract():
+        from finesub import stages
+        monkeypatch.setattr(stages, "prepare_url_input", lambda *_a, **_kw: (
+            paths.final_srt.with_suffix(".mp4"), paths, None, "",
+        ))
 
     outputs = run_request(
         TaskRequest(input="https://example.test/watch?v=1"),
@@ -1090,19 +1096,3 @@ def test_a_url_task_publishes_into_the_run_directory(tmp_path: Path) -> None:
 
     assert outputs == {"rawSrt": str(paths.raw_srt)}
     assert paths.raw_srt.exists()
-
-
-def test_a_url_reaches_the_pipeline_unchanged(tmp_path: Path) -> None:
-    calls: list[str] = []
-    paths = _fake_paths(tmp_path / "run")
-    paths.final_srt.parent.mkdir(parents=True)
-    paths.raw_srt.write_text("raw", encoding="utf-8")
-
-    run_request(
-        TaskRequest(input="https://example.test/watch?v=1"),
-        task_id="task-url",
-        pipeline=lambda source, **kwargs: (calls.append(source) or paths),
-        emit=lambda event: None,
-    )
-
-    assert calls == ["https://example.test/watch?v=1"]

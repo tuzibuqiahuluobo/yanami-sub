@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1.post8",
+    title: { zh: "0.3.1 RC1.8 · 链接字幕流程", en: "0.3.1 RC1.8 · Linked media subtitles" },
+    notes: {
+      zh: ["链接下载完成后走本地文件的字幕流程。", "保留 MP4 不会改变仅文本、音频或视频模式；重试会复用有效下载。"],
+      en: ["Downloaded links use the local subtitle pipeline.", "Keeping an MP4 does not change the media mode; retries reuse valid downloads."],
+    },
+  },
+  {
     version: "0.3.1-rc.1.post7",
     title: { zh: "0.3.1 RC1.7 · 节目对齐时间码", en: "0.3.1 RC1.7 · Programme alignment timecode" },
     notes: {

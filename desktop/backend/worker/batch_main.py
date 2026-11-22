@@ -41,6 +41,7 @@ from desktop.backend.worker.protocol import EventLogWriter
 from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
 from desktop.backend.worker.qwen_attention import configure_qwen_attention
 from desktop.backend.worker.compiler_output import configure_compiler_output
+from desktop.backend.worker.url_input import normalize_batch_url_download
 
 
 def _parse_args() -> argparse.Namespace:
@@ -175,6 +176,7 @@ def run_batch_request(
                     ),
                     claims=claims,
                 )
+                normalize_batch_url_download(item, effective_row.llm_video)
                 # Was `route.source == "agent" and ...`: an API-sourced item
                 # whose correction call failed at runtime (rate limit,
                 # revoked key, network error, ...) fell straight through to
