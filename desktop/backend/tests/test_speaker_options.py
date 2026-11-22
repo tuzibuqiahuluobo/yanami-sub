@@ -60,11 +60,13 @@ def test_speaker_publication_preserves_user_files_and_missing_exports(monkeypatc
 
 
 def test_missing_optional_speech_outputs_are_reported_as_skipped(tmp_path, monkeypatch):
+    source = tmp_path / "clip.mp4"
+    source.touch()
     paths = SimpleNamespace(raw_srt=tmp_path / "clip-raw.srt", stable_json=tmp_path / "clip-stable.json",
         final_srt=tmp_path / "clip.srt")
     paths.raw_srt.write_text("1\n00:00:00,000 --> 00:00:01,000\n中文 日本語\n", encoding="utf-8")
     events = []
-    request = TaskRequest(input="https://example.com/clip", diarize="acoustics", speaker_tracks="both", knowledge="none", cleanup_intermediate=False)
+    request = TaskRequest(input=str(source), diarize="acoustics", speaker_tracks="both", knowledge="none", cleanup_intermediate=False)
     worker.run_request(request, task_id="optional-skipped", pipeline=lambda *_args, **_kwargs: paths, emit=events.append)
     skipped = [event.payload["stage"] for event in events if event.type == "stage" and event.payload.get("skipped")]
     assert skipped == ["diarize", "speaker-tracks"]
