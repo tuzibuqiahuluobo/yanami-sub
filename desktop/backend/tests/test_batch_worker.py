@@ -14,6 +14,54 @@ from desktop.backend.common.core_compat import unified_llm_contract
 from desktop.backend.worker import batch_main
 
 
+def test_raw_fallback_is_still_marked_after_loading_published_outputs(tmp_path):
+    from finesub.scheduler import BatchItem
+
+    raw = tmp_path / "existing-raw.srt"
+    raw.write_text("raw", encoding="utf-8")
+    (tmp_path / "published.json").write_text(json.dumps({"0": {"rawSrt": str(raw)}}), encoding="utf-8")
+    request = BatchRequest.model_validate({"items": [{"input": "fixture.wav", "stage": "final-srt"}]})
+
+    def scheduler(items, *, publish, **_kwargs):
+        results = [ItemResult(label="fixture", status="done")]
+        publish(items, results)
+        return results
+
+    result, = batch_main.run_batch_request(request, batch_id="fallback-resumed", batch_root=tmp_path,
+        emit=lambda _: None, build_item=lambda *_args, **_kwargs: BatchItem(label="fixture", stages={}),
+        claims=object(), run_batch=scheduler, default_pipeline_paths=lambda *_a, **_kw: None)
+    assert result.correction_skipped
+    assert result.outputs == {"rawSrt": str(raw)}
+
+
+def test_batch_download_only_overrides_the_selected_row(monkeypatch, tmp_path):
+    from finesub.pipeline import build_item, OutputClaims
+    from desktop.backend.worker import media_tools
+
+    selected, automatic = "https://example.test/watch?v=AbC", "https://example.test/watch?v=xyz"
+    selected_path = tmp_path / "chosen.mp4"
+    seen = []
+    monkeypatch.setattr(media_tools, "download_selected_video",
+                        lambda url, choice, folder: (seen.append((url, choice.format_id, folder)) or selected_path))
+    request = BatchRequest.model_validate({"items": [
+        {"input": selected, "output": str(tmp_path / "one" / "custom.srt"), "asr_context": "off",
+         "link_format": {"container": "mp4", "format_id": "399"}},
+        {"input": automatic, "output": str(tmp_path / "two" / "auto.srt"), "asr_context": "off"},
+    ]})
+
+    def scheduler(items, **_kwargs):
+        result = items[0].stages["download"](None)
+        assert result["audio"] == str(selected_path)
+        assert result["output"] == request.items[0].output
+        assert selected in result["extra_info"]
+        assert items[1].stages["download"].__name__ == "_download"
+        return [ItemResult(label=item.label) for item in items]
+
+    batch_main.run_batch_request(request, batch_id="formats", batch_root=tmp_path, emit=lambda _: None,
+        build_item=build_item, claims=OutputClaims(), run_batch=scheduler)
+    assert seen == [(selected, "399", tmp_path / "one")]
+
+
 def test_batch_url_publishes_titled_subtitle_in_its_item_directory(monkeypatch, tmp_path):
     from finesub import paths as core_paths
     from finesub.media.source import record_video_info

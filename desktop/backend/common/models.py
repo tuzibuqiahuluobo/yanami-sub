@@ -679,8 +679,6 @@ class BatchRequest(DesktopModel):
         for item in self.items:
             if item.programme_reference:
                 raise ValueError("节目参考仅支持单任务 / Programme reference is only available for single tasks")
-            if item.link_format:
-                raise ValueError("视频格式只支持单任务 / Video format selection is available for single tasks only")
             source = item.input.casefold()
             if source in seen:
                 raise ValueError(f"batch source is listed twice: {item.input}")

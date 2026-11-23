@@ -14,7 +14,7 @@ from desktop.backend.batches.protocol import (
     encode_batch_event,
     parse_batch_event,
 )
-from desktop.backend.common.models import BatchRequest
+from desktop.backend.common.models import BatchRequest, BatchSnapshot
 from desktop.backend.worker.protocol import format_log_message
 
 
@@ -29,6 +29,69 @@ class FakeProcess:
 
     def wait(self):
         return self.return_code
+
+
+def test_batch_keeps_legacy_records_but_blocks_duplicate_reference_files(tmp_path):
+    history = tmp_path / "batches.json"
+    request = {"items": [
+        {"input": "a.mp4", "stage": "final-srt", "refined_srt": str(tmp_path / "shared.srt")},
+        {"input": "b.mp4", "stage": "final-srt", "refined_srt": str(tmp_path / "." / "shared.srt")},
+    ]}
+    raw = {"batch_id": "batch-old", "state": "failed", "created_at": 1, "updated_at": 1,
+           "items": [], "request": request}
+    history.write_text(json.dumps([{"bad": True}, raw]), encoding="utf-8")
+    manager = BatchManager(python_executable="unused", worker_env={},
+        process_factory=lambda *_a, **_kw: pytest.fail("should not spawn unsafe request"),
+        history_path=history, output_root=tmp_path)
+    assert manager.history()[0].batch_id == "batch-old"
+    with pytest.raises(ValueError, match="第 1 和 2 项"):
+        manager.resume("batch-old")
+
+
+def test_batch_can_prepare_one_raw_item_for_translation_without_changing_history(tmp_path):
+    history = tmp_path / "batches.json"
+    item = tmp_path / "batch-old" / "001-test"
+    item.mkdir(parents=True)
+    (item / "test-raw.srt").write_text("raw", encoding="utf-8")
+    stable = item / "test-stable.json"
+    stable.write_text("{}", encoding="utf-8")
+    request = {"items": [{"input": "a.mp4", "stage": "translated-srt", "resume": False,
+        "output": str(item / "test.srt"), "moss_pro_paid": True}]}
+    snapshot = BatchSnapshot.model_validate({"batch_id": "batch-old", "state": "completed",
+        "created_at": 1, "updated_at": 1, "request": request, "items": [
+            {"index": 0, "input": "a.mp4", "label": "a", "state": "done", "correction_skipped": True,
+             "outputs": {"rawSrt": str(item / "test-raw.srt")}}]})
+    history.write_text(json.dumps([snapshot.model_dump(mode="json")]), encoding="utf-8")
+    manager = BatchManager(python_executable="unused", worker_env={},
+        process_factory=lambda *_a, **_kw: pytest.fail("only prepare, never run"),
+        history_path=history, output_root=tmp_path)
+    next_task = manager.translation_request(snapshot.batch_id, 0)
+    assert next_task.stage == "translated-srt" and next_task.resume is True and next_task.moss_pro_paid is False
+    assert next_task.output == str(item / "test.srt")
+    assert manager.history()[0] == snapshot
+    stable.unlink()
+    with pytest.raises(ValueError, match="Recognition files are missing"):
+        manager.translation_request(snapshot.batch_id, 0)
+
+
+def test_running_append_inherits_shared_choices_but_never_per_item_files(tmp_path, monkeypatch):
+    manager = BatchManager(python_executable="unused", worker_env={},
+        process_factory=lambda *_a, **_kw: pytest.fail("mocked spawn"),
+        history_path=tmp_path / "batches.json", output_root=tmp_path)
+    monkeypatch.setattr(manager, "_spawn", lambda *_: FakeProcess("", return_code=None))
+    monkeypatch.setattr(manager, "_start_reader", lambda *_: None)
+    request = BatchRequest.model_validate({"items": [
+        {"input": "https://example.test/first", "name": "first",
+         "stage": "final-srt", "llm_video": "video.mp4", "refined_srt": "first.srt",
+         "link_format": {"container": "mp4", "format_id": "399"}}
+    ]})
+    started = manager.start(request)
+    updated = manager.append(started.batch_id, ["second.mp4"])
+    first, second = updated.request.items
+    assert first.name == "first" and first.link_format is not None
+    assert second.stage == first.stage and second.name == ""
+    assert second.llm_video is second.refined_srt is second.link_format is None
+    assert Path(second.output).parent != Path(first.output).parent
 
 
 @pytest.mark.parametrize("failure", [False, True])

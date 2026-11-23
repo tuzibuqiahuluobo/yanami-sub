@@ -138,6 +138,32 @@
   gap: 6px;
 }
 
+.batch-source-actions .batch-row-toggle {
+  display: inline-flex;
+  width: auto;
+  gap: 5px;
+  padding-inline: 6px;
+  white-space: nowrap;
+}
+
+.batch-row-panel {
+  grid-column: 1 / -1;
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.batch-row-file {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: end;
+}
+
+.batch-row-file > .field { flex: 1 1 190px; min-width: 0; }
+
 .batch-heading-actions {
   justify-content: flex-end;
   flex-wrap: wrap;

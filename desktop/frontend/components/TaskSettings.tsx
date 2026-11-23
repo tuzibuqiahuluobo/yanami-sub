@@ -951,6 +951,7 @@ export function TaskSettings({
                   ]}
                 />
               </div>
+              {!batchMode ? <>
               <label className="field">
                 <span>{t.newTask.settings.llmVideo}</span>
                 <input
@@ -969,6 +970,7 @@ export function TaskSettings({
                   onChange={(event) => onChange({ refined_srt: event.target.value || null })}
                 />
               </label>
+              </> : null}
               <label className="field">
                 <span>{t.newTask.settings.maxRetries}</span>
                 <input

@@ -788,6 +788,7 @@ export interface DesktopApi {
   knowledgeRecovery(action: "list" | "prepare" | "activate" | "recover", identifier?: string, confirmed?: boolean): Promise<KnowledgeRecoveryResult>;
   cancelBatch(batchId: string): Promise<BatchSnapshot>;
   resumeBatch(batchId: string): Promise<BatchSnapshot>;
+  prepareBatchTranslation(batchId: string, index: number): Promise<TaskRequest>;
   getBatchSnapshot(): Promise<BatchSnapshot | null>;
   listBatches(): Promise<BatchSnapshot[]>;
   openBatchDirectory(batchId: string): Promise<{ path: string }>;

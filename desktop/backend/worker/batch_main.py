@@ -13,6 +13,7 @@ from typing import Any
 from finesub.reporting import quieted_libraries
 from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE, holding_activity
 
+from desktop.backend.batches.item_settings import validate_item_materials
 from desktop.backend.batches.protocol import BatchWorkerEvent, encode_batch_event
 from desktop.backend.common.models import (
     BatchItemRequest,
@@ -41,6 +42,7 @@ from desktop.backend.worker.protocol import EventLogWriter
 from desktop.backend.worker.runtime import initialize_native_paths, record_runtime_success
 from desktop.backend.worker.qwen_attention import configure_qwen_attention
 from desktop.backend.worker.compiler_output import configure_compiler_output
+from desktop.backend.worker.url_input import run_after_url_download
 
 
 def _parse_args() -> argparse.Namespace:
@@ -68,11 +70,26 @@ def _item_options(
     options.pop("llm_agent", None)
     options.pop("llm_preset", None)
     options.pop("llm_preset_defaults", None)
+    options.pop("link_format", None)
     if options.pop("programme_reference", None):
         raise ValueError("节目参考暂仅支持新建单任务 / Programme reference is available for single tasks only")
     options["task_id"] = task_id
     options["_batch_workers"] = workers
     return options
+
+
+def _selected_download(row, options):
+    """Keep exact-format downloads in the scheduler's normal download slot."""
+    def payload(local, **resolved):
+        return {
+            "audio": local, "output": resolved["output_path"], "llm_video": resolved["llm_video"],
+            "extra_info": resolved["extra_info"], "_prior_timing": resolved["_prior_timing"],
+            "_run_started_monotonic": resolved["_run_started_monotonic"],
+        }
+
+    resolved_options = {key: value for key, value in options.items() if key != "source"}
+    return run_after_url_download(payload, row.input, link_format=row.link_format,
+                                  output_path=options["output"], **resolved_options)
 
 
 def _failed_item(source: str, error: BaseException):
@@ -131,6 +148,7 @@ def run_batch_request(
 
     batch_root.mkdir(parents=True, exist_ok=True)
     request = request.model_copy(update={"items": [effective_task_request(item) for item in request.items]})
+    validate_item_materials(request.items)
     workers = request.workers.model_dump(mode="python")
     items = []
     route_item = next(
@@ -167,14 +185,18 @@ def run_batch_request(
                 if route.skip_reason and row.stage in {"translated-srt", "final-srt"}:
                     skip_reasons[index] = route.skip_reason
                     effective_row = row.model_copy(update={"stage": "raw-srt"})
+                if effective_row.stage == "raw-srt":
+                    effective_row = effective_row.model_copy(update={"llm_video": None, "refined_srt": None})
+                if effective_row.stage in {"translated-srt", "final-srt"}:
+                    for path in (effective_row.llm_video, effective_row.refined_srt):
+                        if path and not Path(path).expanduser().is_file():
+                            raise ValueError(f"本条项目的参考文件不存在：{path} / Per-item reference file not found")
                 _prepare_task_knowledge(effective_row, stage=effective_row.stage,
                     config_files=getattr(route, "backup_files", None))
-                item = build_item(
-                    _item_options(
-                        effective_row, workers, task_id=f"{batch_id}-{index + 1}"
-                    ),
-                    claims=claims,
-                )
+                options = _item_options(effective_row, workers, task_id=f"{batch_id}-{index + 1}")
+                item = build_item(options, claims=claims)
+                if effective_row.link_format:
+                    item.stages = {**item.stages, "download": lambda _: _selected_download(effective_row, options)}
                 # Was `route.source == "agent" and ...`: an API-sourced item
                 # whose correction call failed at runtime (rate limit,
                 # revoked key, network error, ...) fell straight through to
@@ -243,6 +265,7 @@ def run_batch_request(
                 raise ValueError("Intake source mismatch")
             BatchRequest.model_validate({**request.model_dump(), "items": [
                 *[item.model_dump() for item in request.items], row.model_dump()]})
+            validate_item_materials([*request.items, row])
             request.items.append(row)
             item = build_row(index, row)
             items.append(item)
@@ -273,10 +296,10 @@ def run_batch_request(
                 if index in publish_errors:
                     state = "failed"
                     error = publish_errors[index]
-                correction_skipped = bool(
-                    state == "done"
-                    and skip_reasons.get(index)
-                    and "rawSrt" in published.get(str(index), {})
+                outputs = published.get(str(index), {})
+                correction_skipped = (
+                    state == "done" and request.items[index].stage in {"translated-srt", "final-srt"}
+                    and "rawSrt" in outputs and not {"translatedSrt", "finalSrt"} & outputs.keys()
                 )
                 rows.append(
                     BatchItemSnapshot(
@@ -287,8 +310,9 @@ def run_batch_request(
                         stage=result.stage,
                         error=error,
                         correction_skipped=correction_skipped,
-                        skip_reason=skip_reasons[index] if correction_skipped else "",
-                        outputs=published.get(str(index), {}),
+                        skip_reason=(skip_reasons.get(index, "已保留原始字幕，可单独补译 / Raw subtitle kept; translation can be continued")
+                                     if correction_skipped else ""),
+                        outputs=outputs,
                     )
                 )
             return rows
