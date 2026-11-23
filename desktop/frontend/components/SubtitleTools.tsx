@@ -26,7 +26,7 @@ export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void
   async function save() {
     if (!selected) return;
     setBusy("save"); setError(""); setSaved("");
-    try { setSaved((await desktopApi.saveLinkSubtitle(url.trim(), selected, extension)).path ?? ""); }
+    try { setSaved((await desktopApi.saveLinkSubtitle(url.trim(), selected, extension, result?.title)).path ?? ""); }
     catch (reason) { setError(reason instanceof Error ? reason.message : String(reason)); }
     finally { setBusy(undefined); }
   }

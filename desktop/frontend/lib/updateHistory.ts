@@ -17,6 +17,22 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.2-rc.1",
+    title: { zh: "0.3.2 RC1.0 · 预览版", en: "0.3.2 RC1.0 · Preview" },
+    notes: {
+      zh: ["与 0.3.1 正式版功能一致，供接收预览更新的用户使用。"],
+      en: ["Same features as 0.3.1 stable, packaged for the preview channel."],
+    },
+  },
+  {
+    version: "0.3.1",
+    title: { zh: "0.3.1 · 视频标题命名与链接工具", en: "0.3.1 · Video title naming and link tools" },
+    notes: {
+      zh: ["链接字幕默认使用视频标题，取不到时使用本地日期和时间。", "正式版加入链接下载档位、YouTube 字幕下载、节目参考对齐及 FineSub 0.7.1。"],
+      en: ["Link subtitles default to the video title and fall back to local date and time.", "Stable now includes link download formats, YouTube caption downloads, programme alignment and FineSub 0.7.1."],
+    },
+  },
+  {
     version: "0.3.1-rc.1.post10",
     title: { zh: "0.3.1 RC1.10 · 链接下载档位修复", en: "0.3.1 RC1.10 · Link download format fix" },
     notes: {

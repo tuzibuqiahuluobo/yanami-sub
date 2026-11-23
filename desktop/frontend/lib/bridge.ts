@@ -1116,7 +1116,7 @@ function nativeApi(): DesktopApi {
     previewProgrammeReference: (reaction, reference) => call("preview_programme_reference", reaction, reference),
     programmeFrameRate: (path) => call("programme_frame_rate", path),
     inspectLinkMedia: (url, captions = false) => call("inspect_link_media", url, captions),
-    saveLinkSubtitle: (url, track, extension) => call("save_link_subtitle", url, track.language, track.automatic, extension),
+    saveLinkSubtitle: (url, track, extension, title) => call("save_link_subtitle", url, track.language, track.automatic, extension, title ?? null),
     coreTool: (action, item = "") => call("core_tool", action, item),
     openCodexLogin: () => call("open_codex_login"),
     programmeSubtitleRoles: (taskId, assignment) => assignment === undefined

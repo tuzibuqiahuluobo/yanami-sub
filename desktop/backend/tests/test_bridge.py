@@ -258,6 +258,26 @@ def _bridge(tmp_path: Path) -> tuple[DesktopBridge, FakeJobs]:
     return bridge, jobs
 
 
+def test_caption_save_dialog_suggests_safe_title_or_local_time(tmp_path, monkeypatch):
+    from datetime import datetime
+    from desktop.backend.common import link_names
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls):
+            return cls(2026, 11, 23, 9, 8, 7)
+
+    monkeypatch.setattr(link_names, "datetime", Clock)
+    bridge, _ = _bridge(tmp_path)
+    proposed = []
+    bridge.subtitle_export_selector = lambda extension, stem: proposed.append(f"{stem}.{extension}")
+    monkeypatch.setattr(bridge, "_media_tool", lambda _: pytest.fail("Cancel should not fetch subtitles"))
+    url = "https://www.youtube.com/watch?v=example"
+    for extension, title in (("vtt", "../字幕:第1话"), ("txt", ""), ("srt", "あ" * 200)):
+        assert bridge.save_link_subtitle(url, "ja", False, extension, title)["data"] == {"path": None}
+    assert proposed == ["字幕_第1话.vtt", "2026-11-23_09-08-07.txt", "あ" * 80 + ".srt"]
+
+
 def test_task_log_pages_are_ten_records_and_filter_before_slicing(tmp_path, monkeypatch):
     bridge, _ = _bridge(tmp_path)
     monkeypatch.setattr(bridge, "_task_logs_root", lambda: tmp_path)

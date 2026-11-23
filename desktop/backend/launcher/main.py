@@ -1054,9 +1054,9 @@ def create_application(
 
     bridge.subtitle_file_selector = select_subtitle_file
 
-    def select_subtitle_export(extension: str) -> str | None:
+    def select_subtitle_export(extension: str, stem: str) -> str | None:
         result = window.create_file_dialog(webview.FileDialog.SAVE,
-            save_filename=f"youtube-subtitles.{extension}",
+            save_filename=f"{stem}.{extension}",
             file_types=(f"{extension.upper()} (*.{extension})",))
         return str(result[0] if isinstance(result, (list, tuple)) else result) if result else None
 
