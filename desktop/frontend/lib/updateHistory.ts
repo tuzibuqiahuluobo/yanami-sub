@@ -25,6 +25,14 @@ export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
     },
   },
   {
+    version: "0.3.1.post1",
+    title: { zh: "0.3.1.post1 · 批处理补丁与 0.3.1 功能回顾", en: "0.3.1.post1 · Batch fixes and 0.3.1 recap" },
+    notes: {
+      zh: ["0.3.1：FineSub 0.7.1、链接下载档位、YouTube 字幕下载、按视频标题命名、节目参考对齐和分组字幕。", "补丁：批处理可逐条选择下载档位、输出名称和参考文件，追加不会继承上一条的专属素材。", "仅有原字幕的项目可以单独补译；拒绝误共享参考文件的旧清单，并保留有效历史记录。"],
+      en: ["0.3.1: FineSub 0.7.1, link formats, YouTube captions, title-based naming, programme alignment and grouped subtitles.", "Patch: set download formats, output names and reference files per item. Appending never copies item-specific settings.", "Continue translation for one raw-only item, block accidentally shared reference files and preserve valid history records."],
+    },
+  },
+  {
     version: "0.3.1",
     title: { zh: "0.3.1 · 视频标题命名与链接工具", en: "0.3.1 · Video title naming and link tools" },
     notes: {

@@ -13,14 +13,18 @@ from typing import Any
 from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE, holding_activity
 from finesub_bootstrap.processes import terminate_process_tree
 from finesub_bootstrap import task_output
+from finesub_bootstrap.http_client import network_routes
 
+from desktop.backend.batches.item_settings import new_item_values, validate_item_materials
 from desktop.backend.batches.protocol import BatchWorkerEvent, parse_batch_event
 from desktop.backend.common.models import (
     BatchItemRequest,
     BatchItemSnapshot,
     BatchRequest,
     BatchSnapshot,
+    TaskRequest,
 )
+from desktop.backend.common.network import apply_network_route
 from desktop.backend.common.core_compat import llm_call_options, unified_llm_contract
 from desktop.backend.jobs.launch import (
     ProcessFactory,
@@ -60,6 +64,7 @@ _DESKTOP_ROW_FIELDS = {
     "llm_preset",
     "llm_preset_defaults",
     "name",
+    "link_format",
 }
 _BATCH_OPTION_FIELDS = {"workers", "asr_queue_size", "retry_failed"}
 
@@ -144,6 +149,7 @@ class BatchManager:
     def start(self, request: BatchRequest) -> BatchSnapshot:
         with self._lock:
             self._ensure_idle()
+            validate_item_materials(request.items)
             batch_id = task_output.new_task_id("batch")
             resolved = self._resolve_outputs(batch_id, request)
             process = self._spawn(batch_id, resolved)
@@ -173,6 +179,7 @@ class BatchManager:
                 item.state == "done" for item in snapshot.items
             ):
                 raise ValueError("这个批次已经全部完成。")
+            validate_item_materials(snapshot.request.items)
             process = self._spawn(batch_id, snapshot.request)
             snapshot.state = "running"
             snapshot.error = ""
@@ -212,8 +219,7 @@ class BatchManager:
                 raise ValueError("请选择 1–500 个输入 / Select 1–500 inputs")
             original = snapshot.request
             template = original.items[-1]
-            added = [template.model_copy(update={"input": source.strip(), "output": None,
-                "name": "", "group": "", "priority": 0}) for source in sources]
+            added = [template.model_copy(update=new_item_values(source)) for source in sources]
             combined = BatchRequest.model_validate({**original.model_dump(),
                 "items": [row.model_dump() for row in [*original.items, *added]]})
             combined = self._resolve_outputs(batch_id, combined)
@@ -271,6 +277,29 @@ class BatchManager:
     def request_for(self, batch_id: str) -> BatchRequest:
         with self._lock:
             return self._find(batch_id).request.model_copy(deep=True)
+
+    def translation_request(self, batch_id: str, index: int) -> TaskRequest:
+        with self._lock:
+            self._ensure_idle()
+            snapshot = self._find(batch_id)
+            if snapshot.state == "running" or type(index) is not int or not 0 <= index < len(snapshot.request.items):
+                raise ValueError("请先结束批次并选择有效项目 / Finish the batch and select a valid item")
+            item = snapshot.request.items[index]
+            result = next((row for row in snapshot.items if row.index == index), None)
+            if (result is None or result.input != item.input or result.state != "done" or not result.outputs.get("rawSrt")
+                    or result.outputs.get("translatedSrt") or result.outputs.get("finalSrt") or not item.output):
+                raise ValueError("该项目没有可继续翻译的识别结果 / No recognition result to continue")
+            output = Path(item.output).resolve()
+            raw = output.with_name(f"{output.stem}-raw.srt")
+            stable = output.with_name(f"{output.stem}-stable.json")
+            if (not output.is_relative_to(self._batch_dir(batch_id).resolve())
+                    or raw.is_symlink() or stable.is_symlink() or not raw.is_file() or not stable.is_file()):
+                raise ValueError("识别断点已移动或清理，无法只补翻译 / Recognition files are missing")
+            data = item.model_dump(exclude={"group", "priority"})
+            return TaskRequest.model_validate({
+                **data, "stage": "translated-srt" if item.stage == "translated-srt" else "final-srt",
+                "output": str(output), "resume": True, "moss_pro_paid": False,
+            })
 
     def import_manifest(self, path: str | Path) -> tuple[BatchRequest, list[str]]:
         """Read a core-compatible JSONL manifest without accepting owned paths."""
@@ -432,6 +461,7 @@ class BatchManager:
         context = self._worker_context
         environment = os.environ.copy()
         environment.update(context.environment)
+        apply_network_route(environment, network_routes()[0])
         pinned, _notice = device_environment(request.items[0], self.available_gpus)
         environment.update(pinned)
         environment["YANAMI_SUB_BATCH_ROOT"] = str(self._batch_dir(batch_id))
@@ -591,7 +621,12 @@ class BatchManager:
         try:
             body = json.loads(self.history_path.read_text(encoding="utf-8"))
             rows = body if isinstance(body, list) else []
-            self._history = [BatchSnapshot.model_validate(row, context={"archive": True}) for row in rows]
+            self._history = []
+            for row in rows:
+                try:
+                    self._history.append(BatchSnapshot.model_validate(row, context={"archive": True}))
+                except ValueError:
+                    LOGGER.warning("Skipped an unreadable batch history record")
         except (OSError, ValueError):
             self._history = []
         if self._history:

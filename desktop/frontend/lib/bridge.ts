@@ -435,6 +435,7 @@ function previewApi(): DesktopApi {
       batch = { ...batch, state: "cancelled", updated_at: Date.now() / 1000 };
       return structuredClone(batch);
     },
+    async prepareBatchTranslation() { throw new Error("The browser preview has no recognition files."); },
     async resumeBatch() {
       if (!batch) throw new BridgeCallError("batch_not_found", "没有找到该批次。");
       batch = { ...batch, state: "running", updated_at: Date.now() / 1000 };
@@ -1033,6 +1034,7 @@ function nativeApi(): DesktopApi {
     knowledgeRecovery: (action, identifier = "", confirmed = false) => call("knowledge_recovery", action, identifier, confirmed),
     cancelBatch: (batchId) => call<BatchSnapshot>("cancel_batch", batchId),
     resumeBatch: (batchId) => call<BatchSnapshot>("resume_batch", batchId),
+    prepareBatchTranslation: (batchId, index) => call<TaskRequest>("prepare_batch_translation", batchId, index),
     getBatchSnapshot: () => call<BatchSnapshot | null>("get_batch_snapshot"),
     listBatches: () => call<BatchSnapshot[]>("list_batches"),
     openBatchDirectory: (batchId) =>

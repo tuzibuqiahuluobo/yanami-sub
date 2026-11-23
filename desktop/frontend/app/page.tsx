@@ -943,6 +943,7 @@ function HomeContent() {
             onOpenResources={(ids) => focusResource(ids?.[0] ?? guide?.resourceIds[0] ?? "")}
             onBlocked={(error) => guideBlocked(toBridgeError(error), "batch")}
             onStarted={() => setGuide(null)}
+            onReuseItem={(request) => { setGuide(null); dispatch({ type: "reuseBatchAsr", request }); }}
           />}
           onNavigate={(route: Route) => {
             if (route !== "settings") setSettingsFocus(null);

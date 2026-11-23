@@ -556,6 +556,8 @@ class DesktopBridge:
             return _failure(_missing_resource_error(missing, "开始"))
         try:
             return _success(self.batches.start(request))
+        except ValueError as error:
+            return _failure(BridgeError(code="invalid_request", message=str(error)))
         except BatchAlreadyRunning:
             return _failure(
                 BridgeError(
@@ -577,11 +579,13 @@ class DesktopBridge:
         if self.batches is None:
             return _failure(BridgeError(code="batch_unavailable", message="当前构建不支持批处理。"))
         try:
+            from desktop.backend.batches.item_settings import new_item_values
+
             if not isinstance(sources, list) or not all(isinstance(value, str) for value in sources):
                 raise ValueError("输入必须为路径或 URL 列表 / Expected paths or URLs")
             saved = self.batches.request_for(batch_id)
             candidate = BatchRequest.model_validate({**saved.model_dump(), "items": [
-                {**saved.items[-1].model_dump(), "input": value} for value in sources]})
+                {**saved.items[-1].model_dump(), **new_item_values(value)} for value in sources]})
             missing = self._missing_batch_resources(candidate)
             if isinstance(missing, BridgeError):
                 return _failure(missing)
@@ -647,6 +651,17 @@ class DesktopBridge:
             return _failure(BridgeError(code="batch_not_resumable", message=str(error)))
         except Exception:
             return self._internal_error("resume_batch")
+
+    def prepare_batch_translation(self, batch_id: str, index: int) -> dict[str, Any]:
+        if self.batches is None:
+            return _failure(BridgeError(code="batch_unavailable", message="当前构建不支持批处理。"))
+        active = self.jobs.snapshot()
+        if active is not None and active.state == "running":
+            return _failure(BridgeError(code="task_already_running", message="请先结束正在运行的字幕任务。"))
+        try:
+            return _success(self.batches.translation_request(batch_id, index))
+        except (BatchNotFound, BatchAlreadyRunning, OSError, ValueError) as error:
+            return _failure(BridgeError(code="batch_item_not_reusable", message=str(error)))
 
     def get_batch_snapshot(self) -> dict[str, Any]:
         return self._guard(

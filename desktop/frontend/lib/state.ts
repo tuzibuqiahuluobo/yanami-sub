@@ -76,6 +76,7 @@ export type AppAction =
   | { type: "navigate"; route: Route }
   | { type: "fileSelected"; path: string }
   | { type: "reuseAsr"; snapshot: JobSnapshot }
+  | { type: "reuseBatchAsr"; request: TaskRequest }
   | {
       type: "requestChanged";
       changes: Partial<Omit<TaskRequest, "input">>;
@@ -448,6 +449,15 @@ export function reduceAppState(
           logs: [],
         },
       };
+    case "reuseBatchAsr": {
+      const { input, ...options } = action.request;
+      return {
+        ...state, route: "new-task",
+        task: { ...state.task, phase: "ready", taskId: null, selectedFile: input, request: options,
+          error: null, outputs: {}, logs: [], currentStage: null, stageProgress: null,
+          sourceRoute: null, reusedStages: [], skippedStages: [], statusMessage: "", startedAt: null },
+      };
+    }
     case "reuseAsr": {
       // Point the new task at the finished recognition run's directory: the
       // pipeline skips every stage whose artifact already exists there, so

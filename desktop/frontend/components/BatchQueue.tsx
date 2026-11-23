@@ -11,6 +11,7 @@ import {
   Link2,
   ListRestart,
   Play,
+  SlidersHorizontal,
   ScrollText,
   Square,
   Trash2,
@@ -20,6 +21,8 @@ import {
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { BridgeCallError, desktopApi } from "@/lib/bridge";
+import { batchRowForSubmit, sharedBatchSettings } from "@/lib/batchItemSettings";
+import { invalidOutputName } from "@/lib/formatters";
 import { nativeDropPaths } from "@/lib/fileDrop";
 import { readProcessingDevice, requestDeviceFields } from "@/lib/processingDevice";
 import { saveUi, uiValue } from "@/lib/preferences";
@@ -35,6 +38,7 @@ import type {
 
 import { useLanguage } from "./LanguageProvider";
 import { TaskSettings } from "./TaskSettings";
+import { LinkDownloadOptions } from "./LinkDownloadOptions";
 import { AgentCooperation } from "./AgentCooperation";
 import { useToast } from "./ToastProvider";
 
@@ -50,6 +54,7 @@ interface BatchQueueProps {
   onOpenSettings: (target: ApiProvider | "agents" | "routing" | "credentials") => void;
   onBlocked: (error: BridgeCallError) => void;
   onStarted: () => void;
+  onReuseItem: (request: TaskRequest) => void;
 }
 
 
@@ -77,10 +82,13 @@ export function BatchQueue({
   onOpenSettings,
   onBlocked,
   onStarted,
+  onReuseItem,
 }: BatchQueueProps) {
   const { t, language } = useLanguage();
   const { showSuccess } = useToast();
   const [items, setItems] = useState<BatchItemRequest[]>([]);
+  const invalidNames = items.some((item) => invalidOutputName(item.name));
+  const [editingSource, setEditingSource] = useState<string | null>(null);
   const [urlDraft, setUrlDraft] = useState("");
   const [snapshot, setSnapshot] = useState<BatchSnapshot | null>(null);
   const [history, setHistory] = useState<BatchSnapshot[]>([]);
@@ -133,12 +141,14 @@ export function BatchQueue({
   const appendSources = (incoming: string[]) => {
     const device = requestDeviceFields(readProcessingDevice());
     setItems((current) => {
-      const seen = new Set(current.map((item) => item.input.toLocaleLowerCase()));
+      const seen = new Set(current.map((item) => item.input.toLowerCase()));
       const inputs = incoming
         .map((item) => item.trim())
-        .filter((item) => item && !seen.has(item.toLocaleLowerCase()))
+        .filter(Boolean)
         .filter((item) => {
-          seen.add(item.toLocaleLowerCase());
+          const key = item.toLowerCase();
+          if (seen.has(key)) return false;
+          seen.add(key);
           return true;
         });
       const nextPriority = current.length
@@ -150,6 +160,10 @@ export function BatchQueue({
         input,
         output: null,
         name: "",
+        llm_video: null,
+        refined_srt: null,
+        link_format: null,
+        programme_reference: null,
         group: "",
         priority: nextPriority - index,
       }));
@@ -171,7 +185,7 @@ export function BatchQueue({
   const batchRequest = (rows: BatchItemRequest[]): BatchRequest => {
     const device = requestDeviceFields(readProcessingDevice());
     return {
-      items: rows.map((item) => ({
+      items: rows.map((item) => batchRowForSubmit({
         ...item,
         ...device,
         output: null,
@@ -180,6 +194,28 @@ export function BatchQueue({
       asr_queue_size: asrQueueSize,
       retry_failed: retryFailed,
     };
+  };
+
+  const changeItem = (input: string, patch: Partial<BatchItemRequest>) =>
+    setItems((rows) => rows.map((row) => row.input === input ? { ...row, ...patch } : row));
+
+  const selectItemFile = async (input: string, field: "llm_video" | "refined_srt") => {
+    try {
+      const result = await (field === "llm_video" ? desktopApi.selectInputFile() : desktopApi.selectSubtitleFile());
+      if (result.path) changeItem(input, { [field]: result.path });
+    } catch (caught) {
+      reportError(caught, language === "en" ? "Could not choose a file." : "无法选择文件。");
+    }
+  };
+
+  const reuseItem = async (batchId: string, index: number) => {
+    setBusy(true);
+    setError(null);
+    try {
+      onReuseItem(await desktopApi.prepareBatchTranslation(batchId, index));
+    } catch (caught) {
+      reportError(caught, t.batch.errors.resume);
+    } finally { setBusy(false); }
   };
 
   const refreshHistory = async () => {
@@ -279,11 +315,12 @@ export function BatchQueue({
       const result = await desktopApi.importBatchManifest();
       if (result.cancelled || !result.request) return;
       setItems(result.request.items);
+      setEditingSource(null);
       setWorkers(result.request.workers);
       setAsrQueueSize(result.request.asr_queue_size);
       setRetryFailed(result.request.retry_failed);
       const { input, group, priority, ...shared } = result.request.items[0];
-      onRequestChange(shared);
+      onRequestChange(sharedBatchSettings(shared));
       const notice =
         result.ignored_fields.length
           ? t.batch.manifestImportedIgnored
@@ -321,7 +358,7 @@ export function BatchQueue({
   };
 
   const start = async () => {
-    if (!items.length) return;
+    if (!items.length || invalidNames) return;
     setBusy(true);
     setError(null);
     try {
@@ -441,17 +478,49 @@ export function BatchQueue({
             {items.length ? (
               <ol className="batch-source-list">
                 {items.map((item, index) => (
-                  <li key={`${index}:${item.input}`}>
+                  <li key={item.input}>
                     <span className="batch-source-index">{index + 1}</span>
                     <span className="batch-source-name" title={item.input}>
                       <strong>{sourceLabel(item.input)}</strong>
                       <small>{item.input}</small>
                     </span>
                     <span className="batch-source-actions">
+                      <button type="button" className="batch-row-toggle" disabled={busy}
+                        aria-expanded={editingSource === item.input} aria-controls={`batch-item-settings-${index}`}
+                        onClick={() => setEditingSource(editingSource === item.input ? null : item.input)}>
+                        <SlidersHorizontal size={14} aria-hidden="true" />{language === "en" ? "Item settings" : "单项设置"}
+                      </button>
                       <button type="button" aria-label={t.batch.moveUp} disabled={index === 0} onClick={() => move(index, -1)}><ArrowUp size={14} /></button>
                       <button type="button" aria-label={t.batch.moveDown} disabled={index === items.length - 1} onClick={() => move(index, 1)}><ArrowDown size={14} /></button>
-                      <button type="button" aria-label={t.batch.remove} onClick={() => setItems((rows) => rows.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={14} /></button>
+                      <button type="button" aria-label={t.batch.remove} disabled={busy} onClick={() => {
+                        if (editingSource === item.input) setEditingSource(null);
+                        setItems((rows) => rows.filter((row) => row.input !== item.input));
+                      }}><Trash2 size={14} /></button>
                     </span>
+                    {editingSource === item.input ? <div className="batch-row-panel" id={`batch-item-settings-${index}`}>
+                      <small className="field-help">{language === "en" ? "Applies only to this item." : "下列选项只对这一条生效。"}</small>
+                      <label className="field">
+                        <span>{t.newTask.settings.outputName}</span>
+                        <input value={item.name} disabled={busy} aria-invalid={invalidOutputName(item.name)}
+                          placeholder={language === "en" ? "Leave blank to name automatically" : "留空则自动命名"}
+                          onChange={(event) => changeItem(item.input, { name: event.target.value })} />
+                        {invalidOutputName(item.name) ? <small className="field-error">{t.newTask.settings.outputNameError}</small> : null}
+                      </label>
+                      {/^https?:\/\//i.test(item.input) && item.download_video_source ? <LinkDownloadOptions
+                        url={item.input} choice={item.link_format} locked={busy}
+                        onSelect={(link_format) => changeItem(item.input, { link_format })} /> : null}
+                      {(item.stage === "translated-srt" || item.stage === "final-srt") ? (["llm_video", "refined_srt"] as const).map((field) => (
+                        <div className="batch-row-file" key={field}>
+                          <label className="field">
+                            <span>{field === "llm_video" ? t.newTask.settings.llmVideo : t.newTask.settings.refinedSrt}</span>
+                            <input value={item[field] ?? ""} disabled={busy} placeholder={t.newTask.settings.optionalPath}
+                              onChange={(event) => changeItem(item.input, { [field]: event.target.value || null })} />
+                          </label>
+                          <button className="button button-secondary button-compact" type="button" disabled={busy}
+                            onClick={() => void selectItemFile(item.input, field)}>{language === "en" ? "Choose file" : "选文件"}</button>
+                        </div>
+                      )) : null}
+                    </div> : null}
                   </li>
                 ))}
               </ol>
@@ -470,8 +539,11 @@ export function BatchQueue({
               batchMode
               onOpenSettings={onOpenSettings}
               onChange={(changes) => {
-                onRequestChange(changes);
-                setItems((current) => current.map((item) => ({ ...item, ...changes })));
+                const shared = sharedBatchSettings(changes);
+                onRequestChange(shared);
+                setItems((current) => current.map((item) => ({
+                  ...item, ...shared, ...(shared.download_video_source === false ? { link_format: null } : {}),
+                })));
               }}
             />
 
@@ -496,11 +568,14 @@ export function BatchQueue({
 
             <div className="task-actions">
               <div><strong>{t.batch.ready.replace("{count}", String(items.length))}</strong><span>{t.batch.priorityHint}</span></div>
-              <button type="button" className="button button-primary" disabled={!items.length || busy} onClick={() => void start()}>
+              <button type="button" className="button button-primary" disabled={!items.length || busy || invalidNames} onClick={() => void start()}>
                 <Play size={15} />
                 {busy ? t.batch.starting : t.batch.start}
               </button>
             </div>
+            {invalidNames ? <p className="field-error" role="status">{language === "en"
+              ? "An item has an invalid subtitle name. Open Item settings to fix it."
+              : "有项目的字幕名不合法，请打开「单项设置」修改。"}</p> : null}
           </section>
         </div>
       ) : snapshot ? (
@@ -543,6 +618,12 @@ export function BatchQueue({
                   <small title={item.skip_reason || item.input}>{item.error || item.skip_reason || (item.stage ? `${t.batch.stage}: ${item.stage}` : item.input)}</small>
                   {item.state === "done" && snapshot.request.items[item.index]?.diarize && snapshot.request.items[item.index]?.diarize !== "off" && !item.outputs.speakerTimeline ? <small>{language === "en" ? "Speaker labels were not produced; see the shared log. Ordinary subtitles remain available." : "说话人标签未生成，请查看共享日志；普通字幕仍可使用。"}</small> : null}
                   {item.state === "done" ? <><code className="result-path">{Object.values(item.outputs).join("\n")}</code><code className="result-path">{snapshot.log_path}</code><button type="button" className="button button-secondary button-compact" onClick={() => void desktopApi.openBatchLog(snapshot.batch_id)}>{language === "en" ? "Shared batch log" : "共享批次日志"}</button></> : null}
+                  {snapshot.state !== "running" && item.state === "done" && item.outputs.rawSrt &&
+                    !item.outputs.translatedSrt && !item.outputs.finalSrt ? <button type="button"
+                      className="button button-secondary button-compact" disabled={busy}
+                      onClick={() => void reuseItem(snapshot.batch_id, item.index)}>
+                      {language === "en" ? "Translate this item" : "仅补译这条"}
+                    </button> : null}
                 </div>
                 <span className={`resource-label is-${item.correction_skipped ? "advisory" : item.state === "done" ? "ready" : item.state === "failed" ? "failed" : "neutral"}`}>
                   {item.correction_skipped ? <><X size={12} />{t.batch.correctionSkipped}</> : t.batch.itemStates[item.state]}
