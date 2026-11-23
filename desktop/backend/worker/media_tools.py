@@ -92,7 +92,8 @@ def inspect_link(url: str, *, captions: bool = False):
 
 def download_selected_video(url: str, choice: LinkFormat, task_dir: Path) -> Path:
     from finesub.media.ffmpeg import resolve_ffmpeg, resolve_ffprobe, run_capture
-    from finesub.media.source import YTDLP_RETRY_OPTIONS, validate_video_audio_coverage
+    from finesub.media.source import YTDLP_RETRY_OPTIONS, record_video_info, validate_video_audio_coverage
+    from finesub.paths import resolve_reference_data_root
 
     url = validate_url(url)
     key = hashlib.sha256(json.dumps([url, choice.container, choice.format_id]).encode()).hexdigest()[:24]
@@ -103,6 +104,7 @@ def download_selected_video(url: str, choice: LinkFormat, task_dir: Path) -> Pat
     video = folder / f"source.{choice.container}"
     if video.is_symlink() or (video.exists() and not video.is_file()):
         raise ValueError("视频缓存路径无效 / Invalid video cache path")
+    title = None
     if not video.exists():
         # yt-dlp treats unquoted decimal filters as numbers; format IDs are strings.
         match = f'[format_id="{choice.format_id}"][ext={choice.container}][vcodec!=none]'
@@ -113,7 +115,8 @@ def download_selected_video(url: str, choice: LinkFormat, task_dir: Path) -> Pat
             from yt_dlp.utils import DownloadError
 
             try:
-                ydl.download([url])
+                info = ydl.extract_info(url, download=True)
+                title = info.get("title") if isinstance(info, dict) else None
             except DownloadError as error:
                 if "Requested format is not available" in str(error):
                     raise ValueError(_FORMAT_UNAVAILABLE) from error
@@ -125,6 +128,11 @@ def download_selected_video(url: str, choice: LinkFormat, task_dir: Path) -> Pat
     if not {"audio", "video"} <= tracks:
         raise ValueError("下载结果缺少视频或音轨，请改用其他格式 / The download is missing a video or audio stream")
     validate_video_audio_coverage(video)
+    if isinstance(title, str) and title.strip():
+        try:
+            record_video_info(url, title, resolve_reference_data_root())
+        except (OSError, ValueError):
+            pass  # Title metadata is optional; keep the usable download.
     return video
 
 

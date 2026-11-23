@@ -14,6 +14,39 @@ from desktop.backend.common.core_compat import unified_llm_contract
 from desktop.backend.worker import batch_main
 
 
+def test_batch_url_publishes_titled_subtitle_in_its_item_directory(monkeypatch, tmp_path):
+    from finesub import paths as core_paths
+    from finesub.media.source import record_video_info
+    from finesub.stages import default_pipeline_paths
+    from finesub_bootstrap.task_output import task_stem
+    from desktop.backend.worker import main as worker_main
+
+    monkeypatch.setattr(core_paths, "resolve_reference_data_root", lambda: tmp_path)
+    monkeypatch.setattr(worker_main, "_published_metadata_path", lambda: None)
+    root = tmp_path / "batch"
+    url = "https://example.test/watch?v=9"
+    record_video_info(url, "批处理视频", tmp_path)
+    output = root / "001" / f"{task_stem(source=url)}.srt"
+    request = BatchRequest.model_validate({"items": [{"input": url, "output": str(output)}]})
+    paths = default_pipeline_paths("downloaded.mp4", output)
+    output.parent.mkdir(parents=True)
+    paths.raw_srt.write_text("raw", encoding="utf-8")
+
+    def run_batch(items, *, publish, **_kwargs):
+        results = [ItemResult(label=item.label, status="done", payload=item.payload) for item in items]
+        publish(items, results)
+        return results
+
+    result, = batch_main.run_batch_request(
+        request, batch_id="naming", batch_root=root, emit=lambda _: None, claims=object(),
+        build_item=lambda options, **_: BatchItem(label="link", stages={},
+            payload={"audio": "downloaded.mp4", "output": options["output"]}),
+        run_batch=run_batch, default_pipeline_paths=default_pipeline_paths,
+    )
+    assert result.outputs == {"rawSrt": str(output.with_name("批处理视频-raw.srt"))}
+    assert paths.raw_srt.is_file()
+
+
 def test_manual_batch_adapts_media_for_every_item(monkeypatch, tmp_path):
     from finesub.config import clear_config_cache
     from finesub.llm.routing.model_routes import default_model_routes

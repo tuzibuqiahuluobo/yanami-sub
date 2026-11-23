@@ -168,7 +168,7 @@ class DesktopBridge:
         self.update_installs = update_installs
         self.file_selector = file_selector
         self.subtitle_file_selector: Callable[[], str | None] | None = None
-        self.subtitle_export_selector: Callable[[str], str | None] | None = None
+        self.subtitle_export_selector: Callable[[str, str], str | None] | None = None
         self.knowledge_file_selector: Callable[[], str | None] | None = None
         self.knowledge_export_selector: Callable[[], str | None] | None = None
         self.batch_file_selector = batch_file_selector
@@ -328,8 +328,11 @@ class DesktopBridge:
     def inspect_link_media(self, url: str, captions: bool = False) -> dict[str, Any]:
         return self._guard(lambda: self._media_tool({"action": "inspect", "url": url, "captions": captions}))
 
-    def save_link_subtitle(self, url: str, language: str, automatic: bool, extension: str) -> dict[str, Any]:
+    def save_link_subtitle(
+        self, url: str, language: str, automatic: bool, extension: str, title: str | None = None,
+    ) -> dict[str, Any]:
         def save():
+            from desktop.backend.common.link_names import link_subtitle_stem
             from desktop.backend.worker.media_tools import validate_url
 
             validate_url(url, youtube=True)
@@ -338,7 +341,7 @@ class DesktopBridge:
                 raise ValueError("无效的字幕选项 / Invalid subtitle choice")
             if self.subtitle_export_selector is None:
                 raise ValueError("无法打开保存窗口 / Save dialog is unavailable")
-            destination = self.subtitle_export_selector(extension)
+            destination = self.subtitle_export_selector(extension, link_subtitle_stem(title))
             if not destination:
                 return {"path": None}
             return self._media_tool({"action": "save", "url": url, "language": language,

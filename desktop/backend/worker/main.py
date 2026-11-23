@@ -307,7 +307,7 @@ def _publish_primary_output(
     *,
     task_id: str,
 ) -> dict[str, str]:
-    """Expose the requested result; publish only subtitles beside local media."""
+    """Expose the requested result without moving its pipeline artifact."""
 
     expert = _EXPERT_OUTPUT_BY_STAGE.get(request.stage)
     if expert is not None:
@@ -332,6 +332,27 @@ def _publish_primary_output(
         raise FileNotFoundError(
             f"FineSub completed without producing {request.stage}: {generated}"
         )
+
+    from finesub.media.source import is_url
+
+    if is_url(request.input):
+        from finesub.media.source import load_url_info
+        from finesub.paths import resolve_reference_data_root
+        from finesub_bootstrap.task_output import task_stem
+        from desktop.backend.common.link_names import link_subtitle_stem
+
+        if request.name or (
+            request.output and Path(request.output).name != f"{task_stem(source=request.input)}.srt"
+        ):
+            return {key: str(generated)}
+        try:
+            title = load_url_info(resolve_reference_data_root()).get(request.input, {}).get("title")
+        except (OSError, ValueError):
+            title = None  # An unreadable metadata cache must not lose a finished subtitle.
+        stem = link_subtitle_stem(title, timestamp=generated.stat().st_mtime)
+        desired = generated.with_name(f"{stem}{suffix}")
+        destination = _publish_deliverable(generated, desired, source=generated, task_id=task_id)
+        return {key: str(destination)}
 
     imported = Path(request.input).expanduser()
     if not imported.is_file():

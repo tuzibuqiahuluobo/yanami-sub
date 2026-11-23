@@ -752,7 +752,7 @@ export interface DesktopApi {
   previewProgrammeReference(reaction: string, reference: ProgrammeReference): Promise<ProgrammeReferencePreview>;
   programmeFrameRate(path: string): Promise<{ fps: number | null }>;
   inspectLinkMedia(url: string, captions?: boolean): Promise<LinkMedia>;
-  saveLinkSubtitle(url: string, track: LinkSubtitleTrack, extension: string): Promise<{ path: string | null }>;
+  saveLinkSubtitle(url: string, track: LinkSubtitleTrack, extension: string, title?: string): Promise<{ path: string | null }>;
   coreTool(action: "glossaries" | "fetch_glossary" | "quota" | "thaw_quota", item?: string): Promise<CoreToolResult>;
   openCodexLogin(): Promise<{ opened: boolean }>;
   programmeSubtitleRoles(taskId: string, assignment?: Record<string, string>): Promise<SubtitleRoleResult>;

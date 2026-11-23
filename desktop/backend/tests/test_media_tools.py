@@ -26,7 +26,8 @@ def test_discovery_does_not_list_audio_only_drm_or_unmergeable_video():
     assert [row["format_id"] for row in media_tools.video_formats({"formats": rows})] == ["398", "135"]
 
 
-def test_exact_download_keeps_container_and_reuses_only_its_cache(tmp_path, monkeypatch):
+def test_exact_download_keeps_container_title_and_format_scoped_cache(tmp_path, monkeypatch):
+    from finesub import paths
     from finesub.media import ffmpeg, source
 
     rows = [
@@ -39,14 +40,15 @@ def test_exact_download_keeps_container_and_reuses_only_its_cache(tmp_path, monk
     class Download:
         def __enter__(self): return self
         def __exit__(self, *_): return False
-        def download(self, urls):
-            assert urls == [url]
+        def extract_info(self, requested, *, download):
+            assert requested == url and download
             with YoutubeDL({"quiet": True, "cachedir": False, "format": options[-1]["format"]}) as real:
                 info = real.process_ie_result({"id": "clip", "title": "Clip", "formats": [
                     {**row, "url": f"https://example.test/{row['format_id']}.{row['ext']}"} for row in rows
                 ]}, download=False)
             picked.append(info["format_id"])
             Path(options[-1]["outtmpl"].replace("%(ext)s", "mp4")).write_bytes(b"video")
+            return info
     options = []
     monkeypatch.setattr(media_tools, "downloader", lambda **kwargs: (options.append(kwargs) or Download()))
     monkeypatch.setattr(ffmpeg, "resolve_ffmpeg", lambda: "ffmpeg")
@@ -54,12 +56,14 @@ def test_exact_download_keeps_container_and_reuses_only_its_cache(tmp_path, monk
     monkeypatch.setattr(ffmpeg, "run_capture", lambda _: SimpleNamespace(stdout=json.dumps(
         {"streams": [{"codec_type": "audio"}, {"codec_type": "video"}]})))
     monkeypatch.setattr(source, "validate_video_audio_coverage", lambda _: None)
+    monkeypatch.setattr(paths, "resolve_reference_data_root", lambda: tmp_path)
     url = "https://www.youtube.com/watch?v=abcdefg"
     first = media_tools.download_selected_video(url, LinkFormat(format_id="398", container="mp4"), tmp_path)
     assert media_tools.download_selected_video(url, LinkFormat(format_id="398", container="mp4"), tmp_path) == first
     second = media_tools.download_selected_video(url, LinkFormat(format_id="399", container="mp4"), tmp_path)
     third = media_tools.download_selected_video(url, LinkFormat(format_id="398-1", container="mp4"), tmp_path)
     assert len({first, second, third}) == 3 and picked == ["398+140", "399", "398-1+140"]
+    assert source.load_url_info(tmp_path)[url]["title"] == "Clip"
 
 
 @pytest.mark.parametrize(
@@ -73,12 +77,13 @@ def test_failed_selection_never_silently_falls_back(tmp_path, monkeypatch, messa
     from finesub.media import ffmpeg
 
     attempts = []
-    def download(urls):
-        attempts.extend(urls)
+    def extract_info(url, *, download):
+        assert download
+        attempts.append(url)
         raise DownloadError(message)
 
     monkeypatch.setattr(ffmpeg, "resolve_ffmpeg", lambda: "ffmpeg")
-    monkeypatch.setattr(media_tools, "downloader", lambda **_: nullcontext(SimpleNamespace(download=download)))
+    monkeypatch.setattr(media_tools, "downloader", lambda **_: nullcontext(SimpleNamespace(extract_info=extract_info)))
     url = "https://www.youtube.com/watch?v=abcdefg"
     with pytest.raises(error_type, match=expected):
         media_tools.download_selected_video(url, LinkFormat(format_id="399", container="mp4"), tmp_path)

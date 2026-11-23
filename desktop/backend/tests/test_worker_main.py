@@ -1076,20 +1076,61 @@ def test_a_second_stranger_pushes_the_serial_along(tmp_path: Path) -> None:
     assert (tmp_path / "a-raw.finesub.srt").read_text(encoding="utf-8") == "also theirs"
 
 
-def test_a_url_task_publishes_into_the_run_directory(tmp_path: Path) -> None:
-    # There is no source file next to which a subtitle could be published, so
-    # the generated path is the result. Path("https://...").is_file() is what
-    # decides this, and it must not be mistaken for a relative path.
+@pytest.mark.parametrize(
+    ("title", "expected"),
+    [("  日本語：字幕 / Part 1  ", "日本語：字幕 _ Part 1"), ("CON.txt", "2026-11-23_09-08-07"),
+     (".../<>", "2026-11-23_09-08-07"), (None, "2026-11-23_09-08-07")],
+)
+def test_url_subtitle_uses_title_or_local_time_without_moving_artifact(tmp_path, monkeypatch, title, expected):
+    from datetime import datetime
+    from os import utime
+
+    from finesub import paths as core_paths
+    from finesub.media.source import record_video_info
+    from desktop.backend.worker import main as worker_main
+
+    monkeypatch.setattr(core_paths, "resolve_reference_data_root", lambda: tmp_path)
+    monkeypatch.setattr(worker_main, "_published_metadata_path", lambda: None)
+    url = "https://example.test/watch?v=1"
+    if title is not None:
+        record_video_info(url, title, tmp_path)
     paths = _fake_paths(tmp_path / "run")
     paths.final_srt.parent.mkdir(parents=True)
     paths.raw_srt.write_text("raw", encoding="utf-8")
+    when = datetime(2026, 11, 23, 9, 8, 7).timestamp()
+    utime(paths.raw_srt, (when, when))
 
     outputs = run_request(
-        TaskRequest(input="https://example.test/watch?v=1"),
+        TaskRequest(input=url),
         task_id="task-url",
         pipeline=lambda source, **kwargs: paths,
         emit=lambda event: None,
     )
 
-    assert outputs == {"rawSrt": str(paths.raw_srt)}
-    assert paths.raw_srt.exists()
+    deliverable = paths.raw_srt.with_name(f"{expected}-raw.srt")
+    assert outputs == {"rawSrt": str(deliverable)}
+    assert paths.raw_srt.read_text(encoding="utf-8") == deliverable.read_text(encoding="utf-8") == "raw"
+
+
+def test_url_title_never_clobbers_a_custom_name_or_an_existing_file(tmp_path, monkeypatch):
+    from finesub import paths as core_paths
+    from finesub.media.source import record_video_info
+    from finesub_bootstrap.task_output import task_stem
+    from desktop.backend.worker import main as worker_main
+
+    monkeypatch.setattr(core_paths, "resolve_reference_data_root", lambda: tmp_path)
+    monkeypatch.setattr(worker_main, "_published_metadata_path", lambda: None)
+    monkeypatch.setattr(worker_main, "_claimed_outputs", lambda: {})
+    url = "https://example.test/watch?v=1"
+    record_video_info(url, "Video title", tmp_path)
+    paths = _fake_paths(tmp_path)
+    paths.raw_srt.write_text("raw", encoding="utf-8")
+    reserved = tmp_path / "Video title-raw.srt"
+    reserved.write_text("hand-edited", encoding="utf-8")
+    for request in (TaskRequest(input=url, name="My subtitles"),
+                    TaskRequest(input=url, output=str(tmp_path / "custom.srt"))):
+        assert worker_main._publish_primary_output(paths, request, task_id="custom") == {"rawSrt": str(paths.raw_srt)}
+    inferred = TaskRequest(input=url, output=str(tmp_path / f"{task_stem(source=url)}.srt"))
+    outputs = worker_main._publish_primary_output(paths, inferred, task_id="auto")
+    assert outputs == {"rawSrt": str(tmp_path / "Video title-raw.finesub.srt")}
+    assert reserved.read_text(encoding="utf-8") == "hand-edited"
