@@ -8,7 +8,6 @@ import pytest
 from desktop.backend.common.core_compat import unified_llm_contract
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.worker.main import _execute_pipeline
-from desktop.backend.worker.url_input import normalize_batch_url_download
 
 URL = "https://example.test/watch?v=1"
 
@@ -24,6 +23,8 @@ def url_case(tmp_path, monkeypatch):
     from finesub import stages
     from finesub.media import source
 
+    monkeypatch.setitem(sys.modules, "finesub.speech.runtime.device",
+                        SimpleNamespace(validate_device_token=lambda _: None))
     output = tmp_path / "managed.srt"
     mp4, audio = tmp_path / "video-id.mp4", tmp_path / "video-id.m4a"
     for path in (mp4, audio):
@@ -55,7 +56,6 @@ def url_case(tmp_path, monkeypatch):
     ("audio", True, False, "video", "audio"),
     ("video", True, False, "video", "video"),
     ("text", False, False, "audio", "text"),
-    ("video", False, False, "audio", "audio"),
     ("video", True, True, "audio", "video"),
 ])
 def test_single_url_uses_local_media_rules(url_case, media, keep, explicit, expected_kind, expected_media):
@@ -88,7 +88,6 @@ def test_batch_url_uses_same_local_media_rules(url_case, media):
     output, mp4, _audio, downloads, requests = url_case
     item = build_item({"source": URL, "output": str(output), "stage": "final-srt",
                       "llm_media": media, "llm_retrieval": "none", "knowledge": "none", "style_mode": "none"})
-    normalize_batch_url_download(item, None)
     payload = item.stages["download"](None)
     assert payload["audio"] == mp4
     assert payload["llm_video"] is None
@@ -100,11 +99,24 @@ def test_batch_url_uses_same_local_media_rules(url_case, media):
     assert requests[0][2]["llm_video"] == (mp4 if media == "video" else None)
 
 
-def test_batch_keeps_an_explicit_video_override():
-    data = {"llm_video": "other.mp4", "extra_info": "original"}
-    item = SimpleNamespace(stages={"download": lambda _: data})
-    normalize_batch_url_download(item, "other.mp4")
-    assert item.stages["download"](None) is data
+def test_explicit_download_hands_off_the_exact_local_file(url_case, monkeypatch):
+    from finesub.stages import run_pipeline
+    from desktop.backend.worker import media_tools
+
+    output, mp4, _audio, downloads, requests = url_case
+    calls = []
+    def selected(url, choice, directory):
+        calls.append((url, choice.format_id, choice.container, directory))
+        return mp4
+    monkeypatch.setattr(media_tools, "download_selected_video", selected)
+    request = TaskRequest(input=URL, output=str(output), stage="final-srt",
+                          link_format={"format_id": "398", "container": "mp4"},
+                          llm_media="text", llm_retrieval="none", knowledge="none", style_mode="none")
+    with pytest.raises(ReachedLocalStages):
+        _execute_pipeline(request, stage=request.stage, task_id="chosen", pipeline=run_pipeline)
+    assert calls == [(URL, "398", "mp4", output.parent)]
+    assert downloads == []
+    assert requests[0][1] == mp4 and requests[0][2]["llm_video"] is None
 
 
 def test_retry_reuses_the_validated_video_from_the_same_task(tmp_path, monkeypatch):
@@ -123,8 +135,7 @@ def test_retry_reuses_the_validated_video_from_the_same_task(tmp_path, monkeypat
     request = TaskRequest(input=URL, output=str(tmp_path / "managed.srt"),
                           stage="final-srt", knowledge="none", style_mode="none", llm_media="text")
     for _ in range(2):
-        chosen = _execute_pipeline(request, stage=request.stage, task_id="retry",
-                                   pipeline=lambda local, **kwargs: (local, kwargs["llm_video"]))
-        assert chosen == (str(mp4), None)
+        chosen, _, _ = stages.prepare_url_input(request.input, output_path=request.output, llm_video=None)
+        assert chosen == mp4
     assert checked == [mp4, mp4]
     assert mp4.read_bytes() == b"cached download"

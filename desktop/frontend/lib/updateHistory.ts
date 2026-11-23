@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1.post9",
+    title: { zh: "0.3.1 RC1.9 · 下载档位与字幕工具", en: "0.3.1 RC1.9 · Download options and subtitle tools" },
+    notes: {
+      zh: ["链接任务按实际可用的格式、画质和帧率选档。", "工具页可单独另存 YouTube 字幕为 SRT、VTT 或 TXT。", "升级到 FineSub 0.7.1，接入 Scribe、Vercel、游戏术语表、额度记录与专用 Codex 登录。"],
+      en: ["Select from actual video containers, resolutions and frame rates.", "Save YouTube captions as SRT, VTT or TXT.", "FineSub 0.7.1 adds Scribe, Vercel credentials, game glossaries, quota records and dedicated Codex sign-in."],
+    },
+  },
+  {
     version: "0.3.1-rc.1.post8",
     title: { zh: "0.3.1 RC1.8 · 链接字幕流程", en: "0.3.1 RC1.8 · Linked media subtitles" },
     notes: {

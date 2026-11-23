@@ -196,7 +196,7 @@ const defaultRequest: Omit<TaskRequest, "input"> = {
   asr_decode_batch: "auto",
   asr_context: "terms",
   asr: "local",
-  asr_aligner: false,
+  asr_aligner: "auto",
   asr_repair: "on",
   moss_pro_paid: false,
   word: false,
@@ -442,7 +442,7 @@ export function reduceAppState(
           // A pinned output belongs to the previous file: a cancelled task
           // leaves its directory here (so restarting it is cheap), and a new
           // file must not write into it.
-          request: { ...state.task.request, output: null, programme_reference: null },
+          request: { ...state.task.request, output: null, programme_reference: null, link_format: null },
           error: null,
           outputs: {},
           logs: [],
@@ -469,6 +469,8 @@ export function reduceAppState(
             stage: "final-srt",
             output: previous.output,
             programme_reference: null,
+            link_format: previous.link_format ?? null,
+            download_video_source: previous.download_video_source,
             extra_info:
               state.task.request.extra_info || previous.extra_info || "",
           },

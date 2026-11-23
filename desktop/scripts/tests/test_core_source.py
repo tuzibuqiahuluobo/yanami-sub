@@ -52,8 +52,8 @@ def source(tmp_path):
 
 def test_every_build_caller_uses_the_same_exact_core_descriptor():
     pin = json.loads((ROOT / "desktop/resources/core-source.json").read_text("utf-8"))
-    assert pin == {"repository": "caca2331/finesub", "tag": "v0.7.0", "version": "0.7.0",
-                   "commit": "7123055da0cd6e037d8e37feb53b82f9e428c5cb"}
+    assert pin == {"repository": "caca2331/finesub", "tag": "v0.7.1", "version": "0.7.1",
+                   "commit": "e977f5220415fda4e1b8385ede66bbd1141c3b16"}
     project = tomllib.loads((ROOT / "pyproject.toml").read_text("utf-8"))
     assert f'finesub=={pin["version"]}' in project["project"]["dependencies"]
     for workflow in ("ci.yml", "build-windows.yml"):

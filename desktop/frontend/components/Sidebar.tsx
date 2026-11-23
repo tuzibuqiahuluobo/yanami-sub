@@ -10,6 +10,7 @@ import {
   Settings2,
   Download,
   MessageSquare,
+  Wrench,
 } from "lucide-react";
 
 import { isInstallActive } from "@/lib/resources";
@@ -59,6 +60,7 @@ export function Sidebar({
     { route: "knowledge", label: t.sidebar.knowledge, icon: BookOpenText },
     { route: "resources", label: t.sidebar.resources, icon: Boxes },
     { route: "settings", label: t.sidebar.settings, icon: Settings2 },
+    { route: "tools", label: language === "en" ? "Tools" : "工具", icon: Wrench },
     { route: "feedback", label: language === "en" ? "Feedback" : "反馈", icon: MessageSquare },
   ];
   const activeIndex = Math.max(

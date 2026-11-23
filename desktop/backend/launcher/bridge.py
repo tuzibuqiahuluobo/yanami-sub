@@ -168,6 +168,7 @@ class DesktopBridge:
         self.update_installs = update_installs
         self.file_selector = file_selector
         self.subtitle_file_selector: Callable[[], str | None] | None = None
+        self.subtitle_export_selector: Callable[[str], str | None] | None = None
         self.knowledge_file_selector: Callable[[], str | None] | None = None
         self.knowledge_export_selector: Callable[[], str | None] | None = None
         self.batch_file_selector = batch_file_selector
@@ -323,6 +324,46 @@ class DesktopBridge:
 
     def programme_frame_rate(self, path: str) -> dict[str, Any]:
         return self._guard(lambda: self._programme_worker({"action": "frame_rate", "path": path}))
+
+    def inspect_link_media(self, url: str, captions: bool = False) -> dict[str, Any]:
+        return self._guard(lambda: self._media_tool({"action": "inspect", "url": url, "captions": captions}))
+
+    def save_link_subtitle(self, url: str, language: str, automatic: bool, extension: str) -> dict[str, Any]:
+        def save():
+            from desktop.backend.worker.media_tools import validate_url
+
+            validate_url(url, youtube=True)
+            if (extension not in {"srt", "vtt", "txt"} or not isinstance(language, str)
+                    or not 0 < len(language) <= 80 or not isinstance(automatic, bool)):
+                raise ValueError("无效的字幕选项 / Invalid subtitle choice")
+            if self.subtitle_export_selector is None:
+                raise ValueError("无法打开保存窗口 / Save dialog is unavailable")
+            destination = self.subtitle_export_selector(extension)
+            if not destination:
+                return {"path": None}
+            return self._media_tool({"action": "save", "url": url, "language": language,
+                                     "automatic": automatic, "extension": extension, "destination": destination})
+
+        return self._guard(save)
+
+    def _media_tool(self, payload: dict) -> dict:
+        from desktop.backend.jobs.cooperation import invoke_worker
+
+        try:
+            return invoke_worker(self.jobs.worker_context, "desktop.backend.worker.media_tools", payload, timeout=75)
+        except subprocess.TimeoutExpired as error:
+            raise ValueError("读取视频或字幕超时，请稍后重试 / Media request timed out") from error
+
+    def core_tool(self, action: str, item: str = "") -> dict[str, Any]:
+        def run():
+            from desktop.backend.jobs.cooperation import invoke_worker
+
+            if action not in {"glossaries", "fetch_glossary", "quota", "thaw_quota"} or not isinstance(item, str) or len(item) > 256:
+                raise ValueError("无效的核心工具请求 / Invalid core tool request")
+            return invoke_worker(self.jobs.worker_context, "desktop.backend.worker.core_tools",
+                                 {"action": action, "game": item, "row": item}, timeout=120)
+
+        return self._guard(run)
 
     def _programme_worker(self, payload: dict[str, Any]) -> dict[str, Any]:
         from desktop.backend.jobs.cooperation import invoke_worker
@@ -1342,6 +1383,21 @@ class DesktopBridge:
                 creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0,
             )
             return {"path": command[-1]}
+
+        return self._guard(open_cli)
+
+    def open_codex_login(self) -> dict[str, Any]:
+        def open_cli() -> dict[str, bool]:
+            context = self.jobs.worker_context
+            subprocess.Popen(
+                [context.python_executable, "-X", "utf8", "-c",
+                 "from desktop.backend.settings.local_agents import install_local_agent_command_overrides; "
+                 "from finesub.llm.agent.codex_login import main; "
+                 "install_local_agent_command_overrides(); raise SystemExit(main())"],
+                cwd=context.working_directory, env={**os.environ, **context.environment}, close_fds=True,
+                creationflags=subprocess.CREATE_NEW_CONSOLE if os.name == "nt" else 0,
+            )
+            return {"opened": True}
 
         return self._guard(open_cli)
 

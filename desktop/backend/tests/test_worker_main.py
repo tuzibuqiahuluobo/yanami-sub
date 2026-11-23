@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from types import SimpleNamespace
 import json
+import sys
 
 import pytest
 
@@ -16,7 +17,6 @@ from finesub_bootstrap.locks import (
     try_lock,
 )
 
-from desktop.backend.common.core_compat import unified_llm_contract
 from desktop.backend.common.models import TaskRequest
 from desktop.backend.worker.main import (
     _agent_error_message,
@@ -632,7 +632,7 @@ def test_an_expert_stage_exposes_its_private_artifact(
     assert not (tmp_path / generated.name).exists()
 
 
-def test_the_cpu_tier_with_an_explicit_cuda_is_refused(tmp_path: Path) -> None:
+def test_the_cpu_tier_with_an_explicit_cuda_is_refused(tmp_path: Path, monkeypatch) -> None:
     """The desktop answers this input the same way the CLI does.
 
     `--gpu-tier cpu` says "this run does not use the GPU" and `device: "cuda"`
@@ -642,6 +642,8 @@ def test_the_cpu_tier_with_an_explicit_cuda_is_refused(tmp_path: Path) -> None:
     could not tell a choice from a default and would reject a bare `cpu` tier.
     """
 
+    # The core's hardware module imports torch, which a desktop build test does not need.
+    monkeypatch.setitem(sys.modules, "finesub.speech.runtime.device", SimpleNamespace(is_gpu_device=lambda device: device in {"cuda", "xpu"}))
     source_file = tmp_path / "a.wav"
     source_file.write_bytes(b"audio")
     calls: list[str] = []
@@ -1074,18 +1076,13 @@ def test_a_second_stranger_pushes_the_serial_along(tmp_path: Path) -> None:
     assert (tmp_path / "a-raw.finesub.srt").read_text(encoding="utf-8") == "also theirs"
 
 
-def test_a_url_task_publishes_into_the_run_directory(tmp_path: Path, monkeypatch) -> None:
+def test_a_url_task_publishes_into_the_run_directory(tmp_path: Path) -> None:
     # There is no source file next to which a subtitle could be published, so
     # the generated path is the result. Path("https://...").is_file() is what
     # decides this, and it must not be mistaken for a relative path.
     paths = _fake_paths(tmp_path / "run")
     paths.final_srt.parent.mkdir(parents=True)
     paths.raw_srt.write_text("raw", encoding="utf-8")
-    if unified_llm_contract():
-        from finesub import stages
-        monkeypatch.setattr(stages, "prepare_url_input", lambda *_a, **_kw: (
-            paths.final_srt.with_suffix(".mp4"), paths, None, "",
-        ))
 
     outputs = run_request(
         TaskRequest(input="https://example.test/watch?v=1"),

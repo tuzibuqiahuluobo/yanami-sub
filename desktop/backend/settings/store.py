@@ -63,6 +63,8 @@ _PROVIDER_TIER_ENV_NAMES = {
 }
 _ASR_ENV_NAMES = {
     "MOSS Pro": "MOSS_PRO",
+    "ElevenLabs Scribe": "ELEVENLABS",
+    "MAI2 Vercel AI Gateway": "FINESUB_KEY_VERCEL_STT",
     "MAI2 OpenRouter": "FINESUB_KEY_OPENROUTER_STT",
     "MAI2 Azure key": "FINESUB_KEY_AZURE_SPEECH",
     "MAI2 Azure endpoint": "FINESUB_AZURE_SPEECH_ENDPOINT",
@@ -113,11 +115,11 @@ class SettingsStore:
     def validate_request(self, request) -> BridgeError | None:
         """Validate launch-time capabilities before the worker starts."""
         keys = self._read_keys()
-        required = {"moss-pro": ["MOSS_PRO"], "gemini-35t": ["GEMINI_FREE"]}
+        required = {"moss-pro": ["MOSS_PRO"], "gemini-35t": ["GEMINI_FREE"], "scribe": ["ELEVENLABS"]}
         if request.asr in required and not all(keys.get(name) for name in required[request.asr]):
             return BridgeError(code="asr_credentials_required", message="所选云端转写缺少凭据，请在设置中填写。 / Configure credentials for the selected cloud transcription.", action="open_settings")
-        if request.asr == "mai2" and not (keys.get("FINESUB_KEY_OPENROUTER_STT") or (keys.get("FINESUB_KEY_AZURE_SPEECH") and keys.get("FINESUB_AZURE_SPEECH_ENDPOINT"))):
-            return BridgeError(code="asr_credentials_required", message="MAI2 需要 OpenRouter key 或 Azure 地址与 key。 / Configure an OpenRouter key or Azure endpoint and key.", action="open_settings")
+        if request.asr == "mai2" and not (keys.get("FINESUB_KEY_VERCEL_STT") or keys.get("FINESUB_KEY_OPENROUTER_STT") or (keys.get("FINESUB_KEY_AZURE_SPEECH") and keys.get("FINESUB_AZURE_SPEECH_ENDPOINT"))):
+            return BridgeError(code="asr_credentials_required", message="MAI2 需要 Vercel、OpenRouter 或 Azure 凭据。 / Configure Vercel, OpenRouter, or Azure credentials.", action="open_settings")
 
         if request.stage in {"translated-srt", "final-srt"}:
             try:

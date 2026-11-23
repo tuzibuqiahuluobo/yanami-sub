@@ -500,7 +500,7 @@ def _execute_pipeline(
     from desktop.backend.worker.url_input import run_after_url_download
 
     return run_with_reference(
-        partial(run_after_url_download, pipeline), request,
+        partial(run_after_url_download, pipeline, link_format=request.link_format), request,
         request.input,
         output_path=_resolve_output_path(request),
         stage=stage,

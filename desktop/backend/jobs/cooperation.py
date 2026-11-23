@@ -12,13 +12,13 @@ def invoke(context, payload: dict, *, runner=subprocess.run) -> dict:
     return invoke_worker(context, "desktop.backend.worker.agent_cooperation", payload, runner=runner)
 
 
-def invoke_worker(context, module: str, payload: dict, *, runner=subprocess.run) -> dict:
+def invoke_worker(context, module: str, payload: dict, *, runner=subprocess.run, timeout=30) -> dict:
     environment = {**os.environ, **context.environment}
     with runtime_activity(environment.get(TASK_ACTIVITY_ROOT_VARIABLE, "")):
         result = runner([context.python_executable, "-X", "utf8", "-m", module],
             input=json.dumps(payload, ensure_ascii=False) + "\n", capture_output=True,
             text=True, encoding="utf-8", errors="replace", env=environment,
-            cwd=context.working_directory, timeout=30, check=False,
+            cwd=context.working_directory, timeout=timeout, check=False,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0)
     try:
         envelope = json.loads(result.stdout.strip().splitlines()[-1])

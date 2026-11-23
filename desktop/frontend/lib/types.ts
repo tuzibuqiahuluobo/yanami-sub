@@ -4,6 +4,7 @@ export type Route =
   | "history"
   | "knowledge"
   | "resources"
+  | "tools"
   | "feedback"
   | "settings";
 
@@ -211,6 +212,19 @@ export interface ProgrammeReference {
   spans: { clip_ms: number; reaction_ms: number; length_ms: number }[];
 }
 
+export interface LinkFormat {
+  format_id: string;
+  container: "mp4" | "webm" | "mkv";
+}
+
+export interface LinkVideoFormat extends LinkFormat { height: number; fps: number | null }
+export interface LinkSubtitleTrack { language: string; label: string; automatic: boolean }
+export interface LinkMedia { title: string; formats: LinkVideoFormat[]; tracks: LinkSubtitleTrack[] }
+export interface CoreToolResult {
+  games?: { name: string; installed: boolean }[];
+  rows?: { id: string; spent: boolean; until?: string; seconds?: number; calls?: number }[];
+}
+
 export interface ProgrammeReferencePreview {
   duration_ms: number;
   count: number;
@@ -256,8 +270,8 @@ export interface TaskRequest {
   lang_redecode: "auto" | "on" | "off";
   asr_decode_batch: number | "auto";
   asr_context: "off" | "terms" | "full";
-  asr?: "local" | "mai2" | "moss-pro" | "gemini-35t" | "moss-local";
-  asr_aligner?: boolean;
+  asr?: "local" | "mai2" | "moss-pro" | "gemini-35t" | "moss-local" | "scribe";
+  asr_aligner?: "auto" | "on" | "off" | boolean;
   asr_repair?: "on" | "off" | "quota";
   squeeze_repair?: "auto" | "on" | "off";
   gap_fill?: "auto" | "on" | "off";
@@ -294,6 +308,7 @@ export interface TaskRequest {
   style?: string | null;
   style_mode?: "none" | "read" | "update" | null;
   download_video_source: boolean;
+  link_format?: LinkFormat | null;
   /** collect is accepted only for old saved requests. New choices use read. */
   knowledge: "none" | "read" | "collect" | "update";
   refined_srt?: string | null;
@@ -736,6 +751,10 @@ export interface DesktopApi {
   selectSubtitleFile(): Promise<{ path: string | null }>;
   previewProgrammeReference(reaction: string, reference: ProgrammeReference): Promise<ProgrammeReferencePreview>;
   programmeFrameRate(path: string): Promise<{ fps: number | null }>;
+  inspectLinkMedia(url: string, captions?: boolean): Promise<LinkMedia>;
+  saveLinkSubtitle(url: string, track: LinkSubtitleTrack, extension: string): Promise<{ path: string | null }>;
+  coreTool(action: "glossaries" | "fetch_glossary" | "quota" | "thaw_quota", item?: string): Promise<CoreToolResult>;
+  openCodexLogin(): Promise<{ opened: boolean }>;
   programmeSubtitleRoles(taskId: string, assignment?: Record<string, string>): Promise<SubtitleRoleResult>;
   runBilingualKnowledgeUpdate(request: BilingualKnowledgeRequest): Promise<RefinedKnowledgeUpdateReport>;
   applyKnowledgeProposal(draftId: string): Promise<RefinedKnowledgeUpdateReport>;

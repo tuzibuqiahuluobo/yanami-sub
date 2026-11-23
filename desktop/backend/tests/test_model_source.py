@@ -18,7 +18,7 @@ from desktop.backend.worker.model_source import source_route
 
 CODEBUDDY_TIER = "LOCAL_CODEBUDDY" if unified_llm_contract() else "LOCAL_WORKBUDDY"
 CODEBUDDY_GROUP = "codebuddy-capable" if unified_llm_contract() else "workbuddy-capable"
-CODEBUDDY_TARGET = "local-codebuddy-glm-5_3-flash" if unified_llm_contract() else "local-workbuddy-deepseek-v4-flash"
+CODEBUDDY_TARGET = "local-codebuddy-hy4flash-free" if unified_llm_contract() else "local-workbuddy-deepseek-v4-flash"
 
 
 def test_workbuddy_efficiency_shortcut_is_a_valid_text_only_profile():

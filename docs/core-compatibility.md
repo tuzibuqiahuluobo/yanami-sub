@@ -1,7 +1,7 @@
 # FineSub core compatibility
 
 Yanami Sub 0.3.0 and 0.3.1 RC1.0 target the exact upstream
-[FineSub `v0.7.0`](https://github.com/caca2331/finesub/tree/7123055da0cd6e037d8e37feb53b82f9e428c5cb)
+[FineSub `v0.7.1`](https://github.com/caca2331/finesub/tree/e977f5220415fda4e1b8385ede66bbd1141c3b16)
 source snapshot in `desktop/resources/core-source.json`.
 The desktop repository owns presentation, Windows integration,
 resource installation, and update delivery; FineSub core remains the only owner

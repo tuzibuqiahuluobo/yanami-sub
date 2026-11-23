@@ -6,6 +6,7 @@ import { AppShell } from "@/components/AppShell";
 import { BatchQueue } from "@/components/BatchQueue";
 import { BatchCompletionObserver } from "@/components/BatchCompletionObserver";
 import { Feedback } from "@/components/Feedback";
+import { SubtitleTools } from "@/components/SubtitleTools";
 import { playNotification } from "@/lib/notificationSound";
 import { preferredTaskOutput } from "@/lib/subtitleOutputs";
 import { BootstrapScreen } from "@/components/BootstrapScreen";
@@ -783,6 +784,8 @@ function HomeContent() {
         }}
       />
     );
+  } else if (state.route === "tools") {
+    content = <SubtitleTools onOpenResources={() => dispatch({ type: "navigate", route: "resources" })} />;
   } else if (state.route === "feedback") {
     content = <Feedback />;
   } else if (state.route === "settings") {

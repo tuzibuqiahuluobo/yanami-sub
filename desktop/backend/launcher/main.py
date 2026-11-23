@@ -62,6 +62,9 @@ PUBLIC_BRIDGE_METHODS = (
     "select_subtitle_file",
     "preview_programme_reference",
     "programme_frame_rate",
+    "inspect_link_media",
+    "save_link_subtitle",
+    "core_tool",
     "programme_subtitle_roles",
     "select_batch_files",
     "import_batch_manifest",
@@ -115,6 +118,7 @@ PUBLIC_BRIDGE_METHODS = (
     "probe_local_agents",
     "open_workbuddy_login",
     "open_codebuddy_login",
+    "open_codex_login",
     "get_dsh_path",
     "set_dsh_path",
     "get_agent_paths",
@@ -1049,6 +1053,14 @@ def create_application(
         return str(result[0]) if result else None
 
     bridge.subtitle_file_selector = select_subtitle_file
+
+    def select_subtitle_export(extension: str) -> str | None:
+        result = window.create_file_dialog(webview.FileDialog.SAVE,
+            save_filename=f"youtube-subtitles.{extension}",
+            file_types=(f"{extension.upper()} (*.{extension})",))
+        return str(result[0] if isinstance(result, (list, tuple)) else result) if result else None
+
+    bridge.subtitle_export_selector = select_subtitle_export
 
     def select_knowledge_document() -> str | None:
         result = window.create_file_dialog(webview.FileDialog.OPEN,

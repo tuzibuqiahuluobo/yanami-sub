@@ -73,7 +73,10 @@ def speech_call_options(request: Any) -> dict[str, Any]:
     keys = ("diarize", "diarize_backend", "diarize_max_speakers", "speaker_tracks",
             "asr", "asr_aligner", "asr_repair", "squeeze_repair", "gap_fill", "row_fill")
     if unified_llm_contract():
-        return {key: getattr(request, key) for key in keys}
+        options = {key: getattr(request, key) for key in keys}
+        aligner = options["asr_aligner"]
+        options["asr_aligner"] = ("on" if aligner else "off") if isinstance(aligner, bool) else aligner
+        return options
     if request.diarize != "off" or request.speaker_tracks != "off":
         raise ValueError("说话人功能需要 FineSub 0.6.0 / Diarization requires FineSub 0.6.0")
     return {}

@@ -69,7 +69,13 @@ def capture_materials(paths, refined_srt):
         annotated_csv=paths["annotated_csv"], final_srt=paths["final_srt"],
         research_context=paths["research_context"], artifact_dirs=[paths["artifact_dir"]],
         refined_srt=refined_srt, count_tokens=lambda _text: 0)
-    windows = {window.chunk_id: asdict(window) for chunk in materials.chunks for window in chunk.windows}
+    windows = {}
+    for chunk in materials.chunks:
+        for window in chunk.windows:
+            row = asdict(window)
+            if hasattr(window, "raw_text"):
+                row.update(raw_text=window.raw_text, product_text=window.product_text)
+            windows[window.chunk_id] = row
     semantic = {"mode": materials.mode, "windows": windows,
                 "context": materials.general_context, "feedback": asdict(materials.feedback)}
     digest = hashlib.sha256(json.dumps(semantic, ensure_ascii=False, sort_keys=True, default=str).encode("utf-8")).hexdigest()
@@ -115,7 +121,8 @@ def book_refined_evidence(repo, saved):
     try:
         from finesub.llm.knowledge.node.signals import refined_alignment_evidence
         confirmed, refuted = refined_alignment_evidence(repo.store,
-            ((row["chunk_id"], row["raw_csv"], row["final_csv"], row["refined_csv"]) for row in rows),
+            ((row["chunk_id"], row.get("raw_text", row.get("raw_csv", "")),
+              row.get("product_text", row.get("final_csv", "")), row["refined_csv"]) for row in rows),
             task_id=saved["evidence_task_id"])
         return {"confirmed": confirmed, "refuted": refuted}
     except Exception as error:  # Evidence is fail-soft, like the core update path.

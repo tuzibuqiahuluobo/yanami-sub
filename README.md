@@ -2,9 +2,9 @@
 
 基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台，提供单任务、批处理、本地 Agent / API 路由、知识库、资源管理和应用内更新。
 
-当前版本系列：**0.3.0.post5 正式版 / 0.3.1 RC1.8 预览版（0.3.1-rc.1.post8）**，固定使用 [FineSub v0.7.0](https://github.com/caca2331/finesub/releases/tag/v0.7.0)。桌面端与字幕核心独立发版；本仓库不复制或分叉核心实现。
+当前版本系列：**0.3.0.post5 正式版 / 0.3.1 RC1.9 预览版（0.3.1-rc.1.post9）**。预览版固定使用 [FineSub v0.7.1](https://github.com/caca2331/finesub/releases/tag/v0.7.1)。
 
-RC1.8 的链接任务在下载完成后走本地文件的字幕流程，保留视频源不会改变所选模型媒体设置。[预览版说明](docs/release-notes-v0.3.1-rc.1.post8.md) · [正式版说明](docs/release-notes-v0.3.0.post5.md)
+RC1.9 新增链接下载档位和 YouTube 字幕下载，合入上游对链接、Qwen 与 BOM 字幕的修复。[预览版说明](docs/release-notes-v0.3.1-rc.1.post9.md) · [正式版说明](docs/release-notes-v0.3.0.post5.md)
 
 ## 安装与开始
 
@@ -16,6 +16,8 @@ RC1.8 的链接任务在下载完成后走本地文件的字幕流程，保留�
 
 URL 下载还需要 yt-dlp。首次准备运行环境、模型、URL 下载和在线模型需要可用网络。大文件目录可在应用中迁移；占用随引擎和模型增加，不建议只预留几 GB。
 
+预览版选定网络链接后，会检查可下载的视频档位。只有存在真实选择时才显示格式、画质或帧率；不调整就使用默认下载档位。单独下载 YouTube 已有字幕请在「工具 → YouTube 字幕下载」选择轨道与 SRT、VTT 或 TXT，不需要下载视频或调用模型。
+
 ## 识别引擎怎么选
 
 | 引擎 | 运行位置与用途 | 注意事项 |
@@ -24,11 +26,12 @@ URL 下载还需要 yt-dlp。首次准备运行环境、模型、URL 下载和�
 | 本地 MOSS | 本地一体转写与说话人标注 | NVIDIA RTX 30 系列或更新，至少 8 GB 显存；首用额外下载约 1.7 GB 模型并编译内核 |
 | Gemini 3.5 Transcribe | 云端一体转写 | 使用 Gemini 免费 key，消耗服务方额度 |
 | MOSS Pro | 云端一体转写 | 配置 MOSS_PRO；超免费额度使用余额须在本次任务中明确开启，默认关闭 |
-| MAI-Transcribe-2 | 云端一体转写 | OpenRouter 或 Azure Speech 凭据，按服务商规则付费 |
+| MAI-Transcribe-2 | 云端一体转写 | 支持 Vercel AI Gateway、OpenRouter 或 Azure，额度随账号 |
+| ElevenLabs Scribe | 云端一体转写 | 在设置中填写 ElevenLabs 凭据，额度随账号 |
 
 **选择云端引擎并开始任务，会将音频上传给对应服务商。** 额度、价格和模型可用性以账号为准，不保证永久免费。云端原始回答缓存用于续跑，请勿随意删除。切换引擎不会覆盖已有识别产物；要重新识别请新建任务。
 
-中文素材在核心 0.7.0 中通常只纠错和基础润色、不翻译；普通话识别会转为简体。具体语言判断和产物语义见 [上游中文素材说明](https://github.com/caca2331/finesub/blob/v0.7.0/docs/manual/chinese.md)。
+中文素材通常只纠错和基础润色、不翻译；普通话识别会转为简体。具体语言判断和产物语义见 [上游中文素材说明](https://github.com/caca2331/finesub/blob/v0.7.1/docs/manual/chinese.md)。
 
 ## 纠错翻译与本地 Agent
 
@@ -96,7 +99,7 @@ Windows 10 / 11，64 位。Whisper 建议至少 8 GB 内存；支持的 NVIDIA G
 
 - [桌面端维护与发布](desktop/README_DEV.md) · [GitHub Actions 构建](desktop/docs/cloud-build.md)
 - [核心兼容矩阵](docs/core-compatibility.md) · [来源与第三方许可](NOTICE.md)
-- 核心固定提交：[7123055](https://github.com/caca2331/finesub/tree/7123055da0cd6e037d8e37feb53b82f9e428c5cb)，身份由 desktop/resources/core-source.json 管理。
+- 核心固定提交：[e977f52](https://github.com/caca2331/finesub/tree/e977f5220415fda4e1b8385ede66bbd1141c3b16)，身份由 desktop/resources/core-source.json 管理。
 - 桌面迁移锚点：[FineSub 0.5.0pre/desktop](https://github.com/caca2331/finesub/tree/0.5.0pre/desktop)。
 
 维护者：[tuzibuqiahuluobo](https://github.com/tuzibuqiahuluobo)。FineSub 原作者 / 上游维护者：[caca2331](https://github.com/caca2331)。桌面署名贡献者：caca2331、tuzibuqiahuluobo、回不去的星光。

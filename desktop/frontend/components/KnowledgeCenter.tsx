@@ -37,6 +37,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { KnowledgeStructure } from "./KnowledgeStructure";
 import { KnowledgeDocument } from "./KnowledgeDocument";
 import { KnowledgeRecovery } from "./KnowledgeRecovery";
+import { CoreToolsPanel } from "./CoreToolsPanel";
 import { KnowledgeFileExchange } from "./KnowledgeFileExchange";
 import { CustomSelect } from "./CustomSelect";
 import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
@@ -589,6 +590,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
       {!loading && tab === "maintenance" ? (
         <div className="knowledge-maintenance-grid">
           <KnowledgeRecovery onChanged={() => loadSnapshot(false)} />
+          <CoreToolsPanel mode="glossaries" />
           <section className="primary-panel knowledge-section">
             <div className="section-heading"><div><h2>{t.knowledge.maintenance.healthTitle}</h2><p>{t.knowledge.maintenance.healthHint}</p></div></div>
             <div className="knowledge-command-row">

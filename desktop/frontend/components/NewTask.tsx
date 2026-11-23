@@ -11,6 +11,7 @@ import type { ApiProvider, JobSnapshot, TaskRequest } from "@/lib/types";
 import { DropZone } from "./DropZone";
 import { EnvironmentPanel } from "./EnvironmentPanel";
 import { TaskSettings } from "./TaskSettings";
+import { LinkDownloadOptions } from "./LinkDownloadOptions";
 import { useLanguage } from "./LanguageProvider";
 
 
@@ -115,6 +116,11 @@ export function NewTask({
             onSelect={onSelectFile}
             onDropPath={onDropPath}
           />
+
+          {state.task.selectedFile && /^https?:\/\//i.test(state.task.selectedFile)
+            && state.task.request.download_video_source && !reusePinned ? <LinkDownloadOptions
+              key={state.task.selectedFile} url={state.task.selectedFile} choice={state.task.request.link_format}
+              locked={busy} onSelect={link_format => onRequestChange({ link_format })} /> : null}
 
           <div className="panel-divider" />
 

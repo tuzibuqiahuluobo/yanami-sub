@@ -240,11 +240,12 @@ export function TaskSettings({
                 { value: "moss-local", label: language === "en" ? "Local MOSS · NVIDIA 8 GB+ GPU" : "本地 MOSS（NVIDIA RTX 30+，显存至少 8 GB）" },
                 { value: "gemini-35t", label: "Gemini 3.5 Transcribe · Cloud" },
                 { value: "moss-pro", label: "MOSS Pro · Cloud" },
-                { value: "mai2", label: "MAI-Transcribe-2 · Cloud · Paid" },
+                { value: "mai2", label: "MAI-Transcribe-2 · Cloud" },
+                { value: "scribe", label: "ElevenLabs Scribe · Cloud" },
               ]} />
             <small className="field-help">{language === "en" ? "Joint transcription skips Whisper and separation; timestamps and speakers come from the selected engine. Local MOSS downloads additional weights and requires a supported GPU." : "一体转写不运行 Whisper 和人声分离，时间轴与说话人由所选引擎提供。本地 MOSS 首次需下载模型，仅支持符合条件的 NVIDIA 显卡。"}</small>
             {request.asr && !["local", "moss-local"].includes(request.asr) ? <div className="inline-note" role="note">
-              <p>{language === "en" ? "Starting uploads this task’s audio to the selected provider. Quota and charges follow your account; MAI2 is paid. Configure credentials in Settings first." : "开始后会将本次音频上传到对应服务商，使用账号额度；MAI2 为付费服务。请先在设置中配置凭据。"}</p>
+              <p>{language === "en" ? "Starting uploads this task’s audio to the selected provider. Quota and charges follow your account. Configure credentials in Settings first." : "开始后会将本次音频上传到对应服务商，额度和费用取决于你的账号。请先在设置中配置凭据。"}</p>
               {request.asr === "moss-pro" ? <label className="checkbox-row"><input type="checkbox" checked={request.moss_pro_paid ?? false} disabled={disabled} onChange={(event) => onChange({ moss_pro_paid: event.target.checked })} />{language === "en" ? "Allow MOSS Pro prepaid balance after free quota (this task only)" : "免费额度用完后允许使用 MOSS Pro 预付余额（仅本次，不记忆）"}</label> : null}
               <button type="button" className="button button-secondary button-compact" onClick={() => onOpenSettings?.("routing")}>{language === "en" ? "Configure cloud credentials" : "配置云端凭据"}</button>
             </div> : null}
@@ -260,7 +261,13 @@ export function TaskSettings({
                 <CustomSelect value={request[key] ?? (key === "row_fill" ? "off" : "auto")} disabled={disabled} onChange={(value) => onChange({ [key]: value })}
                   options={[...(key === "row_fill" ? [] : [{ value: "auto", label: language === "en" ? "Automatic (recommended)" : "自动（推荐）" }]), { value: "on", label: language === "en" ? "On" : "开启" }, { value: "off", label: language === "en" ? "Off" : "关闭" }]} /></div>)}
             </div>
-            <label className="switch-row"><input type="checkbox" checked={request.asr_aligner ?? false} disabled={disabled} onChange={(event) => onChange({ asr_aligner: event.target.checked })} /><span>{language === "en" ? "Use local forced alignment for supported joint-transcription outputs (extra model/computation)" : "对支持的一体转写结果使用本地强制对齐（需额外模型与计算）"}</span></label>
+            <div className="field"><span>{language === "en" ? "Local forced alignment" : "本地强制对齐"}</span>
+              <CustomSelect ariaLabel={language === "en" ? "Local forced alignment" : "本地强制对齐"}
+                value={typeof request.asr_aligner === "boolean" ? (request.asr_aligner ? "on" : "off") : request.asr_aligner ?? "auto"}
+                disabled={disabled} onChange={value => onChange({ asr_aligner: value as "auto" | "on" | "off" })}
+                options={[{ value: "auto", label: language === "en" ? "Automatic (recommended)" : "自动（推荐）" },
+                  { value: "on", label: language === "en" ? "On" : "开启" }, { value: "off", label: language === "en" ? "Off" : "关闭" }]} />
+            </div>
             <small className="field-help">{language === "en" ? "Options apply only to supported engines. Repair may increase processing time; quota mode can spend more requests." : "各选项仅在支持的引擎中生效。补漏会增加处理时间；quota 模式会额外消耗请求额度。"}</small>
           </details>
           <div className="field">
@@ -996,7 +1003,7 @@ export function TaskSettings({
                   checked={request.download_video_source}
                   disabled={disabled || !translationSelected}
                   onChange={(event) =>
-                    onChange({ download_video_source: event.target.checked })
+                    onChange({ download_video_source: event.target.checked, ...(event.target.checked ? {} : { link_format: null }) })
                   }
                 />
                 <span>

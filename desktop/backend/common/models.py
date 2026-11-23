@@ -205,8 +205,8 @@ class TaskDefaults(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     model_name: str | None = None
-    asr: Literal["local", "mai2", "moss-pro", "gemini-35t", "moss-local"] | None = None
-    asr_aligner: bool | None = None
+    asr: Literal["local", "mai2", "moss-pro", "gemini-35t", "moss-local", "scribe"] | None = None
+    asr_aligner: Literal["auto", "on", "off"] | bool | None = None
     asr_repair: Literal["on", "off", "quota"] | None = None
     squeeze_repair: Literal["auto", "on", "off"] | None = None
     gap_fill: Literal["auto", "on", "off"] | None = None
@@ -344,6 +344,11 @@ class UpdateInstallSnapshot(DesktopModel):
     updated_at: float
 
 
+class LinkFormat(DesktopModel):
+    format_id: str = Field(pattern=r"^[A-Za-z0-9_.-]{1,80}$")
+    container: Literal["mp4", "webm", "mkv"]
+
+
 class TaskRequest(DesktopModel):
     input: str
     output: str | None = None
@@ -384,8 +389,8 @@ class TaskRequest(DesktopModel):
     lang_redecode: Literal["auto", "on", "off"] = "auto"
     asr_decode_batch: AsrDecodeBatch = "auto"
     asr_context: Literal["off", "terms", "full"] = "terms"
-    asr: Literal["local", "mai2", "moss-pro", "gemini-35t", "moss-local"] = "local"
-    asr_aligner: bool = False
+    asr: Literal["local", "mai2", "moss-pro", "gemini-35t", "moss-local", "scribe"] = "local"
+    asr_aligner: Literal["auto", "on", "off"] | bool = "auto"
     asr_repair: Literal["on", "off", "quota"] = "on"
     squeeze_repair: Literal["auto", "on", "off"] = "auto"
     gap_fill: Literal["auto", "on", "off"] = "auto"
@@ -430,6 +435,7 @@ class TaskRequest(DesktopModel):
     style: str | None = None
     style_mode: Literal["none", "read", "update"] | None = None
     download_video_source: bool = True
+    link_format: LinkFormat | None = None
     # Default on: the knowledge base is what makes later tasks better, and it
     # only runs when the LLM stage does -- a plain transcription ignores it.
     knowledge: KnowledgeMode = "update"
@@ -444,6 +450,8 @@ class TaskRequest(DesktopModel):
         data = handler(self)
         if self.programme_reference is None:
             data.pop("programme_reference", None)
+        if self.link_format is None:
+            data.pop("link_format", None)
         return data
 
     @field_validator("input")
@@ -456,6 +464,8 @@ class TaskRequest(DesktopModel):
 
     @model_validator(mode="after")
     def validate_speaker_exports(self):
+        if self.link_format and (not self.download_video_source or not self.input.lower().startswith(("http://", "https://"))):
+            raise ValueError("视频格式只适用于保留视频源的链接任务 / A video format requires a link and keep-video enabled")
         if self.speaker_tracks != "off" and self.diarize == "off" and self.asr == "local":
             raise ValueError("分轨导出需要开启说话人分离 / Speaker exports require diarization")
         return self
@@ -669,6 +679,8 @@ class BatchRequest(DesktopModel):
         for item in self.items:
             if item.programme_reference:
                 raise ValueError("节目参考仅支持单任务 / Programme reference is only available for single tasks")
+            if item.link_format:
+                raise ValueError("视频格式只支持单任务 / Video format selection is available for single tasks only")
             source = item.input.casefold()
             if source in seen:
                 raise ValueError(f"batch source is listed twice: {item.input}")

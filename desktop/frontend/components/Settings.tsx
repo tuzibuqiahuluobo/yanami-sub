@@ -1,4 +1,6 @@
 "use client";
+
+import { CoreToolsPanel } from "./CoreToolsPanel";
 import { presetLabel, policyLabel } from "../lib/routingLabels";
 
 import {
@@ -953,6 +955,7 @@ export function Settings({
 <button type="button" className="button button-secondary" disabled={routingBusy} onClick={async () => { setRoutingBusy(true); try { await onSaveRouting({ ...toRoutingDraft(), local_agent_service_tier: routingDraft.local_agent_service_tier }); showSuccess(t.toast.saved, "codex-service-saved"); } catch (error) { setAgentPathError((current) => ({ ...current, [tier]: String(error) })); } finally { setRoutingBusy(false); } }}>{language === "en" ? "Save Codex options" : "保存 Codex 选项"}</button></div> : null}
                 <p className="field-help">{agentStatuses?.find((agent) => agent.provider_tier === tier)?.detail || (language === "en" ? "Run CLI detection after saving. Detection does not verify login or quota." : "保存后请运行 CLI 检测；检测不代表登录有效或额度充足。")}</p>
                 {tier === "LOCAL_CODEBUDDY" ? <button type="button" className="button button-secondary" onClick={() => void desktopApi.openCodeBuddyLogin().catch((error) => setAgentPathError((current) => ({ ...current, [tier]: String(error) })))}>{language === "en" ? "Open CLI sign-in" : "打开 CLI 登录"}</button> : null}
+                {tier === "LOCAL_CODEX" ? <button type="button" className="button button-secondary" onClick={() => void desktopApi.openCodexLogin().catch((error) => setAgentPathError((current) => ({ ...current, [tier]: String(error) })))}>{language === "en" ? "Sign in to Codex for FineSub" : "登录 FineSub 专用 Codex"}</button> : null}
               </div></AgentConfigDialog>)}
               </div>
               <button type="button" className="button button-secondary button-compact" onClick={() => setWorkBuddyRepairOpen(true)}>{codeBuddy ? (language === "en" ? "CodeBuddy sign-in repair" : "CodeBuddy 登录修复") : (language === "en" ? "WorkBuddy sign-in repair" : "WorkBuddy 登录修复")}</button>
@@ -1101,6 +1104,7 @@ export function Settings({
         </div>
       </section>
 
+      <CoreToolsPanel mode="quota" />
       <section className="settings-section system-logs-section">
         <div className="settings-section-heading">
           <div>
