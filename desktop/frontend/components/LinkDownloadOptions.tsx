@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Film } from "lucide-react";
+import { Film, RotateCcw } from "lucide-react";
 import { desktopApi } from "@/lib/bridge";
 import type { LinkFormat, LinkVideoFormat } from "@/lib/types";
 import { CustomSelect } from "./CustomSelect";
@@ -40,7 +40,7 @@ export function LinkDownloadOptions({ url, choice, locked, onSelect }: {
   if (locked) return null;
   if (failed) return <div className="link-format-status field-help" role="status">
     {zh ? "暂时无法读取视频档位。" : "Could not read video formats."}
-    <button type="button" className="text-button" onClick={() => { setFailed(false); setFormats(undefined); setAttempt(x => x + 1); }}>{zh ? "重试" : "Retry"}</button>
+    <button type="button" className="button button-secondary button-compact" onClick={() => { setFailed(false); setFormats(undefined); setAttempt(x => x + 1); }}>{zh ? "重试" : "Retry"}</button>
   </div>;
   if (!formats) return <p className="link-format-status field-help" role="status">{zh ? "正在读取可下载的视频档位…" : "Checking available video formats…"}</p>;
   const { current, containers, containerRows, heights, heightRows, frameRates } = formatChoices(formats, choice);
@@ -52,7 +52,9 @@ export function LinkDownloadOptions({ url, choice, locked, onSelect }: {
   return <section className="link-download-options" aria-label={zh ? "链接下载选项" : "Link download options"}>
     <div className="link-format-heading">
       <span><Film size={16} aria-hidden="true" /> {zh ? "下载档位" : "Download quality"}</span>
-      {choice ? <button type="button" className="text-button" onClick={() => onSelect(null)}>{zh ? "恢复自动" : "Use automatic"}</button>
+      {choice ? <button type="button" className="button button-secondary button-compact" onClick={() => onSelect(null)}>
+        <RotateCcw size={14} aria-hidden="true" />{zh ? "恢复自动" : "Use automatic"}
+      </button>
         : <span className="field-help">{zh ? "自动 · 调整任一项后使用所选档位" : "Automatic · Change a field to use that format"}</span>}
     </div>
     {stale ? <p className="field-help" role="status">{zh ? "上次选择的档位已不可用，请重新选择或恢复自动。" : "The previous format is no longer available. Select again or use automatic."}</p> : null}

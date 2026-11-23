@@ -92,8 +92,7 @@ jobs:
         if: ${{ inputs.targeted_only }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          & .\.venv-desktop\Scripts\python.exe -m pip install yt-dlp==2026.8.19
-          & .\.venv-desktop\Scripts\python.exe -m pytest -q desktop/backend/tests/test_ytdlp_log_stream.py desktop/scripts/tests/test_desktop_dependencies.py
+          & .\.venv-desktop\Scripts\python.exe -m pytest -q desktop/backend/tests/test_media_tools.py desktop/backend/tests/test_url_input.py desktop/backend/tests/test_ytdlp_log_stream.py desktop/scripts/tests/test_desktop_dependencies.py
 
       - name: Verify and build frontend
         working-directory: desktop/frontend

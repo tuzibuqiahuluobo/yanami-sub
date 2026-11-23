@@ -260,6 +260,8 @@ try {
         "--icon=$IconPath",
         "--version-file=$LauncherVersionFile",
         "--add-data=$TrayIconPath;.",
+        # yt-dlp is tested in the build venv, but only the managed worker runtime should load it.
+        "--exclude-module=yt_dlp",
         "--hidden-import=pystray._win32",
         "--hidden-import=socksio",
         "--hidden-import=webview.platforms.winforms",

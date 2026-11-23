@@ -16,6 +16,8 @@ _LIMIT = 12 * 1024 * 1024
 _ID = re.compile(r"[A-Za-z0-9_.-]{1,80}\Z")
 _YT_HOSTS = {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}
 _AUDIO_EXT = {"mp4": "m4a", "webm": "webm"}
+_FORMAT_UNAVAILABLE = ("所选视频档位已不可用。请重新读取链接并选择档位，或点「恢复自动」后重试。"
+                       " / The selected video format is unavailable. Refresh the link and select a format, or use automatic.")
 
 
 def validate_url(url: str, *, youtube: bool = False) -> str:
@@ -47,15 +49,18 @@ def _extract(ydl, url):
 
 def video_formats(info):
     rows = info.get("formats") or []
-    audio = {row.get("ext") for row in rows if row.get("vcodec") == "none" and row.get("acodec") not in (None, "none")}
+    audio = {row.get("ext") for row in rows
+             if not row.get("has_drm") and row.get("vcodec") == "none"
+             and row.get("acodec") and row["acodec"] != "none"}
     distinct = {}
     for row in rows:
         fmt, ext, height, fps = (row.get(key) for key in ("format_id", "ext", "height", "fps"))
         if (not isinstance(fmt, str) or not _ID.fullmatch(fmt) or row.get("has_drm")
-                or ext not in {"mp4", "webm", "mkv"} or row.get("vcodec") in (None, "none")
+                or ext not in {"mp4", "webm", "mkv"} or not row.get("vcodec") or row["vcodec"] == "none"
+                or not row.get("acodec")
                 or not isinstance(height, int) or height <= 0):
             continue
-        if row.get("acodec") in (None, "none") and (_AUDIO_EXT.get(ext) not in audio if ext in _AUDIO_EXT else not audio):
+        if row["acodec"] == "none" and (_AUDIO_EXT[ext] not in audio if ext in _AUDIO_EXT else not audio):
             continue
         fps = round(fps, 3) if isinstance(fps, (int, float)) and math.isfinite(fps) and fps > 0 else None
         distinct[ext, height, fps] = {"format_id": fmt, "container": ext, "height": height, "fps": fps}
@@ -99,14 +104,22 @@ def download_selected_video(url: str, choice: LinkFormat, task_dir: Path) -> Pat
     if video.is_symlink() or (video.exists() and not video.is_file()):
         raise ValueError("视频缓存路径无效 / Invalid video cache path")
     if not video.exists():
-        match = f"[format_id={choice.format_id}][ext={choice.container}][vcodec!=none]"
+        # yt-dlp treats unquoted decimal filters as numbers; format IDs are strings.
+        match = f'[format_id="{choice.format_id}"][ext={choice.container}][vcodec!=none]'
         audio = "ba" + (f"[ext={_AUDIO_EXT[choice.container]}]" if choice.container in _AUDIO_EXT else "")
         with downloader(**YTDLP_RETRY_OPTIONS, format=f"best{match}/bestvideo{match}+{audio}",
                         outtmpl=str(folder / "source.%(ext)s"), merge_output_format=choice.container,
                         ffmpeg_location=resolve_ffmpeg()) as ydl:
-            ydl.download([url])
+            from yt_dlp.utils import DownloadError
+
+            try:
+                ydl.download([url])
+            except DownloadError as error:
+                if "Requested format is not available" in str(error):
+                    raise ValueError(_FORMAT_UNAVAILABLE) from error
+                raise
     if not video.is_file():
-        raise ValueError("所选视频格式已不可用，请重新读取选项 / The selected format is unavailable; refresh formats")
+        raise ValueError("未找到下载完成的视频文件，请重试 / The finished video file was not found; retry the download")
     result = run_capture([resolve_ffprobe(), "-v", "error", "-show_entries", "stream=codec_type", "-of", "json", str(video)])
     tracks = {row.get("codec_type") for row in json.loads(result.stdout).get("streams", [])}
     if not {"audio", "video"} <= tracks:
