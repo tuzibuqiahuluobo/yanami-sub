@@ -614,7 +614,7 @@
 .link-download-options, .subtitle-tool-results { display: grid; gap: 12px; min-width: 0; }
 .link-download-options { margin-top: 14px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
 .link-format-heading, .link-format-heading > span:first-child, .link-format-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.link-format-heading { justify-content: space-between; }
+.link-format-heading { min-height: 34px; justify-content: space-between; }
 .link-format-status { margin: 10px 0 0; }
 .page-subtitle-tools .primary-panel { max-width: 740px; }
 .page-subtitle-tools h2 { display: flex; align-items: center; gap: 8px; }

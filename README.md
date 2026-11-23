@@ -2,9 +2,9 @@
 
 基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台，提供单任务、批处理、本地 Agent / API 路由、知识库、资源管理和应用内更新。
 
-当前版本系列：**0.3.0.post5 正式版 / 0.3.1 RC1.9 预览版（0.3.1-rc.1.post9）**。预览版固定使用 [FineSub v0.7.1](https://github.com/caca2331/finesub/releases/tag/v0.7.1)。
+当前版本系列：**0.3.0.post5 正式版 / 0.3.1 RC1.10 预览版（0.3.1-rc.1.post10）**。预览版固定使用 [FineSub v0.7.1](https://github.com/caca2331/finesub/releases/tag/v0.7.1)。
 
-RC1.9 新增链接下载档位和 YouTube 字幕下载，合入上游对链接、Qwen 与 BOM 字幕的修复。[预览版说明](docs/release-notes-v0.3.1-rc.1.post9.md) · [正式版说明](docs/release-notes-v0.3.0.post5.md)
+RC1.10 修复手选视频档位误报不可用的问题；如果档位确实失效，会提示重新选择或恢复自动。[预览版说明](docs/release-notes-v0.3.1-rc.1.post10.md) · [正式版说明](docs/release-notes-v0.3.0.post5.md)
 
 ## 安装与开始
 

@@ -42,6 +42,7 @@ dev = [
   "pytest",
   "pytest-timeout",
   "pytest-xdist",
+  "yt-dlp==2026.8.19",
 ]
 
 [tool.setuptools.dynamic]
