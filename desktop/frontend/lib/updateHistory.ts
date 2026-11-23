@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.1-rc.1.post10",
+    title: { zh: "0.3.1 RC1.10 · 链接下载档位修复", en: "0.3.1 RC1.10 · Link download format fix" },
+    notes: {
+      zh: ["修复手选档位存在却误报不可用的问题。", "档位真的失效时，可重新选择或恢复自动；不会擅自降低画质。", "统一「恢复自动」和「重试」按钮样式。"],
+      en: ["Fix an error that rejected available manual download formats.", "If a format is no longer available, select again or use automatic; quality is not reduced without your choice.", "Match reset and retry buttons to the rest of the app."],
+    },
+  },
+  {
     version: "0.3.1-rc.1.post9",
     title: { zh: "0.3.1 RC1.9 · 下载档位与字幕工具", en: "0.3.1 RC1.9 · Download options and subtitle tools" },
     notes: {
