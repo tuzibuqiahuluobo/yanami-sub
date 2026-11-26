@@ -17,6 +17,30 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.2",
+    title: { zh: "0.3.2 · 反馈附件、诊断与动效", en: "0.3.2 · Feedback attachments, diagnostics and motion" },
+    notes: {
+      zh: ["反馈页新增宽松的拖放附件区，可审阅 Issue 草稿和本地诊断 ZIP。", "清理后保留中间产物种类与大小，说明气泡扩展到五个页面。", "任务及控件动效支持关闭，并保留真实进度与成功状态。"],
+      en: ["A more spacious attachment drop zone, reviewable Issue draft and local diagnostic ZIP.", "Artifact roles and sizes survive cleanup; tooltips cover five more pages.", "Optional task and control motion preserves real progress and success states."],
+    },
+  },
+  {
+    version: "0.3.2-rc.1.post2",
+    title: { zh: "0.3.2 RC1.2 · 反馈诊断与动效", en: "0.3.2 RC1.2 · Diagnostics and motion" },
+    notes: {
+      zh: ["支持审阅后提交的反馈草稿和本地诊断 ZIP，清理前保留产物种类与大小。", "扩展五个页面的说明气泡及局部控件动效，保留减少动态效果选项。"],
+      en: ["Review structured feedback and a local diagnostic ZIP. Artifact roles and sizes survive cleanup.", "Tooltips and local control motion expand across the app and respect reduced motion."],
+    },
+  },
+  {
+    version: "0.3.2-rc.1.post1",
+    title: { zh: "0.3.2 RC1.1 · 说明气泡与任务反馈", en: "0.3.2 RC1.1 · Tooltips and task feedback" },
+    notes: {
+      zh: ["任务设置的可选说明收进问号；必填和风险提示继续直接显示。", "单次和批处理按钮有按压反馈，任务标签背景平滑滑动，真实完成时显示勾号动效。", "继承 0.3.1.post1 的批处理单项设置与单条补译。"],
+      en: ["Optional task explanations move into tooltips; critical notices stay visible.", "Launch buttons respond to presses, the selected task tab slides, and real success gets a brief checkmark effect.", "Includes per-item batch settings and selective translation continuation from 0.3.1.post1."],
+    },
+  },
+  {
     version: "0.3.2-rc.1",
     title: { zh: "0.3.2 RC1.0 · 预览版", en: "0.3.2 RC1.0 · Preview" },
     notes: {

@@ -2,10 +2,9 @@
 import { presetLabel } from "../lib/routingLabels";
 
 import { ChevronDown, SlidersHorizontal } from "lucide-react";
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import { invalidOutputName } from "@/lib/formatters";
-import { runInterfaceTransition } from "@/lib/viewTransition";
 import { useExitPresence } from "@/lib/useExitPresence";
 import type {
   ApiProvider,
@@ -16,6 +15,7 @@ import type {
 } from "@/lib/types";
 
 import { CustomSelect } from "./CustomSelect";
+import { FieldHelp } from "./FieldHelp";
 import { SpeakerSettings } from "./SpeakerSettings";
 import { ProgrammeReferenceSettings } from "./ProgrammeReference";
 import { useLanguage } from "./LanguageProvider";
@@ -83,13 +83,10 @@ export function TaskSettings({
     commitChanges(custom ? { ...request, ...changes, llm_preset_defaults: false } : changes);
   };
   const [tab, setTab] = useState<SettingsTab>("speech");
+  const tabsId = useId();
   const [advanced, setAdvanced] = useState(false);
   const advancedPresence = useExitPresence(advanced);
   const [nameError, setNameError] = useState("");
-  const selectTab = (next: SettingsTab) => {
-    if (next === tab) return;
-    runInterfaceTransition(() => setTab(next));
-  };
   const translationSelected = ["translated-srt", "final-srt"].includes(
     request.stage,
   );
@@ -180,7 +177,7 @@ export function TaskSettings({
         </div>
         {translationSelected ? (
           <div className="field field-wide">
-            <span>{t.newTask.settings.llmSource}</span>
+            <FieldHelp label={t.newTask.settings.llmSource} hint={t.newTask.settings.llmSourceHint} />
             <CustomSelect
               value={source}
               disabled={disabled}
@@ -191,7 +188,7 @@ export function TaskSettings({
                   llm_agent: "",
                   llm_model: [],
                 });
-                if (value !== "auto") selectTab("llm");
+                if (value !== "auto") setTab("llm");
                 if (value === "api" && apiKeys?.gemini_free !== "configured" && apiKeys?.gemini_paid !== "configured") {
                   onOpenSettings?.("gemini_free");
                 }
@@ -203,27 +200,43 @@ export function TaskSettings({
                 { value: "manual", label: t.newTask.settings.llmSourceManual },
               ]}
             />
-            <small className="field-help">{t.newTask.settings.llmSourceHint}</small>
           </div>
         ) : null}
       </div>
 
-      <div className="task-tabs" role="tablist">
+      <div className="task-tabs" data-tab={tab} role="tablist"
+        aria-label={language === "en" ? "Processing options" : "处理选项"}
+        onKeyDown={(event) => {
+          let next: SettingsTab;
+          if (event.key === "Home") next = "speech";
+          else if (event.key === "End") next = "llm";
+          else if (event.key === "ArrowLeft" || event.key === "ArrowRight") next = tab === "speech" ? "llm" : "speech";
+          else return;
+          event.preventDefault();
+          setTab(next);
+          document.getElementById(`${tabsId}-${next}`)?.focus();
+        }}>
         <button
           type="button"
           role="tab"
+          id={`${tabsId}-speech`}
+          aria-controls={`${tabsId}-panel`}
           aria-selected={tab === "speech"}
+          tabIndex={tab === "speech" ? 0 : -1}
           className={`task-tab${tab === "speech" ? " is-active" : ""}`}
-          onClick={() => selectTab("speech")}
+          onClick={() => setTab("speech")}
         >
           {t.newTask.settings.tabSpeech}
         </button>
         <button
           type="button"
           role="tab"
+          id={`${tabsId}-llm`}
+          aria-controls={`${tabsId}-panel`}
           aria-selected={tab === "llm"}
+          tabIndex={tab === "llm" ? 0 : -1}
           className={`task-tab${tab === "llm" ? " is-active" : ""}`}
-          onClick={() => selectTab("llm")}
+          onClick={() => setTab("llm")}
         >
           {t.newTask.settings.tabLlm}
           {llmNeedsKey ? <span className="tab-dot" aria-hidden="true" /> : null}
@@ -231,10 +244,12 @@ export function TaskSettings({
       </div>
 
       {tab === "speech" ? (
-        <div className="field-grid" role="tabpanel">
+        <div className="field-grid" role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-speech`}>
           <div className="field field-wide">
-            <span>{language === "en" ? "Transcription engine" : "语音识别引擎"}</span>
-            <CustomSelect value={request.asr ?? "local"} disabled={disabled} onChange={(value) => onChange({ asr: value as TaskRequest["asr"], moss_pro_paid: false })}
+            <FieldHelp label={language === "en" ? "Transcription engine" : "语音识别引擎"}
+              hint={language === "en" ? "Joint transcription skips Whisper and separation; timestamps and speaker labels come from the selected engine." : "一体转写不运行 Whisper 和人声分离，时间轴与说话人标签由所选引擎提供。"} />
+            <CustomSelect ariaLabel={language === "en" ? "Transcription engine" : "语音识别引擎"}
+              value={request.asr ?? "local"} disabled={disabled} onChange={(value) => onChange({ asr: value as TaskRequest["asr"], moss_pro_paid: false })}
               options={[
                 { value: "local", label: language === "en" ? "Local Whisper (default)" : "本地 Whisper（默认，不上传）" },
                 { value: "moss-local", label: language === "en" ? "Local MOSS · NVIDIA 8 GB+ GPU" : "本地 MOSS（NVIDIA RTX 30+，显存至少 8 GB）" },
@@ -243,7 +258,7 @@ export function TaskSettings({
                 { value: "mai2", label: "MAI-Transcribe-2 · Cloud" },
                 { value: "scribe", label: "ElevenLabs Scribe · Cloud" },
               ]} />
-            <small className="field-help">{language === "en" ? "Joint transcription skips Whisper and separation; timestamps and speakers come from the selected engine. Local MOSS downloads additional weights and requires a supported GPU." : "一体转写不运行 Whisper 和人声分离，时间轴与说话人由所选引擎提供。本地 MOSS 首次需下载模型，仅支持符合条件的 NVIDIA 显卡。"}</small>
+            {request.asr === "moss-local" ? <small className="field-help" role="note">{language === "en" ? "Local MOSS downloads additional weights on first use and requires a supported NVIDIA GPU." : "本地 MOSS 首次需下载模型，仅支持符合条件的 NVIDIA 显卡。"}</small> : null}
             {request.asr && !["local", "moss-local"].includes(request.asr) ? <div className="inline-note" role="note">
               <p>{language === "en" ? "Starting uploads this task’s audio to the selected provider. Quota and charges follow your account. Configure credentials in Settings first." : "开始后会将本次音频上传到对应服务商，额度和费用取决于你的账号。请先在设置中配置凭据。"}</p>
               {request.asr === "moss-pro" ? <label className="checkbox-row"><input type="checkbox" checked={request.moss_pro_paid ?? false} disabled={disabled} onChange={(event) => onChange({ moss_pro_paid: event.target.checked })} />{language === "en" ? "Allow MOSS Pro prepaid balance after free quota (this task only)" : "免费额度用完后允许使用 MOSS Pro 预付余额（仅本次，不记忆）"}</label> : null}
@@ -308,7 +323,7 @@ export function TaskSettings({
           </div>
         </div>
       ) : (
-        <div className="tab-panel" role="tabpanel">
+        <div className="tab-panel" role="tabpanel" id={`${tabsId}-panel`} aria-labelledby={`${tabsId}-llm`}>
           {!translationSelected ? (
             <div className="inline-note tab-note">
               <span>{t.newTask.settings.llmInactive}</span>
@@ -332,7 +347,8 @@ export function TaskSettings({
               switching back to final-srt must find them where they were. */}
           <div className="field-grid">
             {unifiedMedia ? <div className="field field-wide">
-              <span>{language === "en" ? "Preset for this task" : "本次任务预设"}</span>
+              <FieldHelp label={language === "en" ? "Preset for this task" : "本次任务预设"}
+                hint={language === "en" ? "The preset changes this task’s options, but keeps your knowledge-base read/write choice and global routing unchanged." : "切换预设只改变本任务的处理参数，保留知识库读写选择，不修改全局路由。"} />
               <CustomSelect value={request.llm_preset ?? ""} disabled={disabled || !translationSelected}
                 ariaLabel={language === "en" ? "Task preset" : "任务预设"}
                 onChange={(value) => {
@@ -341,10 +357,10 @@ export function TaskSettings({
                 }}
                 options={[{ value: "", label: language === "en" ? "Use settings preset" : "跟随设置中的预设" },
                   ...(routing?.presets ?? []).map((item) => ({ value: item.id, label: presetLabel(item.id, item.name, language === "en") }))]} />
-              <small className="field-help">{language === "en" ? "Selecting a preset updates this task’s processing options but keeps your knowledge read/write choice. Review the options below; global routing is unchanged." : "切换预设会更新本任务的处理参数，但保留你选择的知识库读写模式。可在下方继续调整，不修改全局路由。"}</small>
             </div> : null}
             {source === "agent" ? <div className="field field-wide task-route-field">
-              <span>{t.newTask.settings.agentChoice}</span>
+              <FieldHelp label={t.newTask.settings.agentChoice}
+                hint={language === "en" ? `Some AGY models accept audio or video. Codex, Claude, DSH and ${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} use text. Web search needs a matching route and account access. CLI detection does not verify sign-in.` : `AGY 部分模型支持音频或视频；Codex、Claude、DSH、${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} 使用纯文本。联网搜索需要相应路由和账号权限；检测到 CLI 不代表已登录。`} />
               <CustomSelect
                 value={request.llm_agent ?? ""}
                 disabled={disabled || !translationSelected}
@@ -359,7 +375,6 @@ export function TaskSettings({
                 ]}
               />
               <small className="field-help">{t.newTask.settings.agentChoiceHint}</small>
-              <small className="field-help">{language === "en" ? `Capabilities depend on the selected model: AGY can support audio/video; Codex, Claude, DSH and ${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} use text. Native search requires a matching route and account access. CLI detection does not verify sign-in.` : `能力以所选模型为准：AGY 部分模型支持音频/视频；Codex、Claude、DSH、${unifiedMedia ? "CodeBuddy" : "WorkBuddy"} 使用纯文本。原生搜索还需相应路由及账号权限；检测到 CLI 不代表已登录。`}</small>
               {unifiedMedia ? <small className="field-help">{language === "en" ? "CodeBuddy must be selected explicitly; its upstream fallback group may spend credits. The all-agents automatic order excludes it." : "CodeBuddy 需要手动指定；其上游候选组可能消耗积分。自动依次尝试所有 Agent 时不会启用它。"}</small> : null}
                 {onOpenSettings ? <button type="button" className="button button-secondary button-compact agent-setup-shortcut" onClick={() => onOpenSettings("agents")}>{t.newTask.settings.agentChoiceSetup}<span aria-hidden="true">→</span></button> : null}
             </div> : null}

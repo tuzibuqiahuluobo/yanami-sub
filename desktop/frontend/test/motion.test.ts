@@ -34,25 +34,31 @@ test("motion can be turned off, by the user and by the system", () => {
   assert.match(css, /prefers-reduced-motion: reduce/);
 });
 
-test("theme-coloured switchers share the animation preference gate", () => {
+test("shared-element theme and knowledge switchers share the animation preference gate", () => {
   const helper = read("../lib/viewTransition.ts");
   const settings = read("../components/Settings.tsx");
-  const taskSettings = read("../components/TaskSettings.tsx");
   const knowledge = read("../components/KnowledgeCenter.tsx");
   const css = readStylesheet();
 
   assert.match(helper, /documentElement\.dataset\.motion === "off"/);
   assert.match(helper, /prefers-reduced-motion: reduce/);
   assert.match(settings, /runInterfaceTransition/);
-  assert.match(taskSettings, /runInterfaceTransition/);
   assert.match(knowledge, /runInterfaceTransition/);
-  assert.match(css, /view-transition-name: active-task-tab/);
   assert.match(css, /view-transition-name: active-knowledge-tab/);
-  assert.match(css, /\[data-motion="off"\] \.task-tab\.is-active/);
   assert.match(css, /\[data-motion="off"\] \.knowledge-tabs button\.is-active/);
   assert.match(css, /@keyframes active-choice-fade-out/);
   assert.match(css, /@keyframes active-choice-fade-in/);
   assert.match(css, /active-choice-fade-in 260ms ease-out 90ms/);
+});
+
+test("task tabs move a local indicator rather than transitioning the form", () => {
+  const taskSettings = read("../components/TaskSettings.tsx");
+  const css = readStylesheet();
+  assert.match(taskSettings, /data-tab=\{tab\}/);
+  assert.match(taskSettings, /aria-controls=/);
+  assert.match(taskSettings, /ArrowLeft.*ArrowRight/);
+  assert.doesNotMatch(taskSettings, /runInterfaceTransition/);
+  assert.match(css, /\.task-tabs\[data-tab="llm"\]::before\s*\{[^}]*transform: translateX/);
 });
 
 test("the routing catalog has an accessible two-way reveal", () => {

@@ -1,3 +1,5 @@
+import type { PipelineStage } from "./types";
+
 const SUBTITLE_OUTPUT_KEYS = [
   "finalSrt",
   "translatedSrt",
@@ -38,6 +40,18 @@ export function preferredSubtitleOutput(
   outputs: Record<string, string> | undefined,
 ): string | undefined {
   return subtitleOutputEntries(outputs)[0]?.[1];
+}
+
+export function hasRequestedSubtitleOutput(
+  stage: PipelineStage,
+  outputs: Record<string, string>,
+): boolean {
+  switch (stage) {
+    case "raw-srt": return Boolean(outputs.rawSrt);
+    case "translated-srt": return Boolean(outputs.translatedSrt);
+    case "final-srt": return Boolean(outputs.finalSrt);
+    default: return false;
+  }
 }
 
 

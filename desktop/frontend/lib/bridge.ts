@@ -908,6 +908,9 @@ function previewApi(): DesktopApi {
     async collectFeedbackLogs() {
       return { path: "preview-diagnostics.zip", report: "Browser preview: no local logs collected.", files: 0, size: 0 };
     },
+    async feedbackCliStatus() { return { mode: "missing" as const }; },
+    async publishFeedbackIssue() { throw new Error("Publishing requires the desktop application."); },
+    async openPublishedFeedbackIssue() { throw new Error("No issue was published."); },
     async openFeedbackReport() {
       return { path: "preview-diagnostics.zip" };
     },
@@ -1147,7 +1150,11 @@ function nativeApi(): DesktopApi {
       call<{ path: string }>("open_tasks_directory", taskId),
     listTaskLogs: (query = "", offset = 0) => call<{ items: TaskLogLocation[]; total: number }>("list_task_logs", query, offset),
     openTaskLogLocation: (identifier) => call("open_task_log_location", identifier),
-    collectFeedbackLogs: (selected) => call<DiagnosticPackage>("collect_feedback_logs", selected),
+    collectFeedbackLogs: (selected, fields, attachments = [], includeSystem = true) => call<DiagnosticPackage>(
+      "collect_feedback_logs", selected, fields ?? null, attachments, includeSystem),
+    feedbackCliStatus: () => call("feedback_cli_status"),
+    publishFeedbackIssue: (reviewId) => call("publish_feedback_issue", reviewId),
+    openPublishedFeedbackIssue: (reviewId) => call("open_published_feedback_issue", reviewId),
     openFeedbackReport: () => call("open_feedback_report"),
     openFeedbackIssue: (title = "", description = "", browser = true) => call("open_feedback_issue", title, description, browser),
     openOutput: (path) => call<{ path: string }>("open_output", path),

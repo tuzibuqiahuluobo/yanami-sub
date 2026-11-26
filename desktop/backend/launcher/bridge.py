@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import hashlib
 import logging
 import os
 from pathlib import Path
 import sys
 import subprocess
+import threading
+import uuid
 import webbrowser
 from typing import Any, Literal
 
@@ -36,7 +39,7 @@ from desktop.backend.settings.local_agents import (
     LOCAL_AGENT_TIERS, configure_local_agents, validated_agent_path, workbuddy_desktop_path,
 )
 from desktop.backend.settings.store import SettingsStore
-from desktop.backend.launcher import feedback
+from desktop.backend.launcher import feedback, feedback_issue
 from finesub_bootstrap import secrets
 
 
@@ -195,6 +198,8 @@ class DesktopBridge:
         self.startup_update_issue = startup_update_issue
         self.startup_agent_statuses = startup_agent_statuses
         self._diagnostic_path: Path | None = None
+        self._feedback_review: dict | None = None
+        self._feedback_lock = threading.Lock()
         saved_route = self._stored_download_route()
         if saved_route is not None:
             self._apply_download_route(saved_route)
@@ -1718,7 +1723,10 @@ class DesktopBridge:
             return {"path": str(target)}
         return self._guard(reveal)
 
-    def collect_feedback_logs(self, selected: list[str]) -> dict[str, Any]:
+    def collect_feedback_logs(
+        self, selected: list[str], fields: dict | None = None,
+        attachments: list | None = None, include_system: bool = True,
+    ) -> dict[str, Any]:
         def collect():
             if not isinstance(selected, list):
                 raise ValueError("Invalid log selection")
@@ -1732,10 +1740,56 @@ class DesktopBridge:
                 destination=self.settings.user_data / "diagnostics", selected=selected,
                 version=self.app_version, secrets=secret_values,
                 private_roots=[Path.home(), self.settings.user_data, self._task_logs_root(), Path(root)],
+                fields=fields, attachments=attachments, include_system=include_system,
             )
-            self._diagnostic_path = Path(result["path"])
+            with self._feedback_lock:
+                self._diagnostic_path = Path(result["path"])
+                self._feedback_review = None
+                if fields is not None:
+                    package = self._diagnostic_path
+                    with package.open("rb") as handle:
+                        digest = hashlib.file_digest(handle, "sha256").hexdigest()
+                    result.update(review_id=uuid.uuid4().hex)
+                    self._feedback_review = {**result, "digest": digest}
             return result
         return self._guard(collect)
+
+    def feedback_cli_status(self) -> dict[str, Any]:
+        return self._guard(lambda: {"mode": feedback_issue.cli_capability(self.settings.user_data)})
+
+    def publish_feedback_issue(self, review_id: str) -> dict[str, Any]:
+        def publish():
+            with self._feedback_lock:
+                review = self._feedback_review
+                if not review or review["review_id"] != review_id:
+                    raise ValueError("请先生成并审阅这次报告 / Generate and review this report first")
+                if review.get("published"):
+                    return review["published"]
+                package = Path(review["path"])
+                try:
+                    current = feedback.safe_path(package.parent, package.name)
+                    with current.open("rb") as handle:
+                        payload = handle.read(24 * 1024 * 1024 + 1)
+                except OSError:
+                    raise ValueError("诊断包已移动，请重新生成报告 / Diagnostic package was moved; prepare a new report") from None
+                if len(payload) > 24 * 1024 * 1024 or hashlib.sha256(payload).hexdigest() != review["digest"]:
+                    raise ValueError("诊断包已修改，请重新生成报告 / Diagnostic package was modified; prepare a new report")
+                review["published"] = feedback_issue.publish_issue(
+                    review["issue_title"], review["issue_markdown"], package.parent, payload, review["screenshots"])
+                return review["published"]
+        return self._guard(publish)
+
+    def open_published_feedback_issue(self, review_id: str) -> dict[str, Any]:
+        def reveal():
+            with self._feedback_lock:
+                review = self._feedback_review
+                if not review or review["review_id"] != review_id or not review.get("published"):
+                    raise ValueError("找不到已提交的 Issue / No published issue for this report")
+                url = review["published"]["url"]
+            if self.url_opener(url) is False:
+                raise ValueError("无法打开默认浏览器 / Could not open the default browser")
+            return {"url": url}
+        return self._guard(reveal)
 
     def open_feedback_report(self) -> dict[str, Any]:
         def reveal():

@@ -38,7 +38,114 @@
 .log-location-row small, .log-location-row code { display: block; margin-top: 6px; overflow-wrap: anywhere; color: var(--muted); }
 .feedback-page { max-width: 1000px; }
 .feedback-page .field { margin: 18px 0; }
-.feedback-log-list { max-height: 320px; overflow: auto; margin: 16px 0; }
+.feedback-fields { display: grid; gap: 16px; padding: 0; margin: 0; min-width: 0; border: 0; }
+.feedback-description-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 12px; }
+.feedback-description-grid .field { margin: 0; }
+.feedback-attachment-section {
+  display: grid;
+  gap: 20px;
+  padding: clamp(20px, 3vw, 30px);
+}
+.feedback-attachment-heading h2,
+.feedback-attachment-heading p,
+.feedback-package-footer p { margin: 0; }
+.feedback-attachment-heading p,
+.feedback-package-footer p { margin-top: 5px; color: var(--text-secondary); font-size: .85rem; }
+.feedback-drop {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  min-height: 112px;
+  padding: 20px;
+  border: 1px dashed color-mix(in srgb, var(--text-secondary) 55%, var(--border));
+  border-radius: var(--radius-panel);
+  background: var(--panel-subtle);
+}
+.feedback-drop[data-dragging] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.feedback-drop-icon,
+.feedback-file-icon {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  aspect-ratio: 1;
+  border-radius: 12px;
+  overflow: hidden;
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+}
+.feedback-drop-copy,
+.feedback-file-copy { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.feedback-drop-copy span,
+.feedback-file-copy span { color: var(--text-secondary); font-size: .8rem; }
+.feedback-pick-button { min-height: 42px; }
+.feedback-attachments { display: grid; gap: 8px; padding: 0; margin: 0; list-style: none; }
+.feedback-attachments li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+.feedback-file-icon { width: 40px; }
+.feedback-attachments img { width: 100%; height: 100%; object-fit: contain; }
+.feedback-file-copy strong { font-size: .88rem; overflow-wrap: anywhere; }
+.feedback-log-options {
+  min-width: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+.feedback-task-details > summary,
+.feedback-system-option {
+  display: grid;
+  min-height: 52px;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.feedback-task-details > summary {
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  list-style: none;
+  font-size: .88rem;
+}
+.feedback-task-details > summary::-webkit-details-marker { display: none; }
+.feedback-task-details > summary > svg { color: var(--text-secondary); }
+.feedback-task-details[open] .feedback-log-chevron { transform: rotate(180deg); }
+.feedback-log-count {
+  padding: 2px 8px;
+  border-radius: 999px;
+  color: var(--text-secondary);
+  background: var(--accent-soft);
+  font-size: .75rem;
+}
+.feedback-system-option { grid-template-columns: auto minmax(0, 1fr); border-top: 1px solid var(--border); font-size: .88rem; }
+.feedback-system-option input { width: 16px; height: 16px; margin: 0; }
+.feedback-task-details .feedback-actions { margin: 12px 14px; }
+.feedback-package-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 20px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.feedback-package-footer strong { font-size: .85rem; }
+.feedback-attachment-error { margin: 0; color: var(--danger); overflow-wrap: anywhere; }
+@media (max-width: 620px) {
+  .feedback-drop { grid-template-columns: auto minmax(0, 1fr); gap: 12px; padding: 16px; }
+  .feedback-pick-button { grid-column: 1 / -1; justify-self: start; }
+}
+.feedback-report pre { max-height: 320px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
+.feedback-report details { margin: 12px 0; }
+.feedback-log-list { max-height: 320px; overflow: auto; margin: 0 14px; }
 .feedback-log-list .switch-row { padding: 8px 0; }
 .feedback-log-list span { overflow-wrap: anywhere; }
 .feedback-report pre { background: var(--panel-subtle); padding: 16px; white-space: pre-wrap; overflow-wrap: anywhere; border-radius: 12px; font-size: 13px; }

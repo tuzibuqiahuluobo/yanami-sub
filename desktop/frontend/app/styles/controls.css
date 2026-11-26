@@ -159,13 +159,38 @@
 
 /* The two halves of the pipeline, same pill language as the device picker. */
 .task-tabs {
-  display: flex;
-  gap: 8px;
+  --task-tab-gap: 8px;
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  justify-self: start;
+  max-width: 100%;
+  gap: var(--task-tab-gap);
+}
+
+.task-tabs::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 auto 0 0;
+  width: calc((100% - var(--task-tab-gap)) / 2);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 7%, transparent);
+  pointer-events: none;
+  transition: transform var(--motion-normal) var(--motion-ease-spring);
+}
+
+.task-tabs[data-tab="llm"]::before {
+  transform: translateX(calc(100% + var(--task-tab-gap)));
 }
 
 .task-tab {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 7px 14px;
   border: 1px solid var(--border);
@@ -175,20 +200,12 @@
   font-size: 0.8rem;
   font-weight: 600;
   cursor: pointer;
-  transition:
-    border-color var(--motion-fast) ease,
-    color var(--motion-fast) ease,
-    background var(--motion-fast) ease,
-    box-shadow var(--motion-fast) ease,
-    transform var(--motion-fast) var(--motion-ease-out);
+  transition: color var(--motion-fast) ease;
 }
 
 .task-tab.is-active {
-  border-color: var(--accent, #6b6bd6);
+  border-color: transparent;
   color: var(--text);
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 7%, transparent);
-  view-transition-name: active-task-tab;
 }
 
 /* Something in the other tab needs attention (e.g. a missing API key). */
@@ -280,6 +297,50 @@
   font-size: 0.75rem;
   font-weight: 400;
   line-height: 1.45;
+}
+
+.field-with-help {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-secondary);
+}
+
+.field-help-anchor { display: inline-flex; }
+
+.field-help-trigger {
+  display: grid;
+  width: 24px;
+  height: 22px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: var(--text-secondary);
+  background: transparent;
+  cursor: help;
+}
+
+.field-help-trigger:hover,
+.field-help-trigger:focus-visible { color: var(--text); background: var(--accent-soft); }
+
+.field-help-tooltip {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  width: max-content;
+  max-width: min(286px, calc(100vw - 16px));
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+  font-size: 0.85rem;
+  font-weight: 400;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .field input,

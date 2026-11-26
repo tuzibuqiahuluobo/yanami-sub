@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Captions, Download, Search } from "lucide-react";
+import { Captions, Check, Download, Search } from "lucide-react";
 import { desktopApi } from "@/lib/bridge";
 import type { LinkMedia } from "@/lib/types";
 import { CustomSelect } from "./CustomSelect";
+import { FieldHelp } from "./FieldHelp";
 import { useLanguage } from "./LanguageProvider";
 
 export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void }) {
@@ -51,7 +52,8 @@ export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void
           <div className="field"><span>{zh ? "字幕轨道" : "Caption track"}</span>
             <CustomSelect ariaLabel={zh ? "字幕轨道" : "Caption track"} disabled={!!busy} value={track} onChange={setTrack}
               options={result.tracks.map((row, index) => ({ value: String(index), label: `${row.label} (${row.language}) · ${row.automatic ? (zh ? "自动生成" : "Automatic") : (zh ? "原有字幕" : "Original")}` }))} /></div>
-          <div className="field"><span>{zh ? "保存格式" : "Save as"}</span>
+          <div className="field"><FieldHelp label={zh ? "保存格式" : "Save as"}
+            hint={zh ? "SRT、VTT 保留时间轴。只要文字，不需要时间轴时选 TXT。" : "SRT and VTT retain timestamps. Use TXT for plain text without timings."} />
             <CustomSelect ariaLabel={zh ? "保存格式" : "Save as"} disabled={!!busy} value={extension} onChange={setExtension}
               options={["srt", "vtt", "txt"].map(value => ({ value, label: value.toUpperCase() }))} /></div>
         </div>
@@ -59,7 +61,7 @@ export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void
           <Download size={16} aria-hidden="true" />{busy === "save" ? (zh ? "正在保存…" : "Saving…") : (zh ? "另存字幕" : "Save subtitle")}</button>
       </div> : <p className="inline-note" role="status">{zh ? "这个视频没有找到可下载的字幕轨道。" : "No downloadable subtitle tracks were found."}</p>)}
       {error ? <div className="error-banner" role="alert"><span>{error}</span><button type="button" className="text-button" onClick={onOpenResources}>{zh ? "检查资源" : "Check resources"}</button></div> : null}
-      {saved ? <p className="inline-note" role="status">{zh ? "已保存：" : "Saved: "}{saved}</p> : null}
+      {saved ? <p className="inline-note caption-saved" role="status"><Check size={16} aria-hidden="true" />{zh ? "已保存：" : "Saved: "}{saved}</p> : null}
     </section>
   </div>;
 }

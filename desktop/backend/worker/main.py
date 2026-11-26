@@ -33,6 +33,7 @@ from finesub_bootstrap.locks import (
 )
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.artifact_diagnostics import TASK_DIAGNOSTICS, append_artifact_diagnostics, paths_from_output
 from desktop.backend.common.core_compat import effective_task_request, llm_call_options, speech_call_options
 from desktop.backend.settings.local_agents import install_local_agent_command_overrides
 from desktop.backend.worker.agent_health_check import (
@@ -836,6 +837,10 @@ def run_request(
     if request.llm_preset_defaults:
         emit(WorkerEvent.log(task_id, f"使用预设默认参数 / Preset defaults: {request.llm_preset or 'settings'}"))
     request = effective_task_request(request)
+    tasks_root = os.environ.get("FINESUB_TASKS_ROOT")
+    diagnostics = (Path(tasks_root) / task_id / TASK_DIAGNOSTICS
+                   if tasks_root and task_id not in {"", ".", ".."} and ":" not in task_id
+                   and Path(task_id).name == task_id else None)
 
     # Auto mode must not be blocked by an unrelated Agent probe when the free
     # API is selected. With no source, auto can still produce raw subtitles.
@@ -956,7 +961,11 @@ def run_request(
             if skip_reason:
                 emit(WorkerEvent.log(task_id, skip_reason))
                 emit(WorkerEvent.progress(task_id, stage="translated-srt", message=skip_reason, skipped=True))
-        if request.cleanup_intermediate and outputs and not skip_reason:
+        cleanup = bool(request.cleanup_intermediate and outputs and not skip_reason)
+        if diagnostics is not None:
+            append_artifact_diagnostics(diagnostics, paths, stage=effective_stage,
+                                        action="before_cleanup" if cleanup else "completed")
+        if cleanup:
             # `outputs` is empty for the stages that produce no subtitle
             # (`vocal`/`aligned`/`stable`), and with nothing to preserve the
             # cleanup deleted the very artifact the task was asked for: a green
@@ -971,6 +980,9 @@ def run_request(
                 preserve.append(str(final_path.with_name(f"{final_path.stem}-translated.srt")))
             cleanup_task_intermediates(paths.final_srt, preserve=preserve)
     except Exception as error:
+        if diagnostics is not None and request.output:
+            append_artifact_diagnostics(diagnostics, paths_from_output(Path(request.output)),
+                                        stage=request.stage, action="failed")
         emit(WorkerEvent.failed(task_id, _agent_error_message(error)))
         raise
     emit(WorkerEvent.completed(task_id, outputs))

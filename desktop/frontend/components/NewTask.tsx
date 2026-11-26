@@ -234,8 +234,9 @@ export function NewTask({
             ) : (
               <button
                 type="button"
-                className="button button-primary"
+                className="button button-primary task-generate"
                 disabled={!hasFile || busy || nameRejected}
+                aria-busy={busy}
                 onClick={onStart}
               >
                 {busy ? t.newTask.preparing : t.newTask.startGenerate}

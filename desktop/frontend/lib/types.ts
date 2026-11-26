@@ -760,7 +760,10 @@ export interface DesktopApi {
   applyKnowledgeProposal(draftId: string): Promise<RefinedKnowledgeUpdateReport>;
   listTaskLogs(query?: string, offset?: number): Promise<{ items: TaskLogLocation[]; total: number }>;
   openTaskLogLocation(identifier: string): Promise<{ path: string }>;
-  collectFeedbackLogs(selected: string[]): Promise<DiagnosticPackage>;
+  collectFeedbackLogs(selected: string[], fields?: FeedbackFields, attachments?: FeedbackAttachment[], includeSystem?: boolean): Promise<DiagnosticPackage>;
+  feedbackCliStatus(): Promise<{ mode: "missing" | "signed_out" | "text" | "screenshots" }>;
+  publishFeedbackIssue(reviewId: string): Promise<{ url: string; attachments_complete: boolean }>;
+  openPublishedFeedbackIssue(reviewId: string): Promise<{ url: string }>;
   openFeedbackReport(): Promise<{ path: string }>;
   openFeedbackIssue(title?: string, description?: string, browser?: boolean): Promise<{ url: string; opened: boolean }>;
   getBootstrapState(): Promise<BootstrapState>;
@@ -921,4 +924,18 @@ export interface DiagnosticPackage {
   report: string;
   files: number;
   size: number;
+  review_id?: string;
+  issue_title?: string;
+  issue_markdown?: string;
+  screenshots?: string[];
 }
+
+export interface FeedbackFields {
+  title: string;
+  steps: string;
+  expected: string;
+  actual: string;
+  language: "zh" | "en";
+}
+
+export interface FeedbackAttachment { name: string; data: string }

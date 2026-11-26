@@ -20,6 +20,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 
 import { DownloadProgress } from "@/components/DownloadProgress";
+import { FieldHelp } from "./FieldHelp";
 import { RESOURCE_SIZES } from "@/lib/resourceCatalog";
 import { isUsable, unresolvedDependency } from "@/lib/resources";
 import type {
@@ -439,7 +440,7 @@ export function ResourceManager({
           </span>
           <div className="download-route-copy">
             <div className="download-route-title">
-              <strong>{t.resources.downloadRoute.title}</strong>
+              <strong><FieldHelp label={t.resources.downloadRoute.title} hint={t.resources.downloadRoute.description} /></strong>
               <span className="resource-label is-ready">
                 {downloadRouteBusy || !downloadRoute
                   ? t.resources.downloadRoute.loading
@@ -448,7 +449,6 @@ export function ResourceManager({
                     : t.resources.downloadRoute.actualGlobal}
               </span>
             </div>
-            <p>{t.resources.downloadRoute.description}</p>
             {downloadRouteLocked ? (
               <small>{t.resources.downloadRoute.busy}</small>
             ) : null}
@@ -867,8 +867,8 @@ export function ResourceManager({
                         bytesPerSecond={install.bytes_per_second}
                       />
                     ) : running ? (
-                      <div className="resource-indeterminate">
-                        <span className="indeterminate-track">
+                      <div className="resource-indeterminate" role="status">
+                        <span className="indeterminate-track" aria-hidden="true">
                           <i />
                         </span>
                         <strong>{install.message}</strong>

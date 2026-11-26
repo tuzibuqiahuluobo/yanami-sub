@@ -1,0 +1,102 @@
+/* Motion stays inside the control; no shared canvas, global tick or layout animation. */
+h2 > .field-with-help,
+.download-route-title .field-with-help { color: inherit; }
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) .field-help-tooltip:popover-open {
+    animation: sakuga-bubble var(--motion-fast) var(--motion-ease-spring) both;
+  }
+
+  :root:not([data-motion="off"]) .sound-switch-track::before,
+  :root:not([data-motion="off"]) .motion-toggle > span {
+    transition: transform var(--motion-normal) var(--motion-ease-spring), scale var(--motion-fast) var(--motion-ease-out);
+  }
+  :root:not([data-motion="off"]) .sound-switch input:not(:disabled):active + .sound-switch-track::before,
+  :root:not([data-motion="off"]) .motion-toggle:active > span { scale: 1.28 .83; }
+  :root:not([data-motion="off"]) .sound-switch input:focus:checked + .sound-switch-track {
+    animation: sakuga-track var(--motion-normal) var(--motion-ease-spring) both;
+  }
+  :root:not([data-motion="off"]) .sound-switch input:focus:checked + .sound-switch-track::after {
+    content: "";
+    position: absolute;
+    inset: 2px 1px 2px 13px;
+    border-radius: 50%;
+    border-inline-end: 3px solid var(--accent);
+    border-block-start: 2px solid var(--accent);
+    opacity: 0;
+    animation: sakuga-splash var(--motion-normal) var(--motion-ease-out) both;
+  }
+
+  :root:not([data-motion="off"]) input[type="checkbox"]:not([role="switch"]):checked:focus {
+    animation: completion-check-pop var(--motion-normal) var(--motion-ease-out) both;
+  }
+  :root:not([data-motion="off"]) input[type="radio"]:checked:focus,
+  :root:not([data-motion="off"]) .theme-btn.is-active:focus > svg {
+    animation: completion-check-pop var(--motion-normal) var(--motion-ease-spring) both;
+  }
+
+  :root:not([data-motion="off"]) :is(.sound-range, .glass-opacity-slider)::-webkit-slider-thumb {
+    transition: transform var(--motion-fast) var(--motion-ease-spring), opacity var(--motion-fast) ease-out;
+  }
+  :root:not([data-motion="off"]) :is(.sound-range, .glass-opacity-slider):active::-webkit-slider-thumb {
+    transform: scale(1.24, .82) rotate(-12deg);
+    opacity: .9;
+  }
+
+  :root:not([data-motion="off"]) .field:has(> :is(input:not([type]), input[type="text"], input[type="url"], textarea)) {
+    position: relative;
+  }
+  :root:not([data-motion="off"]) .field:has(> :is(input:not([type]), input[type="text"], input[type="url"], textarea):focus)::after {
+    position: absolute;
+    content: "";
+    pointer-events: none;
+    width: 16px;
+    height: 13px;
+    top: 2px;
+    right: 3px;
+    background:
+      radial-gradient(circle, var(--accent) 44%, transparent 50%) 2px 1px / 5px 5px no-repeat,
+      radial-gradient(circle, var(--accent) 42%, transparent 52%) 10px 4px / 4px 4px no-repeat,
+      radial-gradient(circle, var(--accent) 45%, transparent 52%) 4px 8px / 4px 4px no-repeat;
+    animation: sakuga-dust var(--motion-normal) var(--motion-ease-out) both;
+  }
+
+  :root:not([data-motion="off"]) .toast-success:not([data-leaving]) {
+    animation-name: sakuga-toast-land;
+  }
+
+  :root:not([data-motion="off"]) .progress-track > span {
+    position: relative;
+  }
+  :root:not([data-motion="off"]) .progress-track > span::after {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 auto;
+    width: 12px;
+    max-width: 100%;
+    background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--accent-contrast) 58%, transparent));
+    opacity: .8;
+  }
+}
+
+@keyframes sakuga-bubble {
+  from { opacity: .35; transform: translateY(1px) scale(.98, .95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes sakuga-track {
+  0%, 100% { scale: 1; }
+  55% { scale: 1.1 .94; }
+}
+@keyframes sakuga-splash {
+  0% { opacity: .8; transform: scale(.65) rotate(-15deg); }
+  100% { opacity: 0; transform: translate(6px, -3px) scale(1.18) rotate(9deg); }
+}
+@keyframes sakuga-dust {
+  from { opacity: .55; transform: translate(-4px, 3px) scale(.5); }
+  to { opacity: 0; transform: translate(5px, -4px) scale(1.15); }
+}
+@keyframes sakuga-toast-land {
+  from { opacity: 0; transform: translate(13px, 6px) scale(1.02, .93); }
+  65% { opacity: 1; transform: translate(-2px, 0) scale(.995, 1.012); }
+  to { opacity: 1; transform: translate(0) scale(1); }
+}
