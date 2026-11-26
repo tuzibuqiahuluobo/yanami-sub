@@ -5,6 +5,7 @@ import { Captions, Check, Download, Search } from "lucide-react";
 import { desktopApi } from "@/lib/bridge";
 import type { LinkMedia } from "@/lib/types";
 import { CustomSelect } from "./CustomSelect";
+import { FieldHelp } from "./FieldHelp";
 import { useLanguage } from "./LanguageProvider";
 
 export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void }) {
@@ -51,7 +52,8 @@ export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void
           <div className="field"><span>{zh ? "字幕轨道" : "Caption track"}</span>
             <CustomSelect ariaLabel={zh ? "字幕轨道" : "Caption track"} disabled={!!busy} value={track} onChange={setTrack}
               options={result.tracks.map((row, index) => ({ value: String(index), label: `${row.label} (${row.language}) · ${row.automatic ? (zh ? "自动生成" : "Automatic") : (zh ? "原有字幕" : "Original")}` }))} /></div>
-          <div className="field"><span>{zh ? "保存格式" : "Save as"}</span>
+          <div className="field"><FieldHelp label={zh ? "保存格式" : "Save as"}
+            hint={zh ? "SRT、VTT 保留时间轴。只要文字，不需要时间轴时选 TXT。" : "SRT and VTT retain timestamps. Use TXT for plain text without timings."} />
             <CustomSelect ariaLabel={zh ? "保存格式" : "Save as"} disabled={!!busy} value={extension} onChange={setExtension}
               options={["srt", "vtt", "txt"].map(value => ({ value, label: value.toUpperCase() }))} /></div>
         </div>

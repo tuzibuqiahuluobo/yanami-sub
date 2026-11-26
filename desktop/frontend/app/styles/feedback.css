@@ -38,6 +38,16 @@
 .log-location-row small, .log-location-row code { display: block; margin-top: 6px; overflow-wrap: anywhere; color: var(--muted); }
 .feedback-page { max-width: 1000px; }
 .feedback-page .field { margin: 18px 0; }
+.feedback-fields { display: grid; gap: 16px; padding: 0; margin: 0; min-width: 0; border: 0; }
+.feedback-description-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(230px, 100%), 1fr)); gap: 12px; }
+.feedback-description-grid .field { margin: 0; }
+.feedback-task-details { margin: 12px 0; }
+.feedback-attachments { display: grid; gap: 8px; padding: 0; margin: 0 0 12px; list-style: none; }
+.feedback-attachments li { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.feedback-attachments li span { flex: 1 1 150px; overflow-wrap: anywhere; }
+.feedback-attachments img { max-width: min(150px, 45%); max-height: 90px; border-radius: 7px; object-fit: contain; }
+.feedback-report pre { max-height: 320px; overflow: auto; overflow-wrap: anywhere; white-space: pre-wrap; }
+.feedback-report details { margin: 12px 0; }
 .feedback-log-list { max-height: 320px; overflow: auto; margin: 16px 0; }
 .feedback-log-list .switch-row { padding: 8px 0; }
 .feedback-log-list span { overflow-wrap: anywhere; }

@@ -25,6 +25,7 @@ from finesub_bootstrap.processes import terminate_process_tree
 from finesub_bootstrap import artifacts, task_index, task_output
 
 from desktop.backend.common.models import TaskRequest
+from desktop.backend.common.artifact_diagnostics import TASK_DIAGNOSTICS, append_artifact_diagnostics, paths_from_output
 from desktop.backend.jobs.history import (
     HISTORY_RENDER_LIMIT,
     JobSnapshot,
@@ -433,6 +434,9 @@ class JobManager:
                 keep = [delivered, *(value for value in snapshot.outputs.values() if value)]
                 if snapshot.state != "completed":
                     keep.append(artifacts.artifact_directory(delivered))
+                if self.output_root is not None:
+                    append_artifact_diagnostics(self._task_directory(task_id) / TASK_DIAGNOSTICS,
+                        paths_from_output(delivered), stage=snapshot.request.stage, action="before_manual_cleanup")
                 artifacts.cleanup_intermediate(delivered, preserve=keep)
                 return snapshot.model_copy(deep=True)
 

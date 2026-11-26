@@ -63,6 +63,7 @@ import { WorkBuddyRepairDialog } from "./WorkBuddyRepairDialog";
 import { SoundSettings } from "./SoundSettings";
 import { TaskLogBrowser } from "./TaskLogBrowser";
 import { CustomSelect } from "./CustomSelect";
+import { FieldHelp } from "./FieldHelp";
 import { useLanguage } from "./LanguageProvider";
 import { UpdateSection, type UpdateSectionProps } from "./UpdateSection";
 import { useToast } from "./ToastProvider";
@@ -354,6 +355,7 @@ export function Settings({
                   key={value}
                   type="button"
                   data-theme-option={value}
+                  aria-pressed={appearance.theme === value}
                   className={`theme-btn${appearance.theme === value ? " is-active" : ""}`}
                   onClick={() => selectTheme(value)}
                 >
@@ -398,8 +400,7 @@ export function Settings({
 
           <div className="appearance-item glass-opacity-item">
             <div className="glass-opacity-label">
-              <span className="appearance-label">{t.settings.appearance.glassOpacity}</span>
-              <small>{t.settings.appearance.glassOpacityHint}</small>
+              <FieldHelp label={t.settings.appearance.glassOpacity} hint={t.settings.appearance.glassOpacityHint} />
             </div>
             <div className="glass-opacity-control">
               <input
@@ -410,6 +411,7 @@ export function Settings({
                 value={appearance.glassOpacity}
                 onChange={(e) => onAppearanceChange({ glassOpacity: Number(e.target.value) })}
                 className="glass-opacity-slider"
+                aria-label={t.settings.appearance.glassOpacity}
               />
               <span className="glass-opacity-value">{appearance.glassOpacity}%</span>
             </div>
@@ -971,12 +973,12 @@ export function Settings({
       <UpdateSection {...update} />
 
       <section className="settings-section">
-        <h2>{language === "en" ? "Remember task options" : "记住上次使用的设置"}</h2>
+        <h2><FieldHelp label={language === "en" ? "Remember task options" : "记住上次使用的设置"}
+          hint={language === "en" ? "Input files, notes, credentials and confirmations are not remembered. Turning this off stops restoring and updating saved choices." : "不会记忆输入文件、任务备注、凭据或操作确认。关闭后不再恢复或更新已保存的选项。"} /></h2>
         <label className="switch-row"><input type="checkbox" checked={rememberLast} onChange={(event) => {
           setRememberLast(event.target.checked);
           saveUi({ rememberLastSettings: event.target.checked });
         }} /><span>{language === "en" ? "Restore options for new tasks, batches and knowledge workflows" : "下次新建任务、批处理与知识库操作时沿用上次选项"}</span></label>
-        <p className="field-help">{language === "en" ? "Input files, notes, credentials and destructive confirmations are not remembered. Turning this off keeps saved choices but stops restoring and updating them." : "不记忆输入文件、任务备注、凭据或危险操作确认。关闭后保留已保存的选项，但不再恢复或更新它们。"}</p>
       </section>
 
       <section className="settings-section">

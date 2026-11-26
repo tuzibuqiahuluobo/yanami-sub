@@ -10,6 +10,9 @@ from urllib.parse import urlencode
 import uuid
 from zipfile import ZipFile, ZIP_DEFLATED
 
+from desktop.backend.common.artifact_diagnostics import BATCH_DIAGNOSTICS, TASK_DIAGNOSTICS
+from desktop.backend.launcher.feedback_issue import attachment_files, issue_draft
+
 ISSUES_URL = "https://github.com/tuzibuqiahuluobo/yanami-sub/issues/new"
 MAX_LOG_BYTES = 512 * 1024
 MAX_FILES = 30
@@ -55,7 +58,7 @@ def log_catalog(tasks: Path) -> list[dict]:
             safe = safe_path(tasks, relative)
             if not safe.is_dir():
                 continue
-            log = next((name for name in ("task-log.txt.part", "task-log.txt", "batch-log.txt")
+            log = next((name for name in ("task-log.txt.part", "task-log.txt", "batch-log.txt", TASK_DIAGNOSTICS, BATCH_DIAGNOSTICS)
                         if (safe / name).is_file() and not (safe / name).is_symlink()), "")
             modified = safe.stat().st_mtime
             if log:
@@ -89,9 +92,16 @@ def redact(text: str, secrets: list[str], private_roots: list[Path]) -> str:
 
 def collect_diagnostics(*, tasks: Path, logs: Path, updates: Path, destination: Path,
                         selected: list[str], version: str, secrets: list[str],
-                        private_roots: list[Path]) -> dict:
+                        private_roots: list[Path], fields: dict | None = None,
+                        attachments: list | None = None, include_system: bool = True) -> dict:
     if len(selected) > MAX_FILES or not all(isinstance(item, str) for item in selected):
         raise ValueError("Select at most 30 task/batch logs")
+    if type(include_system) is not bool:
+        raise ValueError("Invalid system log selection")
+    supplied = attachment_files([] if attachments is None else attachments)
+    def clean(text: str) -> str:
+        return redact(text, secrets, private_roots)
+
     catalog = {row["id"]: row for row in log_catalog(tasks)}
     candidates: list[tuple[str, Path, str]] = []
     notes = []
@@ -99,14 +109,23 @@ def collect_diagnostics(*, tasks: Path, logs: Path, updates: Path, destination: 
         row = catalog.get(identifier)
         if row is None:
             raise ValueError("Task log selection no longer exists; refresh the list")
+        sidecar = BATCH_DIAGNOSTICS if row["batch"] else TASK_DIAGNOSTICS
+        inventory = identifier + "/" + sidecar
+        try:
+            if safe_path(tasks, inventory).is_file():
+                candidates.append((f"tasks/{index + 1}-artifacts.txt", tasks, inventory))
+        except (OSError, ValueError):
+            pass
         if not row["log_path"]:
             notes.append(f"task {index + 1}: log not created")
         else:
             relative = Path(row["log_path"]).relative_to(tasks).as_posix()
-            candidates.append((f"tasks/{index + 1}.txt", tasks, relative))
+            if relative != inventory:
+                candidates.append((f"tasks/{index + 1}.txt", tasks, relative))
     # Known logs only. Never include configs, credentials, capsules or requests.
-    for group, root, patterns in (("application", logs, ("session-*.log", "install-*.log", "*.install.log")),
-                                   ("updates", updates, ("*.error.txt", "*.log"))):
+    system_roots = (("application", logs, ("session-*.log", "install-*.log", "*.install.log")),
+                    ("updates", updates, ("*.error.txt", "*.log")))
+    for group, root, patterns in system_roots if include_system else ():
         if not root.is_dir() or root.is_symlink():
             notes.append(f"{group}: directory unavailable")
             continue
@@ -123,9 +142,12 @@ def collect_diagnostics(*, tasks: Path, logs: Path, updates: Path, destination: 
             notes.append(f"{group}: cannot enumerate logs")
         for index, file in enumerate(sorted(files, key=files.get, reverse=True)[:10]):
             candidates.append((f"{group}/{index + 1}.txt", root, file.name))
-    contents: list[tuple[str, bytes]] = []
-    size = 0
+    contents = [(name, clean(data.decode("utf-8-sig", errors="replace")).encode("utf-8")
+                 if name.endswith(".txt") else data) for name, data in supplied]
+    size = sum(len(data) for _, data in contents)
     seen = set()
+    if len(candidates) > MAX_FILES:
+        notes.append("Some logs were omitted by the file-count limit.")
     for label, root, relative in candidates[:MAX_FILES]:
         try:
             source = safe_path(root, relative)
@@ -140,7 +162,7 @@ def collect_diagnostics(*, tasks: Path, logs: Path, updates: Path, destination: 
             text = raw.decode("utf-8-sig", errors="replace")
             if original_size > len(raw):
                 text = "[TRUNCATED: latest 512 KiB snapshot]\n" + text
-            encoded = redact(text, secrets, private_roots).encode("utf-8")
+            encoded = clean(text).encode("utf-8")
             if size + len(encoded) > MAX_TOTAL_BYTES:
                 notes.append(f"{label}: omitted by total size limit")
                 continue
@@ -148,10 +170,12 @@ def collect_diagnostics(*, tasks: Path, logs: Path, updates: Path, destination: 
             size += len(encoded)
         except (OSError, ValueError) as error:
             notes.append(f"{label}: unavailable ({type(error).__name__})")
+    system = f"{platform.system()} {platform.release()}"
+    issue = issue_draft(fields, version=version, system=system, contents=contents, clean=clean) if fields is not None else None
     report = ("# Yanami Sub diagnostic snapshot\n\n"
               f"Version: {version}\nCaptured: {datetime.now(timezone.utc).isoformat()}\n"
-              f"OS: {platform.system()} {platform.release()}\nPython: {platform.python_version()}\n"
-              "Logs are bounded snapshots, not final transcripts. No media, subtitles, configs or Agent sessions included.\n"
+              f"OS: {system}\nPython: {platform.python_version()}\n"
+              "Logs are bounded snapshots, not transcripts. No task media, subtitles, configs or Agent sessions are collected automatically.\n"
               "Review all files before attaching to a PUBLIC GitHub Issue. Redaction cannot detect every free-text secret.\n\n"
               "## Included\n" + "\n".join(f"- {label} ({len(data)} bytes)" for label, data in contents)
               + "\n\n## Missing / limits\n" + "\n".join(notes or ["None"]))
@@ -161,9 +185,15 @@ def collect_diagnostics(*, tasks: Path, logs: Path, updates: Path, destination: 
     output = destination / ("diagnostics-" + datetime.now().strftime("%Y%m%d-%H%M%S") + "-" + uuid.uuid4().hex[:8] + ".zip")
     with ZipFile(output, "x", compression=ZIP_DEFLATED) as archive:
         archive.writestr("report.md", report.encode("utf-8"))
+        if issue:
+            archive.writestr("issue.md", issue[1].encode("utf-8"))
         for label, data in contents:
             archive.writestr(label, data)
-    return {"path": str(output), "report": report, "files": len(contents), "size": output.stat().st_size}
+    result = {"path": str(output), "report": report, "files": len(contents), "size": output.stat().st_size}
+    if issue:
+        result.update(issue_title=issue[0], issue_markdown=issue[1],
+            screenshots=[name for name, _ in contents if name.startswith("screenshots/")])
+    return result
 
 
 def issue_url(title: str, description: str, version: str) -> str:

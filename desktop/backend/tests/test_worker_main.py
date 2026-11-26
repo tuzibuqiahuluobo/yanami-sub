@@ -810,9 +810,10 @@ def test_intermediate_artifacts_survive_by_default(tmp_path: Path) -> None:
     assert paths.task_artifact_dir.is_dir()
 
 
-def test_cleanup_keeps_what_a_rerun_needs(tmp_path: Path) -> None:
+def test_cleanup_keeps_what_a_rerun_needs(tmp_path: Path, monkeypatch) -> None:
     # stable.json survives even here: it is what every later stage reads, and it
     # is tiny next to the vocal audio, which is what actually fills a disk.
+    monkeypatch.setenv("FINESUB_TASKS_ROOT", str(tmp_path / "private"))
     paths = _run_with(
         TaskRequest(input="placeholder", cleanup_intermediate=True), tmp_path
     )
@@ -821,6 +822,9 @@ def test_cleanup_keeps_what_a_rerun_needs(tmp_path: Path) -> None:
     assert not paths.vocal_audio.exists()
     assert not paths.aligned_json.exists()
     assert not paths.metadata_json.exists()
+    diagnostic = (paths.final_srt.parent / "task-diagnostics.log").read_text(encoding="utf-8")
+    assert '"action": "before_cleanup"' in diagnostic and '"vocal_audio": 5' in diagnostic
+    assert "raw subtitle" not in diagnostic
 
 
 def test_cleanup_removes_the_llm_checkpoints(tmp_path: Path) -> None:

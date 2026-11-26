@@ -15,6 +15,7 @@ from finesub_bootstrap.locks import TASK_ACTIVITY_ROOT_VARIABLE, holding_activit
 
 from desktop.backend.batches.item_settings import validate_item_materials
 from desktop.backend.batches.protocol import BatchWorkerEvent, encode_batch_event
+from desktop.backend.common.artifact_diagnostics import BATCH_DIAGNOSTICS, append_artifact_diagnostics
 from desktop.backend.common.models import (
     BatchItemRequest,
     BatchItemSnapshot,
@@ -345,7 +346,11 @@ def run_batch_request(
                         if provenance:
                             emit(BatchWorkerEvent.log(batch_id, f"[{index + 1}] {provenance}"))
                         save_published()
-                        if item_request.cleanup_intermediate and outputs and index not in skip_reasons:
+                        cleanup = bool(item_request.cleanup_intermediate and outputs and index not in skip_reasons)
+                        append_artifact_diagnostics(batch_root / BATCH_DIAGNOSTICS, paths,
+                            stage=item_request.stage, item=index + 1,
+                            action="before_cleanup" if cleanup else "completed")
+                        if cleanup:
                             cleanup_task_intermediates(
                                 paths.final_srt,
                                 preserve=outputs.values(),

@@ -40,6 +40,7 @@ import { KnowledgeRecovery } from "./KnowledgeRecovery";
 import { CoreToolsPanel } from "./CoreToolsPanel";
 import { KnowledgeFileExchange } from "./KnowledgeFileExchange";
 import { CustomSelect } from "./CustomSelect";
+import { FieldHelp } from "./FieldHelp";
 import { BilingualKnowledgeImport, ProposalReview, canApplyProposal, knowledgeOutcome } from "./BilingualKnowledgeImport";
 
 
@@ -431,8 +432,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
               <div className="knowledge-create-form">
                 <div className="section-heading">
                   <div>
-                    <h2>{t.knowledge.create.title}</h2>
-                    <p>{t.knowledge.create.hint}</p>
+                    <h2><FieldHelp label={t.knowledge.create.title} hint={t.knowledge.create.hint} /></h2>
                   </div>
                 </div>
                 <div className="knowledge-form-grid">
@@ -442,8 +442,8 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
                       options={["streamer", "common", "style"].map((value) => ({ value, label: t.knowledge.categories[value as "streamer" | "common" | "style"] }))} />
                   </div>
                   <label className="field">
-                    <span>{t.knowledge.create.key}</span>
-                    <input value={newEntry.key} onChange={(event) => setNewEntry((current) => ({ ...current, key: event.target.value }))} />
+                    <span>{t.knowledge.create.key}{language === "en" ? " (required)" : "（必填）"}</span>
+                    <input required value={newEntry.key} onChange={(event) => setNewEntry((current) => ({ ...current, key: event.target.value }))} />
                   </label>
                   {newEntry.category === "common" ? (
                     <div className="field">
@@ -457,8 +457,8 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
                     <input value={newEntry.aliases} placeholder={t.knowledge.create.aliasesPlaceholder} onChange={(event) => setNewEntry((current) => ({ ...current, aliases: event.target.value }))} />
                   </label>
                   <label className="field field-span-all">
-                    <span>{t.knowledge.create.intro}</span>
-                    <textarea rows={3} value={newEntry.intro} onChange={(event) => setNewEntry((current) => ({ ...current, intro: event.target.value }))} />
+                    <span>{t.knowledge.create.intro}{language === "en" ? " (required)" : "（必填）"}</span>
+                    <textarea required rows={3} value={newEntry.intro} onChange={(event) => setNewEntry((current) => ({ ...current, intro: event.target.value }))} />
                   </label>
                 </div>
                 <div className="knowledge-actions">
@@ -613,7 +613,7 @@ export function KnowledgeCenter({ tasks, routing }: KnowledgeCenterProps) {
           </section>
 
           <section className="primary-panel knowledge-section">
-            <div className="section-heading"><div><h2>{t.knowledge.maintenance.candidates}</h2><p>{t.knowledge.maintenance.candidatesHint}</p></div></div>
+            <div className="section-heading"><h2><FieldHelp label={t.knowledge.maintenance.candidates} hint={t.knowledge.maintenance.candidatesHint} /></h2></div>
             <input value={candidateReason} placeholder={t.knowledge.reason} onChange={(event) => setCandidateReason(event.target.value)} />
             <div className="knowledge-list compact">
               {(snapshot?.pending_candidates || []).map((candidate) => (

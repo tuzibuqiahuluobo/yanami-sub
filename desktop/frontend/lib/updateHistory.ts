@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.2-rc.1.post2",
+    title: { zh: "0.3.2 RC1.2 · 反馈诊断与动效", en: "0.3.2 RC1.2 · Diagnostics and motion" },
+    notes: {
+      zh: ["支持审阅后提交的反馈草稿和本地诊断 ZIP，清理前保留产物种类与大小。", "扩展五个页面的说明气泡及局部控件动效，保留减少动态效果选项。"],
+      en: ["Review structured feedback and a local diagnostic ZIP. Artifact roles and sizes survive cleanup.", "Tooltips and local control motion expand across the app and respect reduced motion."],
+    },
+  },
+  {
     version: "0.3.2-rc.1.post1",
     title: { zh: "0.3.2 RC1.1 · 说明气泡与任务反馈", en: "0.3.2 RC1.1 · Tooltips and task feedback" },
     notes: {

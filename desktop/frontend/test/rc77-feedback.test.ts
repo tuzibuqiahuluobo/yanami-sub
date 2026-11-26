@@ -18,17 +18,19 @@ test("sound defaults to enabled at 50% and disabled/zero is silent", async () =>
   assert.equal(await playNotification("task"), false);
   assert.equal(soundSettings().volume, 0);
 });
-test("feedback states local-only collection, privacy and GitHub final submission", () => {
+test("feedback is local until review and explicit public submission", () => {
   const html = renderToStaticMarkup(createElement(Feedback));
-  assert.match(html, /自动获取日志（本地）/);
+  assert.match(html, /生成报告并打包日志/);
   assert.match(html, /不会自动上传/);
-  assert.match(html, /可访问 GitHub 的代理/);
-  assert.match(html, /系统默认浏览器/);
-  assert.equal([...html.matchAll(/新建 GitHub Issue/g)].length, 1);
-  assert.doesNotMatch(html, /在浏览器继续/);
+  assert.doesNotMatch(html, /直接提交 Issue/);
+  assert.match(html, /type="file"/);
+  const feedback = readFileSync(new URL("../components/Feedback.tsx", import.meta.url), "utf8");
+  assert.match(feedback, /!reviewed \|\| !report\?\.review_id/);
+  assert.match(feedback, /LOG_PAGE_SIZE = 10/);
   const bridge = readFileSync(new URL("../lib/bridge.ts", import.meta.url), "utf8");
   assert.match(bridge, /collect_feedback_logs/);
   assert.match(bridge, /open_feedback_issue/);
+  assert.match(bridge, /publish_feedback_issue/);
   const sound = readFileSync(new URL("../lib/notificationSound.ts", import.meta.url), "utf8");
   assert.match(sound, /\.\/sounds\/completion.wav/);
 });

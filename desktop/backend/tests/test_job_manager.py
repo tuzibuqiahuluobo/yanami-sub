@@ -1867,6 +1867,10 @@ def test_deleting_intermediates_keeps_what_a_rerun_reads(tmp_path) -> None:
 
     assert not bulky.exists()
     assert keeper.exists()
+    log = manager.task_directory(snapshot.task_id) / "task-diagnostics.log"
+    row = json.loads(log.read_text(encoding="utf-8").splitlines()[-1])
+    assert row["action"] == "before_manual_cleanup"
+    assert row["artifact_bytes"]["vocal_audio"] == 5
     # A finished task has nothing to resume, so its checkpoints go too --
     # they are the largest thing left in the directory.
     assert not checkpoints.exists()

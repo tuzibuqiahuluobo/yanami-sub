@@ -408,6 +408,37 @@ def test_github_feedback_reports_default_browser_open_failure(tmp_path):
     assert "默认浏览器" in result["error"]["message"]
 
 
+def test_only_latest_unchanged_review_can_publish_and_reopen_issue(tmp_path, monkeypatch):
+    bridge, _ = _bridge(tmp_path)
+    tasks = tmp_path / "feedback-tasks"
+    tasks.mkdir()
+    monkeypatch.setattr(bridge, "_task_logs_root", lambda: tasks)
+    opened = []
+    bridge.url_opener = opened.append
+    calls = []
+    url = "https://github.com/tuzibuqiahuluobo/yanami-sub/issues/42"
+    def publish(title, body, directory, package, screenshots):
+        calls.append((title, body))
+        assert "Repro" in body and package.startswith(b"PK")
+        return {"url": url, "attachments_complete": True}
+    monkeypatch.setattr("desktop.backend.launcher.feedback_issue.publish_issue", publish)
+    def collect():
+        result = bridge.collect_feedback_logs([], {"title": "Fixture", "steps": "Repro"}, [], False)
+        assert result["ok"], result
+        return result["data"]
+    stale, current = collect(), collect()
+    assert not bridge.publish_feedback_issue(stale["review_id"])["ok"]
+    assert not bridge.open_published_feedback_issue(current["review_id"])["ok"]
+    Path(current["path"]).write_bytes(b"tampered")
+    assert not bridge.publish_feedback_issue(current["review_id"])["ok"]
+    assert calls == []
+    reviewed = collect()
+    assert bridge.publish_feedback_issue(reviewed["review_id"])["data"]["url"] == url
+    assert bridge.publish_feedback_issue(reviewed["review_id"])["data"]["url"] == url
+    assert len(calls) == 1
+    assert bridge.open_published_feedback_issue(reviewed["review_id"])["ok"] and opened == [url]
+
+
 def test_github_feedback_browser_exception_does_not_escape_bridge(tmp_path):
     bridge, _ = _bridge(tmp_path)
     reported = []
