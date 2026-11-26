@@ -24,6 +24,9 @@ test("feedback is local until review and explicit public submission", () => {
   assert.match(html, /不会自动上传/);
   assert.doesNotMatch(html, /直接提交 Issue/);
   assert.match(html, /type="file"/);
+  assert.match(html, /feedback-drop/);
+  assert.match(html, /选择文件/);
+  assert.match(html, /feedback-package-footer/);
   const feedback = readFileSync(new URL("../components/Feedback.tsx", import.meta.url), "utf8");
   assert.match(feedback, /!reviewed \|\| !report\?\.review_id/);
   assert.match(feedback, /LOG_PAGE_SIZE = 10/);

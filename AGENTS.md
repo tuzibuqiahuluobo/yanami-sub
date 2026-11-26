@@ -1,3 +1,3 @@
 # Yanami Sub release policy
 
-When publishing a new build and the user does not specify a channel, publish only a GitHub pre-release for the preview channel. Publish or update the stable release only when the user explicitly requests it. Keep the latest stable release unchanged when publishing a preview.
+For completed Yanami Sub implementation work, default to pushing and publishing a GitHub pre-release unless the user says otherwise. Publish or update the stable release only when the user explicitly requests it. Keep stable unchanged when publishing a preview. An analysis-only request does not authorize code changes or a release.

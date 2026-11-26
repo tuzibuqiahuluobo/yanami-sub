@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { ChevronDown, FileText, FolderOpen, UploadCloud } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { desktopApi } from "@/lib/bridge";
 import { formatBytes } from "@/lib/formatters";
 import { saveUi, uiValue } from "@/lib/preferences";
@@ -44,6 +45,10 @@ export function Feedback() {
   const [rows, setRows] = useState<TaskLogLocation[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [attachments, setAttachments] = useState<File[]>([]);
+  const attachmentPicker = useRef<HTMLInputElement>(null);
+  const attachmentHintId = useId();
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
   const [systemLogs, setSystemLogs] = useState(false);
   const [report, setReport] = useState<DiagnosticPackage | null>(null);
   const [cli, setCli] = useState<Awaited<ReturnType<typeof desktopApi.feedbackCliStatus>>["mode"]>("missing");
@@ -100,6 +105,7 @@ export function Feedback() {
       : text("Issue 已创建，但有截图上传失败。请打开该 Issue 补传，不要重复提交。", "Issue created, but some screenshots failed. Attach them to the existing issue rather than resubmitting."));
   });
   const canPublish = cli === "screenshots" || (cli === "text" && !report?.screenshots?.length);
+  const canPrepare = Boolean(draft.title.trim() || draft.actual.trim() || selected.length || attachments.length || systemLogs);
   const setFiles = (incoming: File[]) => {
     if (!incoming.length || busy) return;
     if (incoming.some((file) => file.size === 0 || file.size > ATTACHMENT_BYTES || !/\.(png|jpe?g|webp|log|txt)$/i.test(file.name))
@@ -126,27 +132,65 @@ export function Feedback() {
             <textarea rows={3} maxLength={4000} value={draft.expected} onChange={(event) => update({ expected: event.target.value })} /></label>
         </div>
       </section>
-      <section className="settings-section"
-        onDragOver={(event) => { if (event.dataTransfer.types.includes("Files")) event.preventDefault(); }}
-        onDrop={(event) => {
-          if (!event.dataTransfer.files.length) return;
-          event.preventDefault();
-          setFiles(Array.from(event.dataTransfer.files));
-        }}>
-        <h2><FieldHelp label={text("2. 选择附件", "2. Select attachments")}
-          hint={text("日志使用有大小上限的副本；截图会去除文件元数据，但不会遮盖画面里的隐私。", "Log snapshots are size-limited. Screenshot metadata is stripped, but visible private content is not hidden.")} /></h2>
-        <p>{text("先在本机打包，不会自动上传。", "Packaging happens locally. Nothing is uploaded automatically.")}</p>
-        <label className="field"><span>{text("选择或拖入截图与日志（可选）", "Choose or drop screenshots and logs (optional)")}</span>
-          <input type="file" multiple accept=".png,.jpg,.jpeg,.webp,.txt,.log"
-            onChange={(event) => { setFiles(Array.from(event.target.files ?? [])); event.currentTarget.value = ""; }} /></label>
+      <section className="settings-section feedback-attachment-section">
+        <div className="feedback-attachment-heading">
+          <h2><FieldHelp label={text("2. 选择附件", "2. Select attachments")}
+            hint={text("日志使用有大小上限的副本；截图会去除文件元数据，但不会遮盖画面里的隐私。", "Log snapshots are size-limited. Screenshot metadata is stripped, but visible private content is not hidden.")} /></h2>
+          <p>{text("可添加截图、日志，或从已有任务中选取诊断记录。", "Add screenshots, log files, or diagnostics from an existing task.")}</p>
+        </div>
+        <div className="feedback-drop" data-dragging={dragging && !busy || undefined}
+          onDragEnter={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            dragDepth.current += 1;
+            setDragging(true);
+          }}
+          onDragOver={(event) => {
+            if (!event.dataTransfer.types.includes("Files")) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = busy ? "none" : "copy";
+          }}
+          onDragLeave={() => {
+            dragDepth.current = Math.max(0, dragDepth.current - 1);
+            if (!dragDepth.current) setDragging(false);
+          }}
+          onDrop={(event) => {
+            if (event.dataTransfer.types.includes("Files")) event.preventDefault();
+            dragDepth.current = 0;
+            setDragging(false);
+            setFiles(Array.from(event.dataTransfer.files));
+          }}>
+          <input ref={attachmentPicker} type="file" hidden multiple accept=".png,.jpg,.jpeg,.webp,.txt,.log"
+            onChange={(event) => { setFiles(Array.from(event.currentTarget.files ?? [])); event.currentTarget.value = ""; }} />
+          <span className="feedback-drop-icon" aria-hidden="true"><UploadCloud size={24} strokeWidth={1.7} /></span>
+          <div className="feedback-drop-copy" id={attachmentHintId}>
+            <strong>{text("拖入截图或日志", "Drop screenshots or logs")}</strong>
+            <span>{text("PNG、JPEG、WebP、TXT、LOG · 最多 5 项，每项不超过 2 MiB", "PNG, JPEG, WebP, TXT, LOG · Up to 5 files, 2 MiB each")}</span>
+          </div>
+          <button type="button" className="button button-secondary feedback-pick-button" aria-describedby={attachmentHintId}
+            onClick={() => attachmentPicker.current?.click()}>
+            <FolderOpen size={16} aria-hidden="true" />
+            {attachments.length ? text("继续添加", "Add more files") : text("选择文件", "Choose files")}
+          </button>
+        </div>
         {attachments.length ? <ul className="feedback-attachments">{attachments.map((file, index) =>
-          <li key={index}>{IMAGE.test(file.name) ? <Screenshot file={file} /> : null}
-            <span>{file.name} · {formatBytes(file.size)}</span>
-            <button type="button" className="button button-secondary button-compact" onClick={() => {
+          <li key={index}><span className="feedback-file-icon" aria-hidden="true">
+            {IMAGE.test(file.name) ? <Screenshot file={file} /> : <FileText size={17} />}
+          </span>
+            <div className="feedback-file-copy"><strong>{file.name}</strong><span>{formatBytes(file.size)}</span></div>
+            <button type="button" className="button button-secondary button-compact"
+              aria-label={text(`移除 ${file.name}`, `Remove ${file.name}`)} onClick={() => {
               invalidate(); setAttachments((current) => current.filter((_, item) => item !== index));
             }}>{text("移除", "Remove")}</button></li>)}</ul> : null}
-        <details className="feedback-task-details">
-          <summary>{text("选择已有任务或批次日志", "Choose existing task or batch logs")} · {selected.length}</summary>
+        {!report && error ? <p className="feedback-attachment-error" role="alert">{error}</p> : null}
+        <div className="feedback-log-options">
+          <details className="feedback-task-details">
+          <summary>
+            <FileText size={17} aria-hidden="true" />
+            <strong>{text("选择已有任务或批次日志", "Choose existing task or batch logs")}</strong>
+            <span className="feedback-log-count">{selected.length ? text(`已选 ${selected.length} 条`, `${selected.length} selected`) : text("未选择", "None selected")}</span>
+            <ChevronDown className="feedback-log-chevron" size={16} aria-hidden="true" />
+          </summary>
           <div className="feedback-log-list">{rows.map((row) => <label className="switch-row" key={row.id}>
             <input type="checkbox" disabled={!row.log_path} checked={selected.includes(row.id)}
               onChange={(event) => { invalidate(); setSelected((current) => event.target.checked ? [...current, row.id].slice(0, 30) : current.filter((id) => id !== row.id)); }} />
@@ -159,14 +203,21 @@ export function Feedback() {
             <button type="button" className="button button-secondary button-compact" disabled={offset + LOG_PAGE_SIZE >= total}
               onClick={() => void loadPage(offset + LOG_PAGE_SIZE)}>{text("下一页", "Next")}</button>
           </div>
-        </details>
-        <label className="switch-row"><input type="checkbox" checked={systemLogs}
+          </details>
+          <label className="feedback-system-option"><input type="checkbox" checked={systemLogs}
           onChange={(event) => { invalidate(); setSystemLogs(event.target.checked); }} />
-          <span>{text("附带近期应用、安装和更新日志", "Include recent app, install and update logs")}</span></label>
-        <button type="button" className="button button-primary task-generate" onClick={() => void prepare()}
-          disabled={!draft.title.trim() && !draft.actual.trim() && !selected.length && !attachments.length && !systemLogs}>
-          {busy ? text("正在处理…", "Working…") : text("生成报告并打包日志", "Prepare issue and package logs")}</button>
-        {!report && error ? <p className="api-key-error" role="alert">{error}</p> : null}
+            <span>{text("附带近期应用、安装和更新日志", "Include recent app, install and update logs")}</span>
+          </label>
+        </div>
+        <div className="feedback-package-footer">
+          <div>
+            <strong>{text("先在本机打包，不会自动上传。", "Packaging happens locally. Nothing is uploaded automatically.")}</strong>
+            {!canPrepare ? <p>{text("写一点问题描述，或添加诊断材料后即可生成。", "Describe the issue or add diagnostic material to continue.")}</p> : null}
+          </div>
+          <button type="button" className="button button-primary task-generate" onClick={() => void prepare()} disabled={!canPrepare}>
+            {busy ? text("正在处理…", "Working…") : text("生成报告并打包日志", "Prepare issue and package logs")}
+          </button>
+        </div>
       </section>
       {report ? <section className="settings-section feedback-report">
         <h2>{text("3. 审阅并提交", "3. Review and submit")}</h2>

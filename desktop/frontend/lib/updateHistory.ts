@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.2",
+    title: { zh: "0.3.2 · 反馈附件、诊断与动效", en: "0.3.2 · Feedback attachments, diagnostics and motion" },
+    notes: {
+      zh: ["反馈页新增宽松的拖放附件区，可审阅 Issue 草稿和本地诊断 ZIP。", "清理后保留中间产物种类与大小，说明气泡扩展到五个页面。", "任务及控件动效支持关闭，并保留真实进度与成功状态。"],
+      en: ["A more spacious attachment drop zone, reviewable Issue draft and local diagnostic ZIP.", "Artifact roles and sizes survive cleanup; tooltips cover five more pages.", "Optional task and control motion preserves real progress and success states."],
+    },
+  },
+  {
     version: "0.3.2-rc.1.post2",
     title: { zh: "0.3.2 RC1.2 · 反馈诊断与动效", en: "0.3.2 RC1.2 · Diagnostics and motion" },
     notes: {
