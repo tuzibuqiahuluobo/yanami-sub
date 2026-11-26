@@ -35,6 +35,12 @@
 
 .toast-item[data-leaving] { pointer-events: none; animation: toast-leave var(--motion-fast) ease-in forwards; }
 
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) :is(.toast-success:not([data-leaving]), .update-progress-toast.is-ready) .toast-status-icon > svg {
+    animation: completion-check-pop var(--motion-normal) var(--motion-ease-out) both;
+  }
+}
+
 .toast-status-icon {
   display: grid;
   width: 28px;
@@ -45,6 +51,11 @@
   color: #fff;
   background: var(--success);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.toast-notice .toast-status-icon {
+  background: color-mix(in srgb, var(--warning) 15%, var(--panel));
+  box-shadow: none;
 }
 
 .toast-message {

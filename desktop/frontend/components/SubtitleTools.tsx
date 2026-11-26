@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Captions, Download, Search } from "lucide-react";
+import { Captions, Check, Download, Search } from "lucide-react";
 import { desktopApi } from "@/lib/bridge";
 import type { LinkMedia } from "@/lib/types";
 import { CustomSelect } from "./CustomSelect";
@@ -59,7 +59,7 @@ export function SubtitleTools({ onOpenResources }: { onOpenResources: () => void
           <Download size={16} aria-hidden="true" />{busy === "save" ? (zh ? "正在保存…" : "Saving…") : (zh ? "另存字幕" : "Save subtitle")}</button>
       </div> : <p className="inline-note" role="status">{zh ? "这个视频没有找到可下载的字幕轨道。" : "No downloadable subtitle tracks were found."}</p>)}
       {error ? <div className="error-banner" role="alert"><span>{error}</span><button type="button" className="text-button" onClick={onOpenResources}>{zh ? "检查资源" : "Check resources"}</button></div> : null}
-      {saved ? <p className="inline-note" role="status">{zh ? "已保存：" : "Saved: "}{saved}</p> : null}
+      {saved ? <p className="inline-note caption-saved" role="status"><Check size={16} aria-hidden="true" />{zh ? "已保存：" : "Saved: "}{saved}</p> : null}
     </section>
   </div>;
 }

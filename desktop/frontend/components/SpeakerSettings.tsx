@@ -2,6 +2,7 @@
 
 import type { TaskRequest } from "../lib/types";
 import { CustomSelect } from "./CustomSelect";
+import { FieldHelp } from "./FieldHelp";
 import { useLanguage } from "./LanguageProvider";
 
 export function SpeakerSettings({ request, disabled, onChange }: {
@@ -14,7 +15,8 @@ export function SpeakerSettings({ request, disabled, onChange }: {
   const joint = Boolean(request.asr && request.asr !== "local");
   const early = ["vocal", "aligned"].includes(request.stage);
   return <div className="field field-wide">
-    <span>{zh ? "说话人分离（可选）" : "Speaker diarization (optional)"}</span>
+    <FieldHelp label={zh ? "说话人分离（可选）" : "Speaker diarization (optional)"}
+      hint={zh ? "普通单轨 SRT 不变。轨号不等于人物身份，可能需要人工合并或校对。" : "The normal single-track SRT is unchanged. Track numbers are not identities and may need manual review."} />
     <CustomSelect value={mode} disabled={disabled || early}
       ariaLabel={zh ? "说话人分离" : "Speaker diarization"}
       onChange={(value) => onChange({ diarize: value as TaskRequest["diarize"], ...(value === "off" ? { speaker_tracks: "off" as const } : {}) })}
@@ -24,7 +26,6 @@ export function SpeakerSettings({ request, disabled, onChange }: {
         { value: "judge-text", label: zh ? "声学标签 + 文字裁判（实验）" : "Acoustics + text judge (experimental)" },
         { value: "judge-audio", label: zh ? "声学标签 + 音频裁判（实验）" : "Acoustics + audio judge (experimental)" },
       ]} />
-    <small className="field-help">{zh ? "从字幕稳定化后执行；普通单轨 SRT 不变。轨号不是人物身份，可能需要人工合并或校对。" : "Runs after stabilization; the normal single-track SRT is unchanged. Track numbers are not identities and may need manual review."}</small>
     {joint ? <small className="field-help">{zh ? "一体转写自带说话人标签，不使用下方的声学模型；开启裁判会额外调用模型。" : "Joint transcription supplies speaker labels without an acoustic model. A judge adds model calls."}</small> : null}
     {mode !== "off" || joint ? <>
       {!joint ? <small className="field-help">{zh ? "默认模型首次按需下载约 450 MB，沿用任务设备；置信标主要按日语拟合，不保证中英文准确度。" : "The default model downloads about 450 MB on first use and follows the task device. Confidence marks were fitted mainly on Japanese, not validated for Chinese or English."}</small> : null}

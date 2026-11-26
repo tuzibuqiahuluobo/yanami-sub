@@ -867,8 +867,8 @@ export function ResourceManager({
                         bytesPerSecond={install.bytes_per_second}
                       />
                     ) : running ? (
-                      <div className="resource-indeterminate">
-                        <span className="indeterminate-track">
+                      <div className="resource-indeterminate" role="status">
+                        <span className="indeterminate-track" aria-hidden="true">
                           <i />
                         </span>
                         <strong>{install.message}</strong>

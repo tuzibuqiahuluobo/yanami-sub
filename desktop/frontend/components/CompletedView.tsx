@@ -23,6 +23,8 @@ import { desktopApi } from "@/lib/bridge";
 
 interface CompletedViewProps {
   task: TaskState;
+  animateSavedSubtitle: boolean;
+  onSavedAnimationEnd: () => void;
   onOpen: (path: string) => void;
   onReset: () => void;
 }
@@ -30,6 +32,8 @@ interface CompletedViewProps {
 
 export function CompletedView({
   task,
+  animateSavedSubtitle,
+  onSavedAnimationEnd,
   onOpen,
   onReset,
 }: CompletedViewProps) {
@@ -82,7 +86,9 @@ export function CompletedView({
 
       <section className="completed-card">
         <div className="completed-summary">
-          <div className={`success-mark${rawFallback ? " is-partial" : ""}`}>
+          <div className={`success-mark${rawFallback ? " is-partial" : ""}`}
+            data-saved-pop={animateSavedSubtitle || undefined}
+            onAnimationEnd={onSavedAnimationEnd}>
             {rawFallback ? <X size={24} strokeWidth={2} /> : <Check size={24} strokeWidth={2} />}
           </div>
           <div>

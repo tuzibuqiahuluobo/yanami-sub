@@ -568,7 +568,8 @@ export function BatchQueue({
 
             <div className="task-actions">
               <div><strong>{t.batch.ready.replace("{count}", String(items.length))}</strong><span>{t.batch.priorityHint}</span></div>
-              <button type="button" className="button button-primary" disabled={!items.length || busy || invalidNames} onClick={() => void start()}>
+              <button type="button" className="button button-primary task-generate" aria-busy={busy}
+                disabled={!items.length || busy || invalidNames} onClick={() => void start()}>
                 <Play size={15} />
                 {busy ? t.batch.starting : t.batch.start}
               </button>

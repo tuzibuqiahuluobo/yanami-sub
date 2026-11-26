@@ -24,9 +24,10 @@ export function BatchCompletionObserver({ enabled }: { enabled: boolean }) {
           const done = current.items.filter((item) => item.state === "done" && !item.correction_skipped).length;
           const failed = current.items.filter((item) => item.state === "failed").length;
           const skipped = current.items.length - done - failed;
+          const succeeded = current.state === "completed" && done > 0 && !failed && !skipped;
           const message = language === "en" ? `Batch ended: ${done} complete, ${failed} failed, ${skipped} partial/skipped. Log: ${current.log_path}` : `批处理结束：完成 ${done}，失败 ${failed}，部分完成/跳过 ${skipped}。日志：${current.log_path}`;
-          (failed || skipped ? showNotice : showSuccess)(message, `batch-ended-${current.batch_id}-${current.updated_at}`);
-          if (current.state === "completed" && failed === 0 && skipped === 0) void playNotification("batch");
+          (succeeded ? showSuccess : showNotice)(message, `batch-ended-${current.batch_id}-${current.updated_at}`);
+          if (succeeded) void playNotification("batch");
         }
         previous.current = current;
       } catch { /* Keep observed state through bridge failures. */ }

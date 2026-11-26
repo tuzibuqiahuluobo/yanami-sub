@@ -17,6 +17,14 @@ export interface UpdateHistoryEntry {
  */
 export const UPDATE_HISTORY: readonly UpdateHistoryEntry[] = [
   {
+    version: "0.3.2-rc.1.post1",
+    title: { zh: "0.3.2 RC1.1 · 说明气泡与任务反馈", en: "0.3.2 RC1.1 · Tooltips and task feedback" },
+    notes: {
+      zh: ["任务设置的可选说明收进问号；必填和风险提示继续直接显示。", "单次和批处理按钮有按压反馈，任务标签背景平滑滑动，真实完成时显示勾号动效。", "继承 0.3.1.post1 的批处理单项设置与单条补译。"],
+      en: ["Optional task explanations move into tooltips; critical notices stay visible.", "Launch buttons respond to presses, the selected task tab slides, and real success gets a brief checkmark effect.", "Includes per-item batch settings and selective translation continuation from 0.3.1.post1."],
+    },
+  },
+  {
     version: "0.3.2-rc.1",
     title: { zh: "0.3.2 RC1.0 · 预览版", en: "0.3.2 RC1.0 · Preview" },
     notes: {

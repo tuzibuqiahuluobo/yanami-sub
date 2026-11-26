@@ -329,6 +329,40 @@
   background: #fff0ee;
 }
 
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="off"]) .task-generate {
+    transition-timing-function: ease, ease, ease, ease, var(--motion-ease-spring);
+  }
+
+  :root:not([data-motion="off"]) .task-generate:active:not(:disabled) {
+    transform: scale(1.02, 0.94);
+    transition-duration: 160ms, 160ms, 160ms, 160ms, 65ms;
+  }
+
+  :root:not([data-motion="off"]) .success-mark[data-saved-pop] > svg,
+  :root:not([data-motion="off"]) .caption-saved > svg {
+    animation: completion-check-pop var(--motion-normal) var(--motion-ease-out) both;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-generate:active:not(:disabled) { transform: none; }
+}
+
+[data-motion="off"] .task-generate:active:not(:disabled) { transform: none; }
+
+@keyframes completion-check-pop {
+  0% { transform: scale(0.72); opacity: 0.55; }
+  60% { transform: scale(1.17); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.caption-saved > svg {
+  margin-inline-end: 5px;
+  vertical-align: text-bottom;
+  color: var(--success);
+}
+
 .processing-hero>div:last-child,
 .completed-summary>div:last-child {
   display: grid;

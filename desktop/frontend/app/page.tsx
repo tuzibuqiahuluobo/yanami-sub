@@ -8,7 +8,8 @@ import { BatchCompletionObserver } from "@/components/BatchCompletionObserver";
 import { Feedback } from "@/components/Feedback";
 import { SubtitleTools } from "@/components/SubtitleTools";
 import { playNotification } from "@/lib/notificationSound";
-import { preferredTaskOutput } from "@/lib/subtitleOutputs";
+import { motionIsReduced } from "@/lib/useExitPresence";
+import { hasRequestedSubtitleOutput, preferredTaskOutput } from "@/lib/subtitleOutputs";
 import { BootstrapScreen } from "@/components/BootstrapScreen";
 import { CompletedView } from "@/components/CompletedView";
 import { ConfirmDialog, isConfirmRemembered } from "@/components/ConfirmDialog";
@@ -448,6 +449,8 @@ function HomeContent() {
   }, [hasActiveResourceInstall, state.bootstrapped, state.route]);
 
   const completedTaskToasts = useRef(new Set<string>());
+  const [subtitlePopFor, setSubtitlePopFor] = useState("");
+  const currentRun = `${state.task.taskId}-${state.task.startedAt}`;
   const previousTaskPhase = useRef(state.task.phase);
   const previousUpdateState = useRef(updateInstall?.state);
   useEffect(() => {
@@ -457,24 +460,27 @@ function HomeContent() {
   useEffect(() => {
     const wasRunning = previousTaskPhase.current === "running";
     previousTaskPhase.current = state.task.phase;
-    const notificationId = `${state.task.taskId}-${state.task.startedAt}`;
     if (
       state.task.phase !== "completed" ||
       !state.task.taskId ||
-      !wasRunning || completedTaskToasts.current.has(notificationId)
+      !wasRunning || completedTaskToasts.current.has(currentRun)
     ) {
       return;
     }
-    completedTaskToasts.current.add(notificationId);
+    completedTaskToasts.current.add(currentRun);
     const rawFallback = ["translated-srt", "final-srt"].includes(state.task.request.stage)
       && Boolean(state.task.outputs.rawSrt)
       && !state.task.outputs.translatedSrt
       && !state.task.outputs.finalSrt;
     if (!rawFallback) {
-      showSuccess(t.toast.taskCompleted + " · " + (preferredTaskOutput(state.task.outputs) || ""), `task-completed-${notificationId}`);
+      showSuccess(t.toast.taskCompleted + " · " + (preferredTaskOutput(state.task.outputs) || ""), `task-completed-${currentRun}`);
       void playNotification("task");
     }
-  }, [showSuccess, state.task.phase, state.task.taskId, state.task.startedAt, state.task.outputs, state.task.request.stage, t.toast.taskCompleted]);
+    if (state.route === "new-task" && hasRequestedSubtitleOutput(state.task.request.stage, state.task.outputs)
+      && !motionIsReduced()) {
+      setSubtitlePopFor(currentRun);
+    }
+  }, [showSuccess, currentRun, state.route, state.task.phase, state.task.taskId, state.task.outputs, state.task.request.stage, t.toast.taskCompleted]);
 
   const previousResourceStates = useRef<Map<string, string> | null>(null);
   useEffect(() => {
@@ -879,6 +885,8 @@ function HomeContent() {
     content = (
       <CompletedView
         task={state.task}
+        animateSavedSubtitle={subtitlePopFor === currentRun}
+        onSavedAnimationEnd={() => setSubtitlePopFor("")}
         onOpen={(path) => void desktopApi.openOutput(path)}
         onReset={() => dispatch({ type: "resetTask" })}
       />
@@ -947,6 +955,7 @@ function HomeContent() {
           />}
           onNavigate={(route: Route) => {
             if (route !== "settings") setSettingsFocus(null);
+            if (route !== "new-task") setSubtitlePopFor("");
             dispatch({ type: "navigate", route });
           }}
           updateAvailable={startupUpdate?.available === true}

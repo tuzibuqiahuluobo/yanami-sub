@@ -2,9 +2,9 @@
 
 基于 [FineSub](https://github.com/caca2331/finesub) 的 Windows 桌面字幕工作台，提供单任务、批处理、本地 Agent / API 路由、知识库、资源管理和应用内更新。
 
-当前版本系列：**0.3.1.post1 正式版 / 0.3.2 RC1.0 预览版（0.3.2-rc.1）**。两版使用 [FineSub v0.7.1](https://github.com/caca2331/finesub/releases/tag/v0.7.1)；本次补丁仅发布在正式通道。
+当前版本系列：**0.3.1.post1 正式版 / 0.3.2 RC1.1 预览版（0.3.2-rc.1.post1）**。两版使用 [FineSub v0.7.1](https://github.com/caca2331/finesub/releases/tag/v0.7.1)。
 
-0.3.1.post1 加入批处理单项设置与单条补译。链接字幕仍默认用视频标题，取不到标题时用本地日期和时间。[0.3.1 及补丁合并公告](docs/release-notes-v0.3.1.post1.md) · [预览版说明](docs/release-notes-v0.3.2-rc.1.md)
+0.3.1.post1 加入批处理单项设置与单条补译。RC1.1 试用说明气泡和新的操作反馈，并继承这些批处理修复。[正式版公告](docs/release-notes-v0.3.1.post1.md) · [预览版公告](docs/release-notes-v0.3.2-rc.1.post1.md)
 
 ## 安装与开始
 
